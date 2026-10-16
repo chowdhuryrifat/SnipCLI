@@ -191,23 +191,23 @@ SnipCLI strictly enforces Model-View-Controller in a terminal CLI environment:
 
 ```mermaid
 flowchart TD
-    User(["Terminal User / CLI"]) -->|argc, argv| Parser["controller::CliParser\n(Tokenization & Flags)"]
-    Parser -->|ParsedArgs| Dispatcher["controller::CommandDispatcher\n(Invoker / Router)"]
+    User["Terminal User / CLI"] -->|"argc, argv"| Parser["controller::CliParser<br/>(Tokenization & Flags)"]
+    Parser -->|ParsedArgs| Dispatcher["controller::CommandDispatcher<br/>(Invoker / Router)"]
 
     subgraph Controller_Layer ["Controller Layer (Commands)"]
-        Dispatcher -->|routes to execute()| Cmd["ICommand Implementations\n(Add, List, Get, Delete, Search, Stats)"]
+        Dispatcher -->|"routes to execute()"| Cmd["ICommand Implementations<br/>(Add, List, Get, Delete, Search, Stats)"]
     end
 
     subgraph Model_Layer ["Model Layer (Domain & Storage)"]
-        Cmd -->|persists & queries| Repo["ISnippetRepository\n(JsonSnippetRepository)"]
+        Cmd -->|persists & queries| Repo["ISnippetRepository<br/>(JsonSnippetRepository)"]
         Cmd -->|validates invariants| Val["SnippetValidator (SRP)"]
-        Cmd -->|invokes strategy| Strat["ISearchStrategy\n(TagSearch / TitleSearch)"]
-        Repo -->|file I/O| Disk[("snippets.json\nFlat File Storage")]
+        Cmd -->|invokes strategy| Strat["ISearchStrategy<br/>(TagSearch / TitleSearch)"]
+        Repo -->|"file I/O"| Disk[("snippets.json<br/>Flat File Storage")]
     end
 
     subgraph View_Layer ["View Layer (Presentation)"]
-        Cmd -->|passes DTOs| View["ISnippetView\n(TerminalView / MarkdownView)"]
-        View -->|renders text| Stream["std::ostream\n(std::cout / std::cerr)"]
+        Cmd -->|passes DTOs| View["ISnippetView<br/>(TerminalView / MarkdownView)"]
+        View -->|renders text| Stream["std::ostream<br/>(std::cout / std::cerr)"]
     end
 ```
 

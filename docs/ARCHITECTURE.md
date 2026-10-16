@@ -13,23 +13,23 @@ In a typical GUI or web application, MVC interacts with event loops or HTTP requ
 
 ```mermaid
 flowchart TD
-    User["CLI User / Terminal"] -->|argc, argv| Main["main() / CliParser"]
+    User["CLI User / Terminal"] -->|"argc, argv"| Main["main() / CliParser"]
     Main -->|ParsedArgs| Dispatcher["CommandDispatcher (Router)"]
     
     subgraph Controller_Layer ["Controller Layer (Commands)"]
-        Dispatcher -->|invokes execute()| Cmd["ICommand Implementations\n(Add, List, Get, Delete, Search, Stats)"]
+        Dispatcher -->|"invokes execute()"| Cmd["ICommand Implementations<br/>(Add, List, Get, Delete, Search, Stats)"]
     end
     
     subgraph Model_Layer ["Model Layer (Business & Data)"]
-        Cmd -->|invokes| Repo["ISnippetRepository\n(JsonSnippetRepository)"]
+        Cmd -->|invokes| Repo["ISnippetRepository<br/>(JsonSnippetRepository)"]
         Cmd -->|validates| Val["SnippetValidator"]
-        Cmd -->|queries| Strat["ISearchStrategy\n(TagSearch, TitleSearch)"]
-        Repo -->|persists to| Storage[("snippets.json")]
+        Cmd -->|queries| Strat["ISearchStrategy<br/>(TagSearch, TitleSearch)"]
+        Repo -->|"persists to"| Storage[("snippets.json")]
     end
     
     subgraph View_Layer ["View Layer (Presentation)"]
-        Cmd -->|passes DTOs to| View["ISnippetView\n(TerminalView / MarkdownView)"]
-        View -->|renders text to| Stream["std::ostream\n(std::cout / std::cerr)"]
+        Cmd -->|passes DTOs to| View["ISnippetView<br/>(TerminalView / MarkdownView)"]
+        View -->|renders text to| Stream["std::ostream<br/>(std::cout / std::cerr)"]
     end
 ```
 

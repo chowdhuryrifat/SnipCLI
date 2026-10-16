@@ -48,8 +48,8 @@ void TerminalView::renderSnippetList(const std::vector<model::Snippet>& snippets
         return;
     }
 
-    m_out << kBold << std::left << std::setw(6) << "ID" << std::setw(25) << "TITLE"
-          << std::setw(12) << "LANGUAGE" << std::setw(10) << "LINES" << "TAGS" << kReset << "\n";
+    m_out << kBold << std::left << std::setw(6) << "ID" << std::setw(25) << "TITLE" << std::setw(12)
+          << "LANGUAGE" << std::setw(10) << "LINES" << "TAGS" << kReset << "\n";
 
     m_out << kDim << std::string(75, '-') << kReset << "\n";
 

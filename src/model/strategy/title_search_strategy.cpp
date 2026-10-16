@@ -1,21 +1,19 @@
 #include "snipcli/model/strategy/title_search_strategy.hpp"
+
 #include <algorithm>
 
 namespace snipcli::model::strategy {
 
 namespace {
 std::string toLower(std::string str) {
-    std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(str.begin(), str.end(), str.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return str;
 }
-} // namespace
+}  // namespace
 
-std::vector<Snippet> TitleSearchStrategy::filter(
-    const std::vector<Snippet>& snippets, 
-    const std::string& criteria) const {
-    
+std::vector<Snippet> TitleSearchStrategy::filter(const std::vector<Snippet>& snippets,
+                                                 const std::string& criteria) const {
     std::vector<Snippet> matches;
     const std::string lowerCriteria = toLower(criteria);
 
@@ -28,4 +26,4 @@ std::vector<Snippet> TitleSearchStrategy::filter(
     return matches;
 }
 
-} // namespace snipcli::model::strategy
+}  // namespace snipcli::model::strategy

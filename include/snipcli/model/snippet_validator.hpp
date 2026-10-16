@@ -1,7 +1,8 @@
 #pragma once
 
-#include "snipcli/model/snippet.hpp"
 #include <string>
+
+#include "snipcli/model/snippet.hpp"
 
 namespace snipcli::model {
 
@@ -35,4 +36,4 @@ public:
     static void validateLanguage(const std::string& language);
 };
 
-} // namespace snipcli::model
+}  // namespace snipcli::model

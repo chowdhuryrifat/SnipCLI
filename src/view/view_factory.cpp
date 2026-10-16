@@ -1,4 +1,5 @@
 #include "snipcli/view/view_factory.hpp"
+
 #include "snipcli/view/markdown_view.hpp"
 #include "snipcli/view/terminal_view.hpp"
 
@@ -21,4 +22,4 @@ std::unique_ptr<ISnippetView> ViewFactory::fromString(const std::string& formatN
     return create(Format::Terminal);
 }
 
-} // namespace snipcli::view
+}  // namespace snipcli::view

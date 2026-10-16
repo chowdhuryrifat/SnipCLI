@@ -1,8 +1,9 @@
 #pragma once
 
-#include "snipcli/model/snippet.hpp"
 #include <string>
 #include <vector>
+
+#include "snipcli/model/snippet.hpp"
 
 namespace snipcli::model::strategy {
 
@@ -19,9 +20,8 @@ public:
      * @param criteria Query parameter (tag, substring, pattern).
      * @return std::vector<Snippet> Filtered result set.
      */
-    [[nodiscard]] virtual std::vector<Snippet> filter(
-        const std::vector<Snippet>& snippets, 
-        const std::string& criteria) const = 0;
+    [[nodiscard]] virtual std::vector<Snippet> filter(const std::vector<Snippet>& snippets,
+                                                      const std::string& criteria) const = 0;
 };
 
-} // namespace snipcli::model::strategy
+}  // namespace snipcli::model::strategy

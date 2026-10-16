@@ -1,29 +1,29 @@
 #include "snipcli/view/terminal_view.hpp"
+
 #include <iomanip>
 #include <sstream>
 
 namespace snipcli::view {
 
 namespace {
-constexpr const char* kReset   = "\033[0m";
-constexpr const char* kBold    = "\033[1m";
-constexpr const char* kRed     = "\033[31m";
-constexpr const char* kGreen   = "\033[32m";
-constexpr const char* kYellow  = "\033[33m";
-constexpr const char* kBlue    = "\033[34m";
-constexpr const char* kCyan    = "\033[36m";
-constexpr const char* kDim     = "\033[2m";
-} // namespace
+constexpr const char* kReset = "\033[0m";
+constexpr const char* kBold = "\033[1m";
+constexpr const char* kRed = "\033[31m";
+constexpr const char* kGreen = "\033[32m";
+constexpr const char* kYellow = "\033[33m";
+constexpr const char* kBlue = "\033[34m";
+constexpr const char* kCyan = "\033[36m";
+constexpr const char* kDim = "\033[2m";
+}  // namespace
 
 TerminalView::TerminalView(std::ostream& outStream, std::ostream& errStream)
     : m_out(outStream), m_err(errStream) {}
 
 void TerminalView::renderSnippet(const model::Snippet& snippet) {
     m_out << kBold << kCyan << "=== Snippet: " << snippet.getTitle() << " ===" << kReset << "\n";
-    m_out << kDim << "ID: " << snippet.getId() 
-          << " | Language: " << snippet.getLanguage() 
+    m_out << kDim << "ID: " << snippet.getId() << " | Language: " << snippet.getLanguage()
           << " | Lines: " << snippet.getLineCount() << kReset << "\n";
-    
+
     m_out << kYellow << "Tags: ";
     const auto& tags = snippet.getTags();
     for (size_t i = 0; i < tags.size(); ++i) {
@@ -48,11 +48,8 @@ void TerminalView::renderSnippetList(const std::vector<model::Snippet>& snippets
         return;
     }
 
-    m_out << kBold << std::left 
-          << std::setw(6)  << "ID" 
-          << std::setw(25) << "TITLE" 
-          << std::setw(12) << "LANGUAGE" 
-          << std::setw(10) << "LINES" 
+    m_out << kBold << std::left << std::setw(6) << "ID" << std::setw(25) << "TITLE" << std::setw(12)
+          << "LANGUAGE" << std::setw(10) << "LINES"
           << "TAGS" << kReset << "\n";
 
     m_out << kDim << std::string(75, '-') << kReset << "\n";
@@ -61,14 +58,13 @@ void TerminalView::renderSnippetList(const std::vector<model::Snippet>& snippets
         std::string tagStr;
         for (size_t i = 0; i < s.getTags().size(); ++i) {
             tagStr += s.getTags()[i];
-            if (i + 1 < s.getTags().size()) tagStr += ", ";
+            if (i + 1 < s.getTags().size())
+                tagStr += ", ";
         }
 
-        m_out << std::left 
-              << std::setw(6)  << s.getId()
-              << kCyan << std::setw(25) << (s.getTitle().length() > 23 ? s.getTitle().substr(0, 20) + "..." : s.getTitle()) << kReset
-              << std::setw(12) << s.getLanguage()
-              << std::setw(10) << s.getLineCount()
+        m_out << std::left << std::setw(6) << s.getId() << kCyan << std::setw(25)
+              << (s.getTitle().length() > 23 ? s.getTitle().substr(0, 20) + "..." : s.getTitle())
+              << kReset << std::setw(12) << s.getLanguage() << std::setw(10) << s.getLineCount()
               << kDim << tagStr << kReset << "\n";
     }
 }
@@ -86,10 +82,8 @@ void TerminalView::renderError(const std::string& message) {
 }
 
 void TerminalView::renderStats(
-    size_t totalSnippets, 
-    size_t totalLines, 
+    size_t totalSnippets, size_t totalLines,
     const std::vector<std::pair<std::string, size_t>>& languageBreakdown) {
-    
     m_out << kBold << kBlue << "📊 SnipCLI Repository Statistics" << kReset << "\n";
     m_out << kDim << "========================================" << kReset << "\n";
     m_out << "  • Total Snippets:      " << kBold << totalSnippets << kReset << "\n";
@@ -102,4 +96,4 @@ void TerminalView::renderStats(
     m_out << kDim << "========================================" << kReset << "\n";
 }
 
-} // namespace snipcli::view
+}  // namespace snipcli::view

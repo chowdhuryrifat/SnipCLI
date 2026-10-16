@@ -1,8 +1,10 @@
 #include "snipcli/controller/commands/add_command.hpp"
-#include "snipcli/common/exceptions.hpp"
-#include "snipcli/model/snippet_validator.hpp"
+
 #include <fstream>
 #include <sstream>
+
+#include "snipcli/common/exceptions.hpp"
+#include "snipcli/model/snippet_validator.hpp"
 
 namespace snipcli::controller::commands {
 
@@ -21,10 +23,9 @@ std::vector<std::string> splitTags(const std::string& raw) {
     }
     return tags;
 }
-} // namespace
+}  // namespace
 
-AddCommand::AddCommand(ParsedArgs args,
-                       std::shared_ptr<model::ISnippetWriter> writer,
+AddCommand::AddCommand(ParsedArgs args, std::shared_ptr<model::ISnippetWriter> writer,
                        std::shared_ptr<model::ISnippetReader> reader,
                        std::shared_ptr<view::ISnippetView> view)
     : m_args(std::move(args)),
@@ -64,14 +65,16 @@ int AddCommand::execute() {
         }
 
         if (m_reader->exists(title)) {
-            throw common::ValidationException("A snippet with title '" + title + "' already exists.");
+            throw common::ValidationException("A snippet with title '" + title +
+                                              "' already exists.");
         }
 
         model::Snippet snippet(0, title, lang, code, tags, "", "");
         model::SnippetValidator::validate(snippet);
 
         uint64_t newId = m_writer->save(snippet);
-        m_view->renderSuccess("Snippet '" + title + "' created successfully with ID #" + std::to_string(newId));
+        m_view->renderSuccess("Snippet '" + title + "' created successfully with ID #" +
+                              std::to_string(newId));
         return 0;
     } catch (const common::SnipException& ex) {
         m_view->renderError(ex.what());
@@ -82,4 +85,4 @@ int AddCommand::execute() {
     }
 }
 
-} // namespace snipcli::controller::commands
+}  // namespace snipcli::controller::commands

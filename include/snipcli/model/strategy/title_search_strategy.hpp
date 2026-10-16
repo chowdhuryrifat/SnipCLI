@@ -9,9 +9,8 @@ namespace snipcli::model::strategy {
  */
 class TitleSearchStrategy : public ISearchStrategy {
 public:
-    [[nodiscard]] std::vector<Snippet> filter(
-        const std::vector<Snippet>& snippets, 
-        const std::string& criteria) const override;
+    [[nodiscard]] std::vector<Snippet> filter(const std::vector<Snippet>& snippets,
+                                              const std::string& criteria) const override;
 };
 
-} // namespace snipcli::model::strategy
+}  // namespace snipcli::model::strategy

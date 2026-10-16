@@ -17,7 +17,8 @@ struct ParsedArgs {
 
     [[nodiscard]] bool hasFlag(const std::string& flag) const;
     [[nodiscard]] bool hasOption(const std::string& key) const;
-    [[nodiscard]] std::string getOption(const std::string& key, const std::string& defaultValue = "") const;
+    [[nodiscard]] std::string getOption(const std::string& key,
+                                        const std::string& defaultValue = "") const;
 };
 
 /**
@@ -28,4 +29,4 @@ public:
     [[nodiscard]] static ParsedArgs parse(int argc, char* argv[]);
 };
 
-} // namespace snipcli::controller
+}  // namespace snipcli::controller

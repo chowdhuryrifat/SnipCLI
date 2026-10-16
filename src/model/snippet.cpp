@@ -1,16 +1,12 @@
 #include "snipcli/model/snippet.hpp"
+
 #include <algorithm>
 #include <sstream>
 
 namespace snipcli::model {
 
-Snippet::Snippet(uint64_t id,
-                 std::string title,
-                 std::string language,
-                 std::string code,
-                 std::vector<std::string> tags,
-                 std::string createdAt,
-                 std::string updatedAt)
+Snippet::Snippet(uint64_t id, std::string title, std::string language, std::string code,
+                 std::vector<std::string> tags, std::string createdAt, std::string updatedAt)
     : m_id(id),
       m_title(std::move(title)),
       m_language(std::move(language)),
@@ -83,9 +79,8 @@ void Snippet::setUpdatedAt(std::string timestamp) {
 }
 
 bool Snippet::hasTag(const std::string& tag) const noexcept {
-    return std::any_of(m_tags.begin(), m_tags.end(), [&tag](const std::string& t) {
-        return t == tag;
-    });
+    return std::any_of(m_tags.begin(), m_tags.end(),
+                       [&tag](const std::string& t) { return t == tag; });
 }
 
-} // namespace snipcli::model
+}  // namespace snipcli::model

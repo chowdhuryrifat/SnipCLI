@@ -1,9 +1,10 @@
 #pragma once
 
-#include "snipcli/model/snippet.hpp"
 #include <optional>
 #include <string>
 #include <vector>
+
+#include "snipcli/model/snippet.hpp"
 
 namespace snipcli::model {
 
@@ -41,4 +42,4 @@ public:
     ~ISnippetRepository() override = default;
 };
 
-} // namespace snipcli::model
+}  // namespace snipcli::model

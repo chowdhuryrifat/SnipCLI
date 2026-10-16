@@ -1,15 +1,14 @@
 #include "snipcli/controller/commands/get_command.hpp"
-#include "snipcli/common/exceptions.hpp"
+
 #include <iostream>
+
+#include "snipcli/common/exceptions.hpp"
 
 namespace snipcli::controller::commands {
 
-GetCommand::GetCommand(ParsedArgs args,
-                       std::shared_ptr<model::ISnippetReader> reader,
+GetCommand::GetCommand(ParsedArgs args, std::shared_ptr<model::ISnippetReader> reader,
                        std::shared_ptr<view::ISnippetView> view)
-    : m_args(std::move(args)),
-      m_reader(std::move(reader)),
-      m_view(std::move(view)) {}
+    : m_args(std::move(args)), m_reader(std::move(reader)), m_view(std::move(view)) {}
 
 std::string GetCommand::getName() const {
     return "get";
@@ -59,4 +58,4 @@ int GetCommand::execute() {
     }
 }
 
-} // namespace snipcli::controller::commands
+}  // namespace snipcli::controller::commands

@@ -1,4 +1,5 @@
 #include "snipcli/controller/cli_parser.hpp"
+
 #include <algorithm>
 
 namespace snipcli::controller {
@@ -55,4 +56,4 @@ ParsedArgs CliParser::parse(int argc, char* argv[]) {
     return result;
 }
 
-} // namespace snipcli::controller
+}  // namespace snipcli::controller

@@ -13,13 +13,8 @@ class Snippet {
 public:
     Snippet() = default;
 
-    Snippet(uint64_t id,
-            std::string title,
-            std::string language,
-            std::string code,
-            std::vector<std::string> tags,
-            std::string createdAt,
-            std::string updatedAt);
+    Snippet(uint64_t id, std::string title, std::string language, std::string code,
+            std::vector<std::string> tags, std::string createdAt, std::string updatedAt);
 
     [[nodiscard]] uint64_t getId() const noexcept;
     [[nodiscard]] const std::string& getTitle() const noexcept;
@@ -49,4 +44,4 @@ private:
     std::string m_updatedAt;
 };
 
-} // namespace snipcli::model
+}  // namespace snipcli::model

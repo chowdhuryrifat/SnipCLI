@@ -1,7 +1,9 @@
 #include "snipcli/model/snippet_validator.hpp"
-#include "snipcli/common/exceptions.hpp"
+
 #include <algorithm>
 #include <unordered_set>
+
+#include "snipcli/common/exceptions.hpp"
 
 namespace snipcli::model {
 
@@ -14,8 +16,8 @@ void SnippetValidator::validate(const Snippet& snippet) {
     }
 
     if (snippet.getLineCount() > kMaxLinesAllowed) {
-        throw common::ValidationException(
-            "Snippet exceeds maximum permitted line count of " + std::to_string(kMaxLinesAllowed) + " lines.");
+        throw common::ValidationException("Snippet exceeds maximum permitted line count of " +
+                                          std::to_string(kMaxLinesAllowed) + " lines.");
     }
 
     // Check duplicate tags
@@ -35,13 +37,14 @@ void SnippetValidator::validateTitle(const std::string& title) {
         throw common::ValidationException("Snippet title cannot be empty.");
     }
     if (title.length() > kMaxTitleLength) {
-        throw common::ValidationException(
-            "Snippet title exceeds maximum length of " + std::to_string(kMaxTitleLength) + " characters.");
+        throw common::ValidationException("Snippet title exceeds maximum length of " +
+                                          std::to_string(kMaxTitleLength) + " characters.");
     }
     for (char c : title) {
         if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-' && c != ' ') {
             throw common::ValidationException(
-                "Snippet title contains invalid characters. Only alphanumeric, dashes, and underscores allowed.");
+                "Snippet title contains invalid characters. Only alphanumeric, dashes, and "
+                "underscores allowed.");
         }
     }
 }
@@ -57,4 +60,4 @@ void SnippetValidator::validateLanguage(const std::string& language) {
     }
 }
 
-} // namespace snipcli::model
+}  // namespace snipcli::model

@@ -1,6 +1,7 @@
+#include <iostream>
+
 #include "snipcli/common/exceptions.hpp"
 #include "snipcli/model/snippet_validator.hpp"
-#include <iostream>
 
 void runValidatorTests() {
     std::cout << "[TEST] Running Validator tests..." << std::endl;

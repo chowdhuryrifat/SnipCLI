@@ -2,10 +2,8 @@
 
 namespace snipcli::model::strategy {
 
-std::vector<Snippet> TagSearchStrategy::filter(
-    const std::vector<Snippet>& snippets, 
-    const std::string& criteria) const {
-    
+std::vector<Snippet> TagSearchStrategy::filter(const std::vector<Snippet>& snippets,
+                                               const std::string& criteria) const {
     std::vector<Snippet> matches;
     for (const auto& snippet : snippets) {
         if (snippet.hasTag(criteria)) {
@@ -15,4 +13,4 @@ std::vector<Snippet> TagSearchStrategy::filter(
     return matches;
 }
 
-} // namespace snipcli::model::strategy
+}  // namespace snipcli::model::strategy

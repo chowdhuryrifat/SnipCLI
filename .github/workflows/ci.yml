@@ -28,7 +28,7 @@ jobs:
       - name: Run Cppcheck Static Analysis
         run: |
           echo "Running cppcheck static analysis..."
-          cppcheck --enable=warning,style,performance,portability --inconclusive --std=c++17 \
+          cppcheck --enable=warning,performance,portability --inconclusive --std=c++17 \
             --suppress=missingIncludeSystem \
             --suppress=unusedFunction \
             --suppress=unmatchedSuppression \

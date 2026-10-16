@@ -44,15 +44,9 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            compiler: gcc
-            cxx: g++
-            cmake_generator: "Unix Makefiles"
             artifact_name: snipcli-linux-x86_64
             binary_path: build/snip
           - os: windows-latest
-            compiler: msvc
-            cxx: cl
-            cmake_generator: "Visual Studio 17 2022"
             artifact_name: snipcli-windows-x86_64
             binary_path: build/Release/snip.exe
 
@@ -62,7 +56,7 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -B build -G "${{ matrix.cmake_generator }}" -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build Library, CLI, and Test Suite
         run: |

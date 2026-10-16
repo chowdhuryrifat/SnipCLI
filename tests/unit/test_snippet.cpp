@@ -12,9 +12,8 @@ void runSnippetTests() {
                                     "2026-10-16T10:00:00Z");
 
     if (snippet.getId() != 1 || snippet.getTitle() != "Dijkstra" ||
-        snippet.getLanguage() != "cpp" || snippet.getLineCount() != 3 ||
-        !snippet.hasTag("graph") || !snippet.hasTag("shortest-path") ||
-        snippet.hasTag("dp")) {
+        snippet.getLanguage() != "cpp" || snippet.getLineCount() != 3 || !snippet.hasTag("graph") ||
+        !snippet.hasTag("shortest-path") || snippet.hasTag("dp")) {
         std::cerr << "Assertion failed in Snippet parameterized constructor tests!" << std::endl;
         std::exit(1);
     }
@@ -30,15 +29,14 @@ void runSnippetTests() {
     emptySnippet.setId(42);
     emptySnippet.setTitle("QuickSort");
     emptySnippet.setLanguage("cpp");
-    emptySnippet.setCode("void sort();"); // 1 line without trailing newline
+    emptySnippet.setCode("void sort();");  // 1 line without trailing newline
     emptySnippet.setTags({"sorting", "divide_and_conquer"});
     emptySnippet.setUpdatedAt("2026-10-17T00:00:00Z");
 
     if (emptySnippet.getId() != 42 || emptySnippet.getTitle() != "QuickSort" ||
         emptySnippet.getLanguage() != "cpp" || emptySnippet.getCode() != "void sort();" ||
         emptySnippet.getLineCount() != 1 || !emptySnippet.hasTag("sorting") ||
-        emptySnippet.hasTag("graph") ||
-        emptySnippet.getUpdatedAt() != "2026-10-17T00:00:00Z") {
+        emptySnippet.hasTag("graph") || emptySnippet.getUpdatedAt() != "2026-10-17T00:00:00Z") {
         std::cerr << "Assertion failed in Snippet setter tests!" << std::endl;
         std::exit(1);
     }

@@ -36,6 +36,7 @@
 - [🏗️ System Architecture & MVC Blueprint](#️-system-architecture--mvc-blueprint)
 - [🧠 SOLID & GoF Design Patterns](#-solid--gof-design-patterns)
 - [🛡️ Defense & Live Modification Playbook](#️-defense--live-modification-playbook)
+- [📅 7-Day Sprint Plan & Daily Work Breakdown](docs/SPRINT_PLAN.md)
 - [👥 Authors & Course Metadata](#-authors--course-metadata)
 
 ---

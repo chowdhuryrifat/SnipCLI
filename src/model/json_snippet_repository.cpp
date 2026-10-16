@@ -1,11 +1,13 @@
 #include "snipcli/model/json_snippet_repository.hpp"
-#include "snipcli/common/exceptions.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+
+#include "snipcli/common/exceptions.hpp"
 
 namespace snipcli::model {
 
@@ -29,16 +31,31 @@ std::string escapeJson(const std::string& input) {
     std::ostringstream ss;
     for (char c : input) {
         switch (c) {
-            case '"':  ss << "\\\""; break;
-            case '\\': ss << "\\\\"; break;
-            case '\b': ss << "\\b";  break;
-            case '\f': ss << "\\f";  break;
-            case '\n': ss << "\\n";  break;
-            case '\r': ss << "\\r";  break;
-            case '\t': ss << "\\t";  break;
+            case '"':
+                ss << "\\\"";
+                break;
+            case '\\':
+                ss << "\\\\";
+                break;
+            case '\b':
+                ss << "\\b";
+                break;
+            case '\f':
+                ss << "\\f";
+                break;
+            case '\n':
+                ss << "\\n";
+                break;
+            case '\r':
+                ss << "\\r";
+                break;
+            case '\t':
+                ss << "\\t";
+                break;
             default:
                 if (static_cast<unsigned char>(c) < 0x20) {
-                    ss << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(c);
+                    ss << "\\u" << std::hex << std::setw(4) << std::setfill('0')
+                       << static_cast<int>(c);
                 } else {
                     ss << c;
                 }
@@ -55,15 +72,33 @@ std::string unescapeJson(const std::string& input) {
         if (input[i] == '\\' && i + 1 < input.size()) {
             char next = input[++i];
             switch (next) {
-                case '"':  out += '"'; break;
-                case '\\': out += '\\'; break;
-                case '/':  out += '/'; break;
-                case 'b':  out += '\b'; break;
-                case 'f':  out += '\f'; break;
-                case 'n':  out += '\n'; break;
-                case 'r':  out += '\r'; break;
-                case 't':  out += '\t'; break;
-                default:   out += next; break;
+                case '"':
+                    out += '"';
+                    break;
+                case '\\':
+                    out += '\\';
+                    break;
+                case '/':
+                    out += '/';
+                    break;
+                case 'b':
+                    out += '\b';
+                    break;
+                case 'f':
+                    out += '\f';
+                    break;
+                case 'n':
+                    out += '\n';
+                    break;
+                case 'r':
+                    out += '\r';
+                    break;
+                case 't':
+                    out += '\t';
+                    break;
+                default:
+                    out += next;
+                    break;
             }
         } else {
             out += input[i];
@@ -75,13 +110,16 @@ std::string unescapeJson(const std::string& input) {
 std::string extractJsonField(const std::string& objStr, const std::string& fieldName) {
     std::string needle = "\"" + fieldName + "\"";
     size_t pos = objStr.find(needle);
-    if (pos == std::string::npos) return "";
+    if (pos == std::string::npos)
+        return "";
 
     size_t colon = objStr.find(':', pos + needle.size());
-    if (colon == std::string::npos) return "";
+    if (colon == std::string::npos)
+        return "";
 
     size_t valStart = objStr.find_first_not_of(" \t\n\r", colon + 1);
-    if (valStart == std::string::npos) return "";
+    if (valStart == std::string::npos)
+        return "";
 
     if (objStr[valStart] == '"') {
         size_t endQuote = valStart + 1;
@@ -91,15 +129,18 @@ std::string extractJsonField(const std::string& objStr, const std::string& field
             }
             endQuote++;
         }
-        if (endQuote >= objStr.size()) return "";
+        if (endQuote >= objStr.size())
+            return "";
         return unescapeJson(objStr.substr(valStart + 1, endQuote - (valStart + 1)));
     } else if (objStr[valStart] == '[') {
         size_t endBracket = objStr.find(']', valStart);
-        if (endBracket == std::string::npos) return "";
+        if (endBracket == std::string::npos)
+            return "";
         return objStr.substr(valStart, endBracket - valStart + 1);
     } else {
         size_t endVal = objStr.find_first_of(",}\n\r", valStart);
-        if (endVal == std::string::npos) endVal = objStr.size();
+        if (endVal == std::string::npos)
+            endVal = objStr.size();
         return objStr.substr(valStart, endVal - valStart);
     }
 }
@@ -109,20 +150,23 @@ std::vector<std::string> parseJsonArray(const std::string& arrStr) {
     size_t i = 0;
     while (i < arrStr.size()) {
         size_t start = arrStr.find('"', i);
-        if (start == std::string::npos) break;
+        if (start == std::string::npos)
+            break;
         size_t end = start + 1;
         while (end < arrStr.size()) {
-            if (arrStr[end] == '"' && arrStr[end - 1] != '\\') break;
+            if (arrStr[end] == '"' && arrStr[end - 1] != '\\')
+                break;
             end++;
         }
-        if (end >= arrStr.size()) break;
+        if (end >= arrStr.size())
+            break;
         elements.push_back(unescapeJson(arrStr.substr(start + 1, end - (start + 1))));
         i = end + 1;
     }
     return elements;
 }
 
-} // namespace
+}  // namespace
 
 JsonSnippetRepository::JsonSnippetRepository(std::filesystem::path storagePath)
     : m_storagePath(std::move(storagePath)) {
@@ -138,7 +182,8 @@ void JsonSnippetRepository::ensureStorageDirectoryExists() const {
         std::error_code ec;
         std::filesystem::create_directories(m_storagePath.parent_path(), ec);
         if (ec) {
-            throw common::StorageException("Unable to create directory: " + m_storagePath.parent_path().string());
+            throw common::StorageException("Unable to create directory: " +
+                                           m_storagePath.parent_path().string());
         }
     }
 }
@@ -170,8 +215,10 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
             if (content[end] == '"' && content[end - 1] != '\\') {
                 inStr = !inStr;
             } else if (!inStr) {
-                if (content[end] == '{') depth++;
-                else if (content[end] == '}') depth--;
+                if (content[end] == '{')
+                    depth++;
+                else if (content[end] == '}')
+                    depth--;
             }
             end++;
         }
@@ -209,7 +256,8 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
     ensureStorageDirectoryExists();
     std::ofstream file(m_storagePath, std::ios::trunc);
     if (!file.is_open()) {
-        throw common::StorageException("Failed to write to storage file: " + m_storagePath.string());
+        throw common::StorageException("Failed to write to storage file: " +
+                                       m_storagePath.string());
     }
 
     file << "[\n";
@@ -224,7 +272,8 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
         const auto& tags = s.getTags();
         for (size_t t = 0; t < tags.size(); ++t) {
             file << "\"" << escapeJson(tags[t]) << "\"";
-            if (t + 1 < tags.size()) file << ", ";
+            if (t + 1 < tags.size())
+                file << ", ";
         }
         file << "],\n";
         file << "    \"createdAt\": \"" << escapeJson(s.getCreatedAt()) << "\",\n";
@@ -278,7 +327,8 @@ uint64_t JsonSnippetRepository::save(Snippet& snippet) {
     if (snippet.getId() == 0) {
         uint64_t maxId = 0;
         for (const auto& s : snippets) {
-            if (s.getId() > maxId) maxId = s.getId();
+            if (s.getId() > maxId)
+                maxId = s.getId();
         }
         snippet.setId(maxId + 1);
         snippet.setUpdatedAt(now);
@@ -306,9 +356,8 @@ uint64_t JsonSnippetRepository::save(Snippet& snippet) {
 bool JsonSnippetRepository::removeById(uint64_t id) {
     std::lock_guard<std::mutex> lock(m_mutex);
     auto snippets = loadFromFile();
-    auto it = std::remove_if(snippets.begin(), snippets.end(), [id](const Snippet& s) {
-        return s.getId() == id;
-    });
+    auto it = std::remove_if(snippets.begin(), snippets.end(),
+                             [id](const Snippet& s) { return s.getId() == id; });
 
     if (it == snippets.end()) {
         return false;
@@ -322,9 +371,8 @@ bool JsonSnippetRepository::removeById(uint64_t id) {
 bool JsonSnippetRepository::removeByTitle(const std::string& title) {
     std::lock_guard<std::mutex> lock(m_mutex);
     auto snippets = loadFromFile();
-    auto it = std::remove_if(snippets.begin(), snippets.end(), [&title](const Snippet& s) {
-        return s.getTitle() == title;
-    });
+    auto it = std::remove_if(snippets.begin(), snippets.end(),
+                             [&title](const Snippet& s) { return s.getTitle() == title; });
 
     if (it == snippets.end()) {
         return false;
@@ -335,4 +383,4 @@ bool JsonSnippetRepository::removeByTitle(const std::string& title) {
     return true;
 }
 
-} // namespace snipcli::model
+}  // namespace snipcli::model

@@ -1,15 +1,14 @@
 #include "snipcli/controller/commands/list_command.hpp"
-#include "snipcli/common/exceptions.hpp"
+
 #include <algorithm>
+
+#include "snipcli/common/exceptions.hpp"
 
 namespace snipcli::controller::commands {
 
-ListCommand::ListCommand(ParsedArgs args,
-                         std::shared_ptr<model::ISnippetReader> reader,
+ListCommand::ListCommand(ParsedArgs args, std::shared_ptr<model::ISnippetReader> reader,
                          std::shared_ptr<view::ISnippetView> view)
-    : m_args(std::move(args)),
-      m_reader(std::move(reader)),
-      m_view(std::move(view)) {}
+    : m_args(std::move(args)), m_reader(std::move(reader)), m_view(std::move(view)) {}
 
 std::string ListCommand::getName() const {
     return "list";
@@ -27,7 +26,8 @@ int ListCommand::execute() {
             std::string tag = m_args.getOption("tag");
             std::vector<model::Snippet> filtered;
             for (const auto& s : snippets) {
-                if (s.hasTag(tag)) filtered.push_back(s);
+                if (s.hasTag(tag))
+                    filtered.push_back(s);
             }
             snippets = std::move(filtered);
         }
@@ -36,7 +36,8 @@ int ListCommand::execute() {
             std::string lang = m_args.getOption("lang");
             std::vector<model::Snippet> filtered;
             for (const auto& s : snippets) {
-                if (s.getLanguage() == lang) filtered.push_back(s);
+                if (s.getLanguage() == lang)
+                    filtered.push_back(s);
             }
             snippets = std::move(filtered);
         }
@@ -49,4 +50,4 @@ int ListCommand::execute() {
     }
 }
 
-} // namespace snipcli::controller::commands
+}  // namespace snipcli::controller::commands

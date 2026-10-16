@@ -18,7 +18,8 @@ public:
  */
 class ValidationException : public SnipException {
 public:
-    explicit ValidationException(const std::string& message) : SnipException("Validation Error: " + message) {}
+    explicit ValidationException(const std::string& message)
+        : SnipException("Validation Error: " + message) {}
 };
 
 /**
@@ -26,7 +27,8 @@ public:
  */
 class StorageException : public SnipException {
 public:
-    explicit StorageException(const std::string& message) : SnipException("Storage Error: " + message) {}
+    explicit StorageException(const std::string& message)
+        : SnipException("Storage Error: " + message) {}
 };
 
 /**
@@ -34,7 +36,8 @@ public:
  */
 class CommandException : public SnipException {
 public:
-    explicit CommandException(const std::string& message) : SnipException("Command Error: " + message) {}
+    explicit CommandException(const std::string& message)
+        : SnipException("Command Error: " + message) {}
 };
 
-} // namespace snipcli::common
+}  // namespace snipcli::common

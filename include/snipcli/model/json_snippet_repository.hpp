@@ -1,8 +1,9 @@
 #pragma once
 
-#include "snipcli/model/i_snippet_repository.hpp"
 #include <filesystem>
 #include <mutex>
+
+#include "snipcli/model/i_snippet_repository.hpp"
 
 namespace snipcli::model {
 
@@ -34,4 +35,4 @@ private:
     mutable std::mutex m_mutex;
 };
 
-} // namespace snipcli::model
+}  // namespace snipcli::model

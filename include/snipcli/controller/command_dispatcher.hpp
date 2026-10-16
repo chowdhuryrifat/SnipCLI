@@ -1,10 +1,11 @@
 #pragma once
 
-#include "snipcli/controller/i_command.hpp"
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include "snipcli/controller/i_command.hpp"
 
 namespace snipcli::controller {
 
@@ -23,4 +24,4 @@ private:
     std::vector<std::string> m_order;
 };
 
-} // namespace snipcli::controller
+}  // namespace snipcli::controller

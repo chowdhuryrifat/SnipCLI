@@ -1,14 +1,12 @@
 #include "snipcli/controller/commands/delete_command.hpp"
+
 #include "snipcli/common/exceptions.hpp"
 
 namespace snipcli::controller::commands {
 
-DeleteCommand::DeleteCommand(ParsedArgs args,
-                             std::shared_ptr<model::ISnippetWriter> writer,
+DeleteCommand::DeleteCommand(ParsedArgs args, std::shared_ptr<model::ISnippetWriter> writer,
                              std::shared_ptr<view::ISnippetView> view)
-    : m_args(std::move(args)),
-      m_writer(std::move(writer)),
-      m_view(std::move(view)) {}
+    : m_args(std::move(args)), m_writer(std::move(writer)), m_view(std::move(view)) {}
 
 std::string DeleteCommand::getName() const {
     return "delete";
@@ -59,4 +57,4 @@ int DeleteCommand::execute() {
     }
 }
 
-} // namespace snipcli::controller::commands
+}  // namespace snipcli::controller::commands

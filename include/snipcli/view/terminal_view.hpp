@@ -1,7 +1,8 @@
 #pragma once
 
-#include "snipcli/view/i_snippet_view.hpp"
 #include <iostream>
+
+#include "snipcli/view/i_snippet_view.hpp"
 
 namespace snipcli::view {
 
@@ -17,14 +18,12 @@ public:
     void renderMessage(const std::string& message) override;
     void renderSuccess(const std::string& message) override;
     void renderError(const std::string& message) override;
-    void renderStats(
-        size_t totalSnippets, 
-        size_t totalLines, 
-        const std::vector<std::pair<std::string, size_t>>& languageBreakdown) override;
+    void renderStats(size_t totalSnippets, size_t totalLines,
+                     const std::vector<std::pair<std::string, size_t>>& languageBreakdown) override;
 
 private:
     std::ostream& m_out;
     std::ostream& m_err;
 };
 
-} // namespace snipcli::view
+}  // namespace snipcli::view

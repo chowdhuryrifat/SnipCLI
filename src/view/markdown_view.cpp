@@ -12,7 +12,8 @@ void MarkdownView::renderSnippet(const model::Snippet& snippet) {
     m_out << "- **Lines:** " << snippet.getLineCount() << "\n";
     m_out << "- **Tags:** ";
     for (size_t i = 0; i < snippet.getTags().size(); ++i) {
-        m_out << "`" << snippet.getTags()[i] << "`" << (i + 1 < snippet.getTags().size() ? ", " : "");
+        m_out << "`" << snippet.getTags()[i] << "`"
+              << (i + 1 < snippet.getTags().size() ? ", " : "");
     }
     m_out << "\n\n```" << snippet.getLanguage() << "\n";
     m_out << snippet.getCode();
@@ -35,14 +36,12 @@ void MarkdownView::renderSnippetList(const std::vector<model::Snippet>& snippets
         std::string tagStr;
         for (size_t i = 0; i < s.getTags().size(); ++i) {
             tagStr += "`" + s.getTags()[i] + "`";
-            if (i + 1 < s.getTags().size()) tagStr += ", ";
+            if (i + 1 < s.getTags().size())
+                tagStr += ", ";
         }
 
-        m_out << "| " << s.getId() << " | " 
-              << s.getTitle() << " | " 
-              << s.getLanguage() << " | " 
-              << s.getLineCount() << " | " 
-              << tagStr << " |\n";
+        m_out << "| " << s.getId() << " | " << s.getTitle() << " | " << s.getLanguage() << " | "
+              << s.getLineCount() << " | " << tagStr << " |\n";
     }
 }
 
@@ -59,10 +58,8 @@ void MarkdownView::renderError(const std::string& message) {
 }
 
 void MarkdownView::renderStats(
-    size_t totalSnippets, 
-    size_t totalLines, 
+    size_t totalSnippets, size_t totalLines,
     const std::vector<std::pair<std::string, size_t>>& languageBreakdown) {
-    
     m_out << "## SnipCLI Repository Statistics\n\n";
     m_out << "- **Total Snippets:** " << totalSnippets << "\n";
     m_out << "- **Total Lines of Code:** " << totalLines << "\n\n";
@@ -74,4 +71,4 @@ void MarkdownView::renderStats(
     }
 }
 
-} // namespace snipcli::view
+}  // namespace snipcli::view

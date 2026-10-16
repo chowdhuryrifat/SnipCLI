@@ -1,3 +1,8 @@
+#include <cstdlib>
+#include <filesystem>
+#include <iostream>
+#include <memory>
+
 #include "snipcli/controller/cli_parser.hpp"
 #include "snipcli/controller/command_dispatcher.hpp"
 #include "snipcli/controller/commands/add_command.hpp"
@@ -8,11 +13,6 @@
 #include "snipcli/controller/commands/stats_command.hpp"
 #include "snipcli/model/json_snippet_repository.hpp"
 #include "snipcli/view/view_factory.hpp"
-
-#include <cstdlib>
-#include <filesystem>
-#include <iostream>
-#include <memory>
 
 namespace {
 
@@ -30,9 +30,11 @@ std::filesystem::path resolveStoragePath() {
 #else
     const char* home = std::getenv("HOME");
     if (home) {
-        std::filesystem::path candidate = std::filesystem::path(home) / ".snipcli" / "snippets.json";
+        std::filesystem::path candidate =
+            std::filesystem::path(home) / ".snipcli" / "snippets.json";
         std::error_code ec;
-        if (std::filesystem::exists(candidate.parent_path()) || std::filesystem::create_directories(candidate.parent_path(), ec)) {
+        if (std::filesystem::exists(candidate.parent_path()) ||
+            std::filesystem::create_directories(candidate.parent_path(), ec)) {
             return candidate;
         }
     }
@@ -40,7 +42,7 @@ std::filesystem::path resolveStoragePath() {
     return std::filesystem::current_path() / ".snipcli_snippets.json";
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char* argv[]) {
     using namespace snipcli;
@@ -63,12 +65,18 @@ int main(int argc, char* argv[]) {
 
         // Command Dispatcher Setup (Open/Closed Principle)
         controller::CommandDispatcher dispatcher;
-        dispatcher.registerCommand(std::make_unique<controller::commands::AddCommand>(args, repository, repository, view));
-        dispatcher.registerCommand(std::make_unique<controller::commands::ListCommand>(args, repository, view));
-        dispatcher.registerCommand(std::make_unique<controller::commands::GetCommand>(args, repository, view));
-        dispatcher.registerCommand(std::make_unique<controller::commands::DeleteCommand>(args, repository, view));
-        dispatcher.registerCommand(std::make_unique<controller::commands::SearchCommand>(args, repository, view));
-        dispatcher.registerCommand(std::make_unique<controller::commands::StatsCommand>(args, repository, view));
+        dispatcher.registerCommand(
+            std::make_unique<controller::commands::AddCommand>(args, repository, repository, view));
+        dispatcher.registerCommand(
+            std::make_unique<controller::commands::ListCommand>(args, repository, view));
+        dispatcher.registerCommand(
+            std::make_unique<controller::commands::GetCommand>(args, repository, view));
+        dispatcher.registerCommand(
+            std::make_unique<controller::commands::DeleteCommand>(args, repository, view));
+        dispatcher.registerCommand(
+            std::make_unique<controller::commands::SearchCommand>(args, repository, view));
+        dispatcher.registerCommand(
+            std::make_unique<controller::commands::StatsCommand>(args, repository, view));
 
         if (args.verb.empty() || args.hasFlag("--help") || args.hasFlag("-h")) {
             dispatcher.printHelp();

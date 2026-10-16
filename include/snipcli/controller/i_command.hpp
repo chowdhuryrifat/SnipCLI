@@ -21,4 +21,4 @@ public:
     [[nodiscard]] virtual std::string getDescription() const = 0;
 };
 
-} // namespace snipcli::controller
+}  // namespace snipcli::controller

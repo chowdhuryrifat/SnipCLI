@@ -1,11 +1,13 @@
 #include "snipcli/controller/command_dispatcher.hpp"
+
 #include <iomanip>
 #include <iostream>
 
 namespace snipcli::controller {
 
 void CommandDispatcher::registerCommand(std::unique_ptr<ICommand> command) {
-    if (!command) return;
+    if (!command)
+        return;
     std::string name = command->getName();
     m_commands[name] = std::move(command);
     m_order.push_back(name);
@@ -33,8 +35,8 @@ void CommandDispatcher::printHelp() const {
     for (const auto& name : m_order) {
         auto it = m_commands.find(name);
         if (it != m_commands.end()) {
-            std::cout << "  " << std::left << std::setw(12) << name 
-                      << it->second->getDescription() << "\n";
+            std::cout << "  " << std::left << std::setw(12) << name << it->second->getDescription()
+                      << "\n";
         }
     }
 
@@ -44,4 +46,4 @@ void CommandDispatcher::printHelp() const {
     std::cout << "  --format <fmt>   Output format ('terminal' or 'markdown')\n";
 }
 
-} // namespace snipcli::controller
+}  // namespace snipcli::controller

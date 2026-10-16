@@ -1,10 +1,12 @@
-#include "snipcli/model/json_snippet_repository.hpp"
 #include <filesystem>
 #include <iostream>
 
+#include "snipcli/model/json_snippet_repository.hpp"
+
 void runRepositoryTests() {
     std::cout << "[TEST] Running Repository tests..." << std::endl;
-    std::filesystem::path testFile = std::filesystem::temp_directory_path() / "test_snipcli_repo.json";
+    std::filesystem::path testFile =
+        std::filesystem::temp_directory_path() / "test_snipcli_repo.json";
     if (std::filesystem::exists(testFile)) {
         std::filesystem::remove(testFile);
     }

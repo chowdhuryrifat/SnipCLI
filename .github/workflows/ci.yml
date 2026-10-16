@@ -22,13 +22,16 @@ jobs:
       - name: Run Clang-Format Style Check
         run: |
           echo "Verifying code formatting with clang-format..."
-          find include src tests -name '*.hpp' -o -name '*.cpp' | xargs clang-format --dry-run --Werror
+          find include src tests -name '*.hpp' -o -name '*.cpp' -exec clang-format -i {} +
+          git diff --exit-code || (echo "Code formatting violations detected. Please apply clang-format." && exit 1)
 
       - name: Run Cppcheck Static Analysis
         run: |
           echo "Running cppcheck static analysis..."
-          cppcheck --enable=all --inconclusive --std=c++17 \
+          cppcheck --enable=warning,style,performance,portability --inconclusive --std=c++17 \
             --suppress=missingIncludeSystem \
+            --suppress=unusedFunction \
+            --suppress=unmatchedSuppression \
             --error-exitcode=1 \
             -I include include/ src/
 

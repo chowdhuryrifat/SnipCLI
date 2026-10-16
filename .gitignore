@@ -1,0 +1,22 @@
+# Build directories
+build/
+bin/
+lib/
+out/
+
+# IDE and Editor configurations
+.vscode/
+.idea/
+*.swp
+*.swo
+compile_commands.json
+.cache/
+
+# Local snippet database files
+*.snipcli_snippets.json
+test_snippets.json
+snippets.json
+
+# OS files
+.DS_Store
+Thumbs.db

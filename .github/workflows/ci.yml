@@ -1,0 +1,83 @@
+name: SnipCLI CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "dev" ]
+  pull_request:
+    branches: [ "main", "dev" ]
+
+jobs:
+  lint-and-format:
+    name: Code Quality & Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Clang-Format and Cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format cppcheck
+
+      - name: Run Clang-Format Style Check
+        run: |
+          echo "Verifying code formatting with clang-format..."
+          find include src tests -name '*.hpp' -o -name '*.cpp' | xargs clang-format --dry-run --Werror
+
+      - name: Run Cppcheck Static Analysis
+        run: |
+          echo "Running cppcheck static analysis..."
+          cppcheck --enable=all --inconclusive --std=c++17 \
+            --suppress=missingIncludeSystem \
+            --error-exitcode=1 \
+            -I include include/ src/
+
+  build-and-test:
+    name: Build & Test Matrix (${{ matrix.os }} - ${{ matrix.compiler }})
+    needs: lint-and-format
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            compiler: gcc
+            cxx: g++
+            cmake_generator: "Unix Makefiles"
+            artifact_name: snipcli-linux-x86_64
+            binary_path: build/snip
+          - os: windows-latest
+            compiler: msvc
+            cxx: cl
+            cmake_generator: "Visual Studio 17 2022"
+            artifact_name: snipcli-windows-x86_64
+            binary_path: build/Release/snip.exe
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G "${{ matrix.cmake_generator }}" -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Library, CLI, and Test Suite
+        run: |
+          cmake --build build --config Release --parallel
+
+      - name: Run CTest Unit Tests
+        run: |
+          ctest --test-dir build -C Release --output-on-failure
+
+      - name: Run CLI Integration & Smoke Tests (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x ./tests/smoke/smoke_test.sh
+          ./tests/smoke/smoke_test.sh ./build/snip
+
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.binary_path }}
+          retention-days: 7

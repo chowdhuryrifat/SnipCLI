@@ -125,6 +125,6 @@ For a fast 7-day sprint between 2 developers, merge conflicts in C++ arise prima
 
 1. **Day 1 Contract Freeze:** On Day 1, both developers (Lameya and Chowdhury Rifat) collaborate to finalize and merge all abstract header interfaces (`ISnippetRepository.hpp`, `ISnippetView.hpp`, `ICommand.hpp`, `Snippet.hpp`) into `dev`. Once merged, these headers are **FROZEN**.
 2. **Strict File Ownership:**
-   - **Lameya Tabasum's Domain (Backend / Core):** `include/snipcli/model/`, `src/model/`, `tests/unit/test_snippet.cpp`, `tests/unit/test_validator.cpp`, `tests/unit/test_repository.cpp`, `tests/unit/test_strategy.cpp`.
-   - **Chowdhury Rifat Ahmed's Domain (Frontend / Routing):** `include/snipcli/view/`, `include/snipcli/controller/`, `src/view/`, `src/controller/`, `tests/smoke/smoke_test.sh`, `.github/workflows/ci.yml`.
-3. **No Cross-Editing:** If Chowdhury Rifat needs an additional method in Model, he requests an interface adjustment via a GitHub issue/PR rather than modifying Lameya's implementation files, and vice versa.
+   - **Chowdhury Rifat Ahmed's Domain (Backend / Core):** `include/snipcli/model/`, `src/model/`, `tests/unit/test_snippet.cpp`, `tests/unit/test_validator.cpp`, `tests/unit/test_repository.cpp`, `tests/unit/test_strategy.cpp`.
+   - **Lameya Tabasum's Domain (Frontend / Routing & DevOps):** `include/snipcli/view/`, `include/snipcli/controller/`, `src/view/`, `src/controller/`, `tests/smoke/smoke_test.sh`, `.github/workflows/ci.yml`.
+3. **No Cross-Editing:** If Lameya needs an additional method in Model, she requests an interface adjustment via a GitHub issue/PR rather than modifying Rifat's implementation files, and vice versa.

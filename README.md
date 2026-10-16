@@ -97,6 +97,6 @@ ctest --test-dir build --output-on-failure
 ## Authors & Course Context
 
 - **Developers:**
-  - **Lameya Tabasum** (Student ID: `@lameyatabasum`) - Backend & Core Model Architect
-  - **Chowdhury Rifat Ahmed** (Student ID: `@chowdhuryrifat`) - Frontend & Routing Lead
+  - **Chowdhury Rifat Ahmed** (Student ID: `@chowdhuryrifat`) - Backend & Core Model Architect
+  - **Lameya Tabasum** (Student ID: `@lameyatabasum`) - Frontend, Routing & DevOps Lead
 

@@ -98,6 +98,6 @@ ctest --test-dir build --output-on-failure
 
 - **Course:** Advanced Programming Laboratory
 - **Developers:**
-  - **Lameya Tabasum** (Student ID: `250201`) - Backend & Core Model Architect
-  - **Chowdhury Rifat Ahmed** (Student ID: `250233`) - Frontend & Routing Lead
+  - **Chowdhury Rifat Ahmed** (Student ID: `250233`) - Backend & Core Model Architect
+  - **Lameya Tabasum** (Student ID: `250201`) - Frontend, Routing & DevOps Lead
 

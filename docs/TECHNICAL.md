@@ -1,7 +1,7 @@
 # SnipCLI Technical Reference Manual
 
 **Course:** Advanced Programming Laboratory  
-**Engineers:** Lameya Tabasum (ID: `250201`) & Chowdhury Rifat Ahmed (ID: `250233`)
+**Engineers:** Chowdhury Rifat Ahmed (ID: `250233`) & Lameya Tabasum (ID: `250201`)
 
 ---
 

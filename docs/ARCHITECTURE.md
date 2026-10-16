@@ -2,8 +2,8 @@
 
 **Course:** Advanced Programming Laboratory  
 **Engineers:**  
-- **Lameya Tabasum** (Student ID: `250201`) - Backend & Core Architect  
-- **Chowdhury Rifat Ahmed** (Student ID: `250233`) - Frontend & Routing Lead  
+- **Chowdhury Rifat Ahmed** (Student ID: `250233`) - Backend & Core Architect  
+- **Lameya Tabasum** (Student ID: `250201`) - Frontend, Routing & DevOps Lead  
 
 ---
 

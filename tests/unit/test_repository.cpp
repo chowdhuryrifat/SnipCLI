@@ -17,22 +17,37 @@ void runRepositoryTests() {
         std::exit(1);
     }
 
+    // Test ISP: Verify operations via segregated ISnippetWriter interface
+    snipcli::model::ISnippetWriter& writer = repo;
     snipcli::model::Snippet s1(0, "BFS", "cpp", "queue<int> q;", {"graph"}, "", "");
-    uint64_t id1 = repo.save(s1);
-    if (id1 != 1 || repo.count() != 1) {
-        std::cerr << "Save snippet failed!" << std::endl;
+    uint64_t id1 = writer.save(s1);
+    if (id1 != 1) {
+        std::cerr << "Save snippet via ISnippetWriter failed!" << std::endl;
         std::exit(1);
     }
 
-    auto found = repo.getByTitle("BFS");
+    // Test ISP: Verify queries via segregated ISnippetReader interface
+    const snipcli::model::ISnippetReader& reader = repo;
+    if (reader.count() != 1 || !reader.exists("BFS")) {
+        std::cerr << "Query via ISnippetReader failed!" << std::endl;
+        std::exit(1);
+    }
+
+    auto found = reader.getByTitle("BFS");
     if (!found.has_value() || found->getId() != 1 || found->getTitle() != "BFS") {
-        std::cerr << "Get by title failed!" << std::endl;
+        std::cerr << "Get by title via ISnippetReader failed!" << std::endl;
         std::exit(1);
     }
 
-    bool deleted = repo.removeByTitle("BFS");
-    if (!deleted || repo.count() != 0) {
-        std::cerr << "Remove by title failed!" << std::endl;
+    auto byId = reader.getById(1);
+    if (!byId.has_value() || byId->getTitle() != "BFS") {
+        std::cerr << "Get by ID via ISnippetReader failed!" << std::endl;
+        std::exit(1);
+    }
+
+    bool deleted = writer.removeByTitle("BFS");
+    if (!deleted || reader.count() != 0) {
+        std::cerr << "Remove by title via ISnippetWriter failed!" << std::endl;
         std::exit(1);
     }
 

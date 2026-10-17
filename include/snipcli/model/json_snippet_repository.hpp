@@ -20,9 +20,9 @@ public:
     [[nodiscard]] bool exists(const std::string& title) const override;
     [[nodiscard]] size_t count() const override;
 
-    uint64_t save(Snippet& snippet) override;
-    bool removeById(uint64_t id) override;
-    bool removeByTitle(const std::string& title) override;
+    [[nodiscard]] uint64_t save(Snippet& snippet) override;
+    [[nodiscard]] bool removeById(uint64_t id) override;
+    [[nodiscard]] bool removeByTitle(const std::string& title) override;
 
     [[nodiscard]] const std::filesystem::path& getStoragePath() const noexcept;
 

@@ -33,8 +33,10 @@
 - [✨ Key Features](#-key-features)
 - [🚀 Quick Start & Installation](#-quick-start--installation)
 - [🖥️ Interactive Command Showcase](#️-interactive-command-showcase)
+- [📖 Complete CLI Command & Option Reference](#-complete-cli-command--option-reference)
 - [🏗️ System Architecture & MVC Blueprint](#️-system-architecture--mvc-blueprint)
 - [🧠 SOLID & GoF Design Patterns](#-solid--gof-design-patterns)
+- [🧪 Automated Testing & CI/CD Pipeline](#-automated-testing--cicd-pipeline)
 - [🛡️ Defense & Live Modification Playbook](#️-defense--live-modification-playbook)
 - [👥 Authors & Course Metadata](#-authors--course-metadata)
 
@@ -44,12 +46,12 @@
 
 | Capability | Description | Advantage |
 | :--- | :--- | :--- |
-| ⚡ **Instant CLI Querying** | Filter templates by tag (`#graph`, `#dp`) or case-insensitive title search. | **O(1) to O(N)** in-memory querying under 5ms. |
+| ⚡ **Instant CLI Querying** | Filter templates by tag (`#graph`, `#dp`), language (`cpp`, `python`), or case-insensitive title search. | **O(1) to O(N)** in-memory querying under 5ms. |
 | 🎨 **Dual Presentation Engine** | Toggle between styled **ANSI colorized tables** and **GitHub-Flavored Markdown**. | Pipe ready-to-publish tables directly into docs. |
 | 🧩 **Strict MVC Separation** | Zero presentation code in Models; zero business logic in Views. | Total layer independence and 100% testability. |
 | 🛡️ **Defensive Domain Validation** | Rejects empty payloads, duplicate titles, and invalid language formats. | Prevents silent database corruption. |
 | 📋 **Unix Pipe Native** | Extract raw source code directly via `--code-only` or `-c`. | Pipe directly to clipboard (`xclip`/`pbcopy`) or compiler. |
-| 📊 **Repository Telemetry** | Aggregate line counts, snippet volumes, and language distributions. | Track algorithmic toolkit growth over time. |
+| 📊 **Repository Telemetry** | Aggregate line counts, snippet volumes, and sorted language distributions. | Track algorithmic toolkit growth over time. |
 
 ---
 
@@ -73,10 +75,10 @@ cmake --build build --parallel
 
 ### 3. Verify Build & Run Test Suite
 ```bash
-# Run CTest Unit Tests (All 4 Suites)
+# Run CTest Unit Tests (All 7 Suites - 93 Scenarios & Invariants)
 ctest --test-dir build --output-on-failure
 
-# Run Integration & CLI Smoke Tests
+# Run Automated End-to-End Smoke & Integration Tests
 ./tests/smoke/smoke_test.sh ./build/snip
 ```
 
@@ -130,6 +132,9 @@ ID    TITLE                    LANGUAGE    LINES     TAGS
 
 # Tag-based exact search
 ./build/snip search --tag "tree"
+
+# Language-based exact search (LanguageSearchStrategy)
+./build/snip search --lang "cpp"
 ```
 </details>
 
@@ -139,6 +144,9 @@ ID    TITLE                    LANGUAGE    LINES     TAGS
 ```bash
 # Inspect snippet with formatted banner, metadata, and line numbers
 ./build/snip get --title "Dijkstra"
+
+# Retrieve snippet by numeric ID
+./build/snip get --id 1
 
 # Pipe pure source code straight into system clipboard
 ./build/snip get --title "Dijkstra" --code-only | pbcopy    # macOS
@@ -183,7 +191,39 @@ Export your snippet library directly to GitHub-Flavored Markdown for homework re
 | 2 | SegmentTree | cpp | 45 | `tree`, `range_query` |
 </details>
 
+<details>
+<summary><b>7. 🗑️ Snippet Deletion & Mutation</b></summary>
+
+```bash
+# Delete snippet by unique title
+./build/snip delete --title "Dijkstra"
+
+# Delete snippet by numeric ID
+./build/snip delete --id 1
+
+# Delete snippet via positional query
+./build/snip delete "BinarySearch"
+```
+> **Output:** `> **Success:** Snippet 'Dijkstra' deleted successfully.`
+</details>
+
 ---
+
+## 📖 Complete CLI Command & Option Reference
+
+| Verb | Syntax | Flags & Options | Description |
+| :--- | :--- | :--- | :--- |
+| `add` | `snip add --title <t> --lang <l> [--code <c> \| --file <f>] [--tags <t1,t2>]` | `--title, -t`<br>`--lang, -l`<br>`--code, -c`<br>`--file, -f`<br>`--tags` | Persists a new code snippet with strict domain validation. |
+| `list` | `snip list [--tag <tag>] [--lang <lang>] [--format <fmt>]` | `--tag, --tags`<br>`--lang, --language`<br>`--format` (`terminal` \| `markdown`) | Displays tabular snippet library with optional category/language filters. |
+| `get` | `snip get [--title <t> \| --id <id> \| <query>] [--code-only] [--format <fmt>]` | `--title, -t`<br>`--id`<br>`--code-only, -c`<br>`--format` | Retrieves and inspects a snippet; `--code-only` outputs pure source for pipes. |
+| `search` | `snip search [<query>] [--tag <tag>] [--lang <lang>] [--format <fmt>]` | `--tag, --tags`<br>`--lang, --language`<br>`--format` | Dynamic GoF Strategy search across substrings, tags, or languages. |
+| `stats` | `snip stats [--format <fmt>]` | `--format` (`terminal` \| `markdown`) | Computes repository telemetry, total line count, and sorted language metrics. |
+| `delete` | `snip delete [--title <t> \| --id <id> \| <query>] [--format <fmt>]` | `--title, -t`<br>`--id`<br>`--format` | Deletes a snippet by title or ID with verification and clean error reporting. |
+
+**Global Options:**
+- `--help, -h`: Display command-line manual and option syntax.
+- `--version, -v`: Display application name and semantic version.
+- `--format <terminal|markdown>`: Globally override presentation engine format.
 
 ## 🏗️ System Architecture & MVC Blueprint
 
@@ -228,9 +268,39 @@ flowchart TD
 - **D - Dependency Inversion Principle (DIP):** High-level command modules depend on abstract interfaces (`ISnippetReader`, `ISnippetWriter`, `ISnippetView`), injected via constructors at application startup.
 
 ### 2. GoF Design Patterns Mapping
-- **Command Pattern (Behavioral):** Encapsulates CLI operations as objects (`ICommand` $\rightarrow$ `AddCommand`, `ListCommand`, etc.), decoupling the parser from business execution.
-- **Strategy Pattern (Behavioral):** Dynamic search algorithms (`ISearchStrategy` $\rightarrow$ `TagSearchStrategy`, `TitleSearchStrategy`) selected at runtime based on CLI parameters.
-- **Factory Pattern (Creational):** Polymorphic view creation (`ViewFactory` $\rightarrow$ `TerminalView`, `MarkdownView`) based on user-supplied format flags.
+- **Command Pattern (Behavioral):** Encapsulates CLI operations as objects (`ICommand` $\rightarrow$ `AddCommand`, `ListCommand`, `GetCommand`, `DeleteCommand`, `SearchCommand`, `StatsCommand`), decoupling the CLI argument parser from domain business execution.
+- **Strategy Pattern (Behavioral):** Dynamic algorithmic search strategies (`ISearchStrategy` $\rightarrow$ `TagSearchStrategy`, `TitleSearchStrategy`, `LanguageSearchStrategy`) dynamically bound at runtime based on CLI flags, eliminating nested conditional logic.
+- **Factory Pattern (Creational):** Polymorphic view creation (`ViewFactory` $\rightarrow$ `TerminalView`, `MarkdownView`) based on user-supplied format flags, featuring standard and custom stream injection for 100% test isolation.
+
+---
+
+## 🧪 Automated Testing & CI/CD Pipeline
+
+SnipCLI enforces rigorous multi-layered quality gates across every commit and Pull Request:
+
+### 1. Multi-Suite Unit Testing (CTest)
+A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 93 domain invariants and behavioral scenarios:
+- **`Snippet` (10 Invariants):** Immutability, line counting, tag normalization, ISO 8601 timestamps.
+- **`SnippetValidator` (12 Invariants):** Defense against empty titles, illegal characters, empty languages, and missing payloads.
+- **`JsonSnippetRepository` (10 Scenarios):** CRUD operations, ID auto-incrementation, persistence roundtrips, and corrupted JSON recovery.
+- **`Strategy Pattern` (10 Scenarios):** Case-insensitive title substring, exact tag matching, and language filtering.
+- **`CliParser` & `CommandDispatcher` (10 Invariants):** Tokenization, short/long flags, positional arguments, unknown verbs.
+- **`Command Wiring` (24 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution.
+- **`View Engine & Factory` (17 Scenarios):** Stream-injected verification of `TerminalView`, `MarkdownView`, and `ViewFactory`.
+
+### 2. Automated End-to-End Smoke & Integration Suite
+The bash test suite (`tests/smoke/smoke_test.sh`) verifies the final binary end-to-end:
+- Full CLI verb lifecycle (`add`, `list`, `get`, `search`, `stats`, `delete`).
+- Dual presentation engines (ANSI terminal formatting vs GitHub-Flavored Markdown).
+- Pipe-native extraction (`--code-only`) ensuring zero extraneous metadata leaks into shell pipes.
+- Error quarantine: cleanly exits with non-zero exit codes upon duplicate titles, invalid verbs, or missing IDs.
+- Cross-platform path normalization (`cygpath`) for seamless execution across Linux, macOS, and Windows Git Bash.
+
+### 3. GitHub Actions CI/CD Matrix
+Every pull request targeting `main` or `dev` triggers the automated CI/CD pipeline:
+- **Code Quality & Static Analysis:** Clang-Format 18 check (`git diff --exit-code`) and Cppcheck static analysis (`--enable=warning,performance,portability --error-exitcode=1`).
+- **Build & Test Matrix:** Parallel compilation and CTest execution across `ubuntu-latest` (GCC) and `windows-latest` (MSVC).
+- **Automated Artifact Packaging:** Production binaries are automatically archived and published as CI build artifacts.
 
 ---
 

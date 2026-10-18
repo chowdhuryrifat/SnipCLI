@@ -115,6 +115,12 @@ public:
     void setTags(std::vector<std::string> tags);
 
     /**
+     * @brief Updates the ISO 8601 timestamp of creation.
+     * @param timestamp The new timestamp string.
+     */
+    void setCreatedAt(std::string timestamp);
+
+    /**
      * @brief Updates the ISO 8601 timestamp of last modification.
      * @param timestamp The new timestamp string.
      */

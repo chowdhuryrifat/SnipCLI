@@ -33,7 +33,8 @@ void assertNoThrow(const std::string& testName, Func&& func) {
         std::cerr << "[FAIL] " << testName << " unexpectedly threw: " << ex.what() << std::endl;
         std::exit(1);
     } catch (...) {
-        std::cerr << "[FAIL] " << testName << " unexpectedly threw an unknown exception!" << std::endl;
+        std::cerr << "[FAIL] " << testName << " unexpectedly threw an unknown exception!"
+                  << std::endl;
         std::exit(1);
     }
 }

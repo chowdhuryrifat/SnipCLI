@@ -24,10 +24,8 @@ void runSnippetTests() {
     // ---------------------------------------------------------
     {
         std::vector<std::string> tags = {"graph", "shortest-path"};
-        snipcli::model::Snippet snippet(1, "Dijkstra", "cpp",
-                                        "int main() {\n  return 0;\n}\n",
-                                        tags, "2026-10-19T00:00:00Z",
-                                        "2026-10-19T00:00:00Z");
+        snipcli::model::Snippet snippet(1, "Dijkstra", "cpp", "int main() {\n  return 0;\n}\n",
+                                        tags, "2026-10-19T00:00:00Z", "2026-10-19T00:00:00Z");
 
         assertTrue(snippet.getId() == 1, "getId() must return 1");
         assertTrue(snippet.getTitle() == "Dijkstra", "getTitle() must return 'Dijkstra'");
@@ -76,8 +74,10 @@ void runSnippetTests() {
         assertTrue(snippet.getCode() == "def quicksort(arr):\n    pass\n",
                    "Mutated code must match");
         assertTrue(snippet.getTags().size() == 2, "Mutated tags count must be 2");
-        assertTrue(snippet.getCreatedAt() == "2026-10-19T01:00:00Z", "Mutated createdAt must match");
-        assertTrue(snippet.getUpdatedAt() == "2026-10-19T02:00:00Z", "Mutated updatedAt must match");
+        assertTrue(snippet.getCreatedAt() == "2026-10-19T01:00:00Z",
+                   "Mutated createdAt must match");
+        assertTrue(snippet.getUpdatedAt() == "2026-10-19T02:00:00Z",
+                   "Mutated updatedAt must match");
         assertTrue(snippet.getLineCount() == 2, "Mutated snippet line count must be 2");
     }
 
@@ -120,7 +120,8 @@ void runSnippetTests() {
     // Scenario 5: Tag Predicate (hasTag)
     // ---------------------------------------------------------
     {
-        snipcli::model::Snippet snippet(1, "BinarySearch", "cpp", "code", {"binary-search", "divide-and-conquer"}, "", "");
+        snipcli::model::Snippet snippet(1, "BinarySearch", "cpp", "code",
+                                        {"binary-search", "divide-and-conquer"}, "", "");
 
         assertTrue(snippet.hasTag("binary-search"), "hasTag must return true for existing tag");
         assertTrue(snippet.hasTag("divide-and-conquer"), "hasTag must return true for second tag");
@@ -136,7 +137,8 @@ void runSnippetTests() {
     // Scenario 6: Deep Copy Semantics (Copy Constructor & Assignment)
     // ---------------------------------------------------------
     {
-        snipcli::model::Snippet original(10, "Original", "cpp", "int a = 1;", {"tag1"}, "ts1", "ts1");
+        snipcli::model::Snippet original(10, "Original", "cpp", "int a = 1;", {"tag1"}, "ts1",
+                                         "ts1");
 
         // Copy constructor
         snipcli::model::Snippet copyConstructed = original;
@@ -162,7 +164,8 @@ void runSnippetTests() {
     // Scenario 7: Move Semantics (Move Constructor & Assignment)
     // ---------------------------------------------------------
     {
-        snipcli::model::Snippet source(100, "ToMove", "cpp", "long code buffer...", {"move_tag"}, "t1", "t2");
+        snipcli::model::Snippet source(100, "ToMove", "cpp", "long code buffer...", {"move_tag"},
+                                       "t1", "t2");
 
         // Move constructor
         snipcli::model::Snippet moved(std::move(source));
@@ -190,8 +193,10 @@ void runSnippetTests() {
         assertTrue(constSnippet.getLanguage() == "rust", "Const getLanguage() callable");
         assertTrue(constSnippet.getCode() == "fn main() {}", "Const getCode() callable");
         assertTrue(constSnippet.getTags().size() == 1, "Const getTags() callable");
-        assertTrue(constSnippet.getCreatedAt() == "2026-10-19T00:00:00Z", "Const getCreatedAt() callable");
-        assertTrue(constSnippet.getUpdatedAt() == "2026-10-19T00:00:00Z", "Const getUpdatedAt() callable");
+        assertTrue(constSnippet.getCreatedAt() == "2026-10-19T00:00:00Z",
+                   "Const getCreatedAt() callable");
+        assertTrue(constSnippet.getUpdatedAt() == "2026-10-19T00:00:00Z",
+                   "Const getUpdatedAt() callable");
         assertTrue(constSnippet.getLineCount() == 1, "Const getLineCount() callable");
         assertTrue(constSnippet.hasTag("const_tag"), "Const hasTag() callable");
     }
@@ -227,7 +232,8 @@ void runSnippetTests() {
             "}\n";
 
         snipcli::model::Snippet s(7, "ComplexCodeSnippet", "cpp", complexCode, {"syntax"}, "", "");
-        assertTrue(s.getCode() == complexCode, "Complex code with tabs, quotes, and escapes preserved");
+        assertTrue(s.getCode() == complexCode,
+                   "Complex code with tabs, quotes, and escapes preserved");
         assertTrue(s.getLineCount() == 6, "Complex code line count correctly computed as 6");
     }
 

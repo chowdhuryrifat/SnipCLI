@@ -46,6 +46,7 @@ add_library(snipcli_core
     ${SRC_DIR}/model/json_snippet_repository.cpp
     ${SRC_DIR}/model/strategy/tag_search_strategy.cpp
     ${SRC_DIR}/model/strategy/title_search_strategy.cpp
+    ${SRC_DIR}/model/strategy/language_search_strategy.cpp
     ${SRC_DIR}/view/terminal_view.cpp
     ${SRC_DIR}/view/markdown_view.cpp
     ${SRC_DIR}/view/view_factory.cpp

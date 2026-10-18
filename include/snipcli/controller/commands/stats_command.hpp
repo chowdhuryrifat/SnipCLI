@@ -11,7 +11,8 @@
 namespace snipcli::controller::commands {
 
 /**
- * @brief Command Pattern (GoF): Concrete command for calculating and displaying repository telemetry.
+ * @brief Command Pattern (GoF): Concrete command for calculating and displaying repository
+ * telemetry.
  *
  * Traverses repository records via ISnippetReader to aggregate repository-wide metrics:
  * total snippet count, total lines of code, and snippet distribution across programming languages.

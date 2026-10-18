@@ -35,14 +35,14 @@ int StatsCommand::execute() {
         }
 
         std::vector<std::pair<std::string, size_t>> breakdown(counts.begin(), counts.end());
-        std::sort(breakdown.begin(), breakdown.end(),
-                  [](const std::pair<std::string, size_t>& a,
-                     const std::pair<std::string, size_t>& b) {
-                      if (a.second != b.second) {
-                          return a.second > b.second;  // Descending count
-                      }
-                      return a.first < b.first;        // Alphabetical secondary
-                  });
+        std::sort(
+            breakdown.begin(), breakdown.end(),
+            [](const std::pair<std::string, size_t>& a, const std::pair<std::string, size_t>& b) {
+                if (a.second != b.second) {
+                    return a.second > b.second;  // Descending count
+                }
+                return a.first < b.first;  // Alphabetical secondary
+            });
 
         m_view->renderStats(totalSnippets, totalLines, breakdown);
         return 0;

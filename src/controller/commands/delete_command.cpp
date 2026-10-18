@@ -1,5 +1,7 @@
 #include "snipcli/controller/commands/delete_command.hpp"
 
+#include <string>
+
 #include "snipcli/common/exceptions.hpp"
 
 namespace snipcli::controller::commands {
@@ -22,9 +24,22 @@ int DeleteCommand::execute() {
         std::string identifier;
 
         if (m_args.hasOption("id")) {
-            uint64_t id = std::stoull(m_args.getOption("id"));
-            identifier = "ID #" + std::to_string(id);
-            deleted = m_writer->removeById(id);
+            std::string idStr = m_args.getOption("id");
+            try {
+                size_t idx = 0;
+                uint64_t id = std::stoull(idStr, &idx);
+                if (idx != idStr.size()) {
+                    m_view->renderError("Invalid snippet ID format: '" + idStr +
+                                        "'. Expected an integer.");
+                    return 1;
+                }
+                identifier = "ID #" + std::to_string(id);
+                deleted = m_writer->removeById(id);
+            } catch (const std::exception&) {
+                m_view->renderError("Invalid snippet ID format: '" + idStr +
+                                    "'. Expected an integer.");
+                return 1;
+            }
         } else if (m_args.hasOption("title")) {
             std::string title = m_args.getOption("title");
             identifier = "'" + title + "'";
@@ -32,15 +47,23 @@ int DeleteCommand::execute() {
         } else if (!m_args.positionals.empty()) {
             std::string query = m_args.positionals[0];
             try {
-                uint64_t id = std::stoull(query);
-                identifier = "ID #" + std::to_string(id);
-                deleted = m_writer->removeById(id);
+                size_t idx = 0;
+                uint64_t id = std::stoull(query, &idx);
+                if (idx == query.size()) {
+                    identifier = "ID #" + std::to_string(id);
+                    deleted = m_writer->removeById(id);
+                } else {
+                    identifier = "'" + query + "'";
+                    deleted = m_writer->removeByTitle(query);
+                }
             } catch (...) {
                 identifier = "'" + query + "'";
                 deleted = m_writer->removeByTitle(query);
             }
         } else {
-            m_view->renderError("Must specify snippet --id or --title to delete.");
+            m_view->renderError(
+                "Must specify snippet --id <id> or --title <title> to delete, or provide an "
+                "identifier as an argument.");
             return 1;
         }
 
@@ -51,9 +74,12 @@ int DeleteCommand::execute() {
             m_view->renderError("Snippet " + identifier + " not found.");
             return 1;
         }
-    } catch (const std::exception& ex) {
+    } catch (const common::SnipException& ex) {
         m_view->renderError(ex.what());
         return 1;
+    } catch (const std::exception& ex) {
+        m_view->renderError(std::string("Unexpected error: ") + ex.what());
+        return 2;
     }
 }
 

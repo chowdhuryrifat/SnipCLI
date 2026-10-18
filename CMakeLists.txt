@@ -79,3 +79,9 @@ add_executable(snip_tests
 )
 target_link_libraries(snip_tests PRIVATE snipcli_core)
 add_test(NAME CoreUnitTests COMMAND snip_tests)
+
+# Installation Target
+include(GNUInstallDirs)
+install(TARGETS snip
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)

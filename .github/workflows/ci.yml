@@ -45,9 +45,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
+            compiler: GCC
             artifact_name: snipcli-linux-x86_64
             binary_path: build/snip
           - os: windows-latest
+            compiler: MSVC
             artifact_name: snipcli-windows-x86_64
             binary_path: build/Release/snip.exe
 

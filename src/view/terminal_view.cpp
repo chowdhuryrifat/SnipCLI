@@ -113,7 +113,7 @@ void TerminalView::renderSnippetList(const std::vector<model::Snippet>& snippets
 
         std::string displayTitle = s.getTitle();
         if (displayTitle.length() > 23) {
-            displayTitle = displayTitle.substr(0, 20) + "...";
+            displayTitle.replace(20, std::string::npos, "...");
         }
 
         m_out << std::left << std::setw(6) << s.getId() << colorCyan() << std::setw(25)

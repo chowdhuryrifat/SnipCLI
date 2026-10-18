@@ -1,11 +1,14 @@
 #include "snipcli/model/json_snippet_repository.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <cstdlib>
 #include <ctime>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <unordered_map>
 
 #include "snipcli/common/exceptions.hpp"
 
@@ -55,7 +58,7 @@ std::string escapeJson(const std::string& input) {
             default:
                 if (static_cast<unsigned char>(c) < 0x20) {
                     ss << "\\u" << std::hex << std::setw(4) << std::setfill('0')
-                       << static_cast<int>(c);
+                       << static_cast<int>(static_cast<unsigned char>(c)) << std::dec;
                 } else {
                     ss << c;
                 }
@@ -63,6 +66,15 @@ std::string escapeJson(const std::string& input) {
         }
     }
     return ss.str();
+}
+
+bool isEscaped(const std::string& str, size_t pos) {
+    size_t backslashes = 0;
+    while (pos > 0 && str[pos - 1] == '\\') {
+        backslashes++;
+        pos--;
+    }
+    return (backslashes % 2) != 0;
 }
 
 std::string unescapeJson(const std::string& input) {
@@ -96,6 +108,21 @@ std::string unescapeJson(const std::string& input) {
                 case 't':
                     out += '\t';
                     break;
+                case 'u':
+                    if (i + 4 < input.size()) {
+                        std::string hexStr = input.substr(i + 1, 4);
+                        try {
+                            unsigned long codePoint = std::stoul(hexStr, nullptr, 16);
+                            if (codePoint < 128) {
+                                out += static_cast<char>(codePoint);
+                                i += 4;
+                                break;
+                            }
+                        } catch (...) {
+                        }
+                    }
+                    out += next;
+                    break;
                 default:
                     out += next;
                     break;
@@ -107,42 +134,87 @@ std::string unescapeJson(const std::string& input) {
     return out;
 }
 
-std::string extractJsonField(const std::string& objStr, const std::string& fieldName) {
-    std::string needle = "\"" + fieldName + "\"";
-    size_t pos = objStr.find(needle);
-    if (pos == std::string::npos)
-        return "";
+std::unordered_map<std::string, std::string> parseJsonObject(const std::string& objStr) {
+    std::unordered_map<std::string, std::string> fields;
+    size_t idx = 0;
+    while (idx < objStr.size()) {
+        while (idx < objStr.size() && (std::isspace(static_cast<unsigned char>(objStr[idx])) ||
+                                       objStr[idx] == '{' || objStr[idx] == ',')) {
+            idx++;
+        }
+        if (idx >= objStr.size() || objStr[idx] == '}') {
+            break;
+        }
 
-    size_t colon = objStr.find(':', pos + needle.size());
-    if (colon == std::string::npos)
-        return "";
+        if (objStr[idx] != '"') {
+            idx++;
+            continue;
+        }
 
-    size_t valStart = objStr.find_first_not_of(" \t\n\r", colon + 1);
-    if (valStart == std::string::npos)
-        return "";
+        size_t keyStart = idx + 1;
+        size_t keyEnd = keyStart;
+        while (keyEnd < objStr.size() && (objStr[keyEnd] != '"' || isEscaped(objStr, keyEnd))) {
+            keyEnd++;
+        }
+        if (keyEnd >= objStr.size()) {
+            break;
+        }
+        std::string key = objStr.substr(keyStart, keyEnd - keyStart);
+        idx = keyEnd + 1;
 
-    if (objStr[valStart] == '"') {
-        size_t endQuote = valStart + 1;
-        while (endQuote < objStr.size()) {
-            if (objStr[endQuote] == '"' && objStr[endQuote - 1] != '\\') {
+        while (idx < objStr.size() && std::isspace(static_cast<unsigned char>(objStr[idx]))) {
+            idx++;
+        }
+        if (idx >= objStr.size() || objStr[idx] != ':') {
+            break;
+        }
+        idx++;  // skip ':'
+
+        while (idx < objStr.size() && std::isspace(static_cast<unsigned char>(objStr[idx]))) {
+            idx++;
+        }
+        if (idx >= objStr.size()) {
+            break;
+        }
+
+        std::string value;
+        if (objStr[idx] == '"') {
+            size_t valStart = idx + 1;
+            size_t valEnd = valStart;
+            while (valEnd < objStr.size() && (objStr[valEnd] != '"' || isEscaped(objStr, valEnd))) {
+                valEnd++;
+            }
+            if (valEnd >= objStr.size()) {
                 break;
             }
-            endQuote++;
+            value = unescapeJson(objStr.substr(valStart, valEnd - valStart));
+            idx = valEnd + 1;
+        } else if (objStr[idx] == '[') {
+            size_t arrStart = idx;
+            size_t arrEnd = idx + 1;
+            bool inStr = false;
+            while (arrEnd < objStr.size()) {
+                if (objStr[arrEnd] == '"' && !isEscaped(objStr, arrEnd)) {
+                    inStr = !inStr;
+                } else if (!inStr && objStr[arrEnd] == ']') {
+                    arrEnd++;
+                    break;
+                }
+                arrEnd++;
+            }
+            value = objStr.substr(arrStart, arrEnd - arrStart);
+            idx = arrEnd;
+        } else {
+            size_t valStart = idx;
+            while (idx < objStr.size() && objStr[idx] != ',' && objStr[idx] != '}' &&
+                   !std::isspace(static_cast<unsigned char>(objStr[idx]))) {
+                idx++;
+            }
+            value = objStr.substr(valStart, idx - valStart);
         }
-        if (endQuote >= objStr.size())
-            return "";
-        return unescapeJson(objStr.substr(valStart + 1, endQuote - (valStart + 1)));
-    } else if (objStr[valStart] == '[') {
-        size_t endBracket = objStr.find(']', valStart);
-        if (endBracket == std::string::npos)
-            return "";
-        return objStr.substr(valStart, endBracket - valStart + 1);
-    } else {
-        size_t endVal = objStr.find_first_of(",}\n\r", valStart);
-        if (endVal == std::string::npos)
-            endVal = objStr.size();
-        return objStr.substr(valStart, endVal - valStart);
+        fields[key] = std::move(value);
     }
+    return fields;
 }
 
 std::vector<std::string> parseJsonArray(const std::string& arrStr) {
@@ -153,9 +225,7 @@ std::vector<std::string> parseJsonArray(const std::string& arrStr) {
         if (start == std::string::npos)
             break;
         size_t end = start + 1;
-        while (end < arrStr.size()) {
-            if (arrStr[end] == '"' && arrStr[end - 1] != '\\')
-                break;
+        while (end < arrStr.size() && (arrStr[end] != '"' || isEscaped(arrStr, end))) {
             end++;
         }
         if (end >= arrStr.size())
@@ -167,6 +237,40 @@ std::vector<std::string> parseJsonArray(const std::string& arrStr) {
 }
 
 }  // namespace
+
+std::filesystem::path JsonSnippetRepository::getDefaultStoragePath() {
+    const char* envPath = std::getenv("SNIPCLI_STORAGE_PATH");
+    if (envPath && std::string(envPath).length() > 0) {
+        return std::filesystem::path(envPath);
+    }
+
+#if defined(_WIN32)
+    const char* appData = std::getenv("APPDATA");
+    if (appData && std::string(appData).length() > 0) {
+        std::filesystem::path candidate =
+            std::filesystem::path(appData) / "SnipCLI" / "snippets.json";
+        std::error_code ec;
+        if (std::filesystem::exists(candidate.parent_path()) ||
+            std::filesystem::create_directories(candidate.parent_path(), ec)) {
+            return candidate;
+        }
+    }
+#else
+    const char* home = std::getenv("HOME");
+    if (home && std::string(home).length() > 0) {
+        std::filesystem::path candidate =
+            std::filesystem::path(home) / ".snipcli" / "snippets.json";
+        std::error_code ec;
+        if (std::filesystem::exists(candidate.parent_path()) ||
+            std::filesystem::create_directories(candidate.parent_path(), ec)) {
+            return candidate;
+        }
+    }
+#endif
+    return std::filesystem::current_path() / ".snipcli_snippets.json";
+}
+
+JsonSnippetRepository::JsonSnippetRepository() : JsonSnippetRepository(getDefaultStoragePath()) {}
 
 JsonSnippetRepository::JsonSnippetRepository(std::filesystem::path storagePath)
     : m_storagePath(std::move(storagePath)) {
@@ -212,7 +316,7 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
         int depth = 1;
         bool inStr = false;
         while (end < content.size() && depth > 0) {
-            if (content[end] == '"' && content[end - 1] != '\\') {
+            if (content[end] == '"' && !isEscaped(content, end)) {
                 inStr = !inStr;
             } else if (!inStr) {
                 if (content[end] == '{')
@@ -224,13 +328,15 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
         }
         if (depth == 0) {
             std::string objStr = content.substr(pos, end - pos);
-            std::string idStr = extractJsonField(objStr, "id");
-            std::string title = extractJsonField(objStr, "title");
-            std::string language = extractJsonField(objStr, "language");
-            std::string code = extractJsonField(objStr, "code");
-            std::string tagsStr = extractJsonField(objStr, "tags");
-            std::string createdAt = extractJsonField(objStr, "createdAt");
-            std::string updatedAt = extractJsonField(objStr, "updatedAt");
+            auto fields = parseJsonObject(objStr);
+
+            std::string idStr = fields["id"];
+            std::string title = fields["title"];
+            std::string language = fields["language"];
+            std::string code = fields["code"];
+            std::string tagsStr = fields["tags"];
+            std::string createdAt = fields["createdAt"];
+            std::string updatedAt = fields["updatedAt"];
 
             uint64_t id = 0;
             if (!idStr.empty()) {
@@ -242,7 +348,10 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
             }
 
             std::vector<std::string> tags = parseJsonArray(tagsStr);
-            snippets.emplace_back(id, title, language, code, tags, createdAt, updatedAt);
+            if (!title.empty() || id > 0) {
+                snippets.emplace_back(id, std::move(title), std::move(language), std::move(code),
+                                      std::move(tags), std::move(createdAt), std::move(updatedAt));
+            }
             pos = end;
         } else {
             break;
@@ -331,12 +440,18 @@ uint64_t JsonSnippetRepository::save(Snippet& snippet) {
                 maxId = s.getId();
         }
         snippet.setId(maxId + 1);
+        if (snippet.getCreatedAt().empty()) {
+            snippet.setCreatedAt(now);
+        }
         snippet.setUpdatedAt(now);
         snippets.push_back(snippet);
     } else {
         bool found = false;
         for (auto& s : snippets) {
             if (s.getId() == snippet.getId()) {
+                if (snippet.getCreatedAt().empty()) {
+                    snippet.setCreatedAt(s.getCreatedAt());
+                }
                 snippet.setUpdatedAt(now);
                 s = snippet;
                 found = true;
@@ -344,6 +459,9 @@ uint64_t JsonSnippetRepository::save(Snippet& snippet) {
             }
         }
         if (!found) {
+            if (snippet.getCreatedAt().empty()) {
+                snippet.setCreatedAt(now);
+            }
             snippet.setUpdatedAt(now);
             snippets.push_back(snippet);
         }

@@ -46,6 +46,7 @@ add_library(snipcli_core
     ${SRC_DIR}/model/json_snippet_repository.cpp
     ${SRC_DIR}/model/strategy/tag_search_strategy.cpp
     ${SRC_DIR}/model/strategy/title_search_strategy.cpp
+    ${SRC_DIR}/model/strategy/language_search_strategy.cpp
     ${SRC_DIR}/view/terminal_view.cpp
     ${SRC_DIR}/view/markdown_view.cpp
     ${SRC_DIR}/view/view_factory.cpp
@@ -78,3 +79,9 @@ add_executable(snip_tests
 )
 target_link_libraries(snip_tests PRIVATE snipcli_core)
 add_test(NAME CoreUnitTests COMMAND snip_tests)
+
+# Installation Target
+include(GNUInstallDirs)
+install(TARGETS snip
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)

@@ -74,6 +74,7 @@ add_executable(snip_tests
     tests/unit/test_repository.cpp
     tests/unit/test_strategy.cpp
     tests/unit/test_parser.cpp
+    tests/unit/test_view.cpp
 )
 target_link_libraries(snip_tests PRIVATE snipcli_core)
 add_test(NAME CoreUnitTests COMMAND snip_tests)

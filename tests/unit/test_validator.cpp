@@ -25,74 +25,149 @@ void assertThrowsValidationException(const std::string& testName, Func&& func) {
     }
 }
 
+template <typename Func>
+void assertNoThrow(const std::string& testName, Func&& func) {
+    try {
+        func();
+    } catch (const std::exception& ex) {
+        std::cerr << "[FAIL] " << testName << " unexpectedly threw: " << ex.what() << std::endl;
+        std::exit(1);
+    } catch (...) {
+        std::cerr << "[FAIL] " << testName << " unexpectedly threw an unknown exception!" << std::endl;
+        std::exit(1);
+    }
+}
+
 }  // namespace
 
 void runValidatorTests() {
     std::cout << "[TEST] Running Validator tests..." << std::endl;
 
-    // Test 1: Valid snippet with standard characters and tags
-    snipcli::model::Snippet valid(1, "Dijkstra_Shortest-Path v2", "c++",
-                                  "int n = 10;\nvector<int> d;\n", {"graph", "sp"}, "", "");
-    try {
+    // ---------------------------------------------------------
+    // Invariant 1: Valid Snippet Passes Validation
+    // ---------------------------------------------------------
+    assertNoThrow("Valid standard snippet", []() {
+        snipcli::model::Snippet valid(1, "Dijkstra_Shortest-Path v2", "c++",
+                                      "int n = 10;\nvector<int> d;\n", {"graph", "sp"}, "", "");
         snipcli::model::SnippetValidator::validate(valid);
-    } catch (...) {
-        std::cerr << "[FAIL] Valid snippet unexpectedly failed validation!" << std::endl;
-        std::exit(1);
-    }
+    });
 
-    // Test 2: Empty title
+    // ---------------------------------------------------------
+    // Invariant 2: Empty Title Rejection
+    // ---------------------------------------------------------
     assertThrowsValidationException("Empty title", []() {
         snipcli::model::Snippet s(1, "", "cpp", "int x = 0;", {}, "", "");
         snipcli::model::SnippetValidator::validate(s);
     });
 
-    // Test 3: Title exceeding max length (101 chars)
-    assertThrowsValidationException("Title exceeds max length", []() {
+    // ---------------------------------------------------------
+    // Invariant 3: Title Boundary - Exactly 100 Characters (kMaxTitleLength)
+    // ---------------------------------------------------------
+    assertNoThrow("Title exactly 100 characters boundary", []() {
+        std::string maxTitle(snipcli::model::SnippetValidator::kMaxTitleLength, 'a');
+        snipcli::model::SnippetValidator::validateTitle(maxTitle);
+    });
+
+    // ---------------------------------------------------------
+    // Invariant 4: Title Boundary - Exceeding 100 Characters (101 chars)
+    // ---------------------------------------------------------
+    assertThrowsValidationException("Title exceeds max length (101 characters)", []() {
         std::string longTitle(snipcli::model::SnippetValidator::kMaxTitleLength + 1, 'a');
         snipcli::model::SnippetValidator::validateTitle(longTitle);
     });
 
-    // Test 4: Title with invalid special characters (@, $, !)
-    assertThrowsValidationException("Title with special characters", []() {
-        snipcli::model::SnippetValidator::validateTitle("Invalid@Title$");
+    // ---------------------------------------------------------
+    // Invariant 5: Title Character Constraints (Illegal Characters)
+    // ---------------------------------------------------------
+    assertThrowsValidationException("Title with special character @", []() {
+        snipcli::model::SnippetValidator::validateTitle("Invalid@Title");
+    });
+    assertThrowsValidationException("Title with special character $", []() {
+        snipcli::model::SnippetValidator::validateTitle("Invalid$Title");
+    });
+    assertThrowsValidationException("Title with special character !", []() {
+        snipcli::model::SnippetValidator::validateTitle("Invalid!Title");
+    });
+    assertThrowsValidationException("Title with newline character", []() {
+        snipcli::model::SnippetValidator::validateTitle("Invalid\nTitle");
     });
 
-    // Test 5: Empty language
+    // ---------------------------------------------------------
+    // Invariant 6: Title Character Constraints (Allowed Characters)
+    // ---------------------------------------------------------
+    assertNoThrow("Title with alphanumeric, spaces, dashes, and underscores", []() {
+        snipcli::model::SnippetValidator::validateTitle("Valid-Title_with Numbers 123");
+    });
+
+    // ---------------------------------------------------------
+    // Invariant 7: Language Validation - Standard & Special Characters
+    // ---------------------------------------------------------
+    assertNoThrow("Valid language formats (c++, c#, python3)", []() {
+        snipcli::model::SnippetValidator::validateLanguage("cpp");
+        snipcli::model::SnippetValidator::validateLanguage("c++");
+        snipcli::model::SnippetValidator::validateLanguage("c#");
+        snipcli::model::SnippetValidator::validateLanguage("python3");
+    });
+
+    // ---------------------------------------------------------
+    // Invariant 8: Language Validation - Empty & Disallowed Characters
+    // ---------------------------------------------------------
     assertThrowsValidationException("Empty language", []() {
         snipcli::model::Snippet s(1, "ValidTitle", "", "int x = 0;", {}, "", "");
         snipcli::model::SnippetValidator::validate(s);
     });
-
-    // Test 6: Invalid language format characters
-    assertThrowsValidationException("Invalid language format", []() {
+    assertThrowsValidationException("Invalid language format with percent sign", []() {
         snipcli::model::SnippetValidator::validateLanguage("c%lang");
     });
+    assertThrowsValidationException("Invalid language format with dash", []() {
+        snipcli::model::SnippetValidator::validateLanguage("c-lang");
+    });
 
-    // Test 7: Empty code content
+    // ---------------------------------------------------------
+    // Invariant 9: Code Content - Empty Code Rejection
+    // ---------------------------------------------------------
     assertThrowsValidationException("Empty code content", []() {
         snipcli::model::Snippet s(1, "ValidTitle", "cpp", "", {}, "", "");
         snipcli::model::SnippetValidator::validate(s);
     });
 
-    // Test 8: Code exceeding max line count (1001 lines)
-    assertThrowsValidationException("Code exceeds max lines", []() {
-        std::string manyLines;
-        for (size_t i = 0; i <= snipcli::model::SnippetValidator::kMaxLinesAllowed; ++i) {
-            manyLines += "line\n";
+    // ---------------------------------------------------------
+    // Invariant 10: Code Boundary - Exactly 1000 Lines (kMaxLinesAllowed)
+    // ---------------------------------------------------------
+    assertNoThrow("Code exactly 1000 lines boundary", []() {
+        std::string exactMaxLines;
+        for (size_t i = 0; i < snipcli::model::SnippetValidator::kMaxLinesAllowed; ++i) {
+            exactMaxLines += "line\n";
         }
-        snipcli::model::Snippet s(1, "LargeSnippet", "cpp", manyLines, {}, "", "");
+        snipcli::model::Snippet s(1, "BoundarySnippet", "cpp", exactMaxLines, {}, "", "");
         snipcli::model::SnippetValidator::validate(s);
     });
 
-    // Test 9: Empty tag string
-    assertThrowsValidationException("Empty tag string", []() {
+    // ---------------------------------------------------------
+    // Invariant 11: Code Boundary - Exceeding 1000 Lines (1001 lines)
+    // ---------------------------------------------------------
+    assertThrowsValidationException("Code exceeds max lines (1001 lines)", []() {
+        std::string tooManyLines;
+        for (size_t i = 0; i <= snipcli::model::SnippetValidator::kMaxLinesAllowed; ++i) {
+            tooManyLines += "line\n";
+        }
+        snipcli::model::Snippet s(1, "TooLargeSnippet", "cpp", tooManyLines, {}, "", "");
+        snipcli::model::SnippetValidator::validate(s);
+    });
+
+    // ---------------------------------------------------------
+    // Invariant 12: Tag Constraints - Empty Tags & Duplicate Tags
+    // ---------------------------------------------------------
+    assertThrowsValidationException("Empty tag string rejection", []() {
         snipcli::model::SnippetValidator::validateTags({"valid_tag", ""});
     });
-
-    // Test 10: Duplicate tags
-    assertThrowsValidationException("Duplicate tags", []() {
+    assertThrowsValidationException("Duplicate tag rejection", []() {
         snipcli::model::SnippetValidator::validateTags({"dp", "graph", "dp"});
     });
+    assertNoThrow("Valid unique tags and empty tag list", []() {
+        snipcli::model::SnippetValidator::validateTags({});
+        snipcli::model::SnippetValidator::validateTags({"tree", "binary-tree", "dfs"});
+    });
 
-    std::cout << "[PASS] Validator tests passed. (10/10 Invariants Verified)" << std::endl;
+    std::cout << "[PASS] Validator tests passed. (12/12 Invariants Verified)" << std::endl;
 }

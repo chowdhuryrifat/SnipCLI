@@ -9,7 +9,8 @@
 namespace snipcli::model {
 
 /**
- * @brief Validates snippet business constraints according to the Single Responsibility Principle (SRP).
+ * @brief Validates snippet business constraints according to the Single Responsibility Principle
+ * (SRP).
  *
  * Exclusively responsible for enforcing domain data integrity and business rules before
  * snippet persistence. Quarantines all domain validation logic away from CLI argument
@@ -48,7 +49,8 @@ public:
      *
      * Invariants enforced:
      * - Language identifier must not be empty.
-     * - Language characters must be alphanumeric, '+', or '#' (e.g., "cpp", "c++", "c#", "python3").
+     * - Language characters must be alphanumeric, '+', or '#' (e.g., "cpp", "c++", "c#",
+     * "python3").
      *
      * @param language The candidate language identifier.
      * @throws common::ValidationException If language violates any invariant.

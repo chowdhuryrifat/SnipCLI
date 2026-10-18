@@ -66,7 +66,7 @@ public:
      * @brief Retrieves the list of registered command names in their order of registration.
      * @return std::vector<std::string> Ordered list of command verb identifiers.
      */
-    [[nodiscard]] std::vector<std::string> getRegisteredCommands() const;
+    [[nodiscard]] const std::vector<std::string>& getRegisteredCommands() const noexcept;
 
 private:
     std::unordered_map<std::string, std::unique_ptr<ICommand>> m_commands;

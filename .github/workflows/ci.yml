@@ -22,7 +22,7 @@ jobs:
       - name: Run Clang-Format Style Check
         run: |
           echo "Verifying code formatting with clang-format..."
-          find include src tests -name '*.hpp' -o -name '*.cpp' -exec clang-format -i {} +
+          find include src tests \( -name '*.hpp' -o -name '*.cpp' \) -exec clang-format -i {} +
           git diff --exit-code || (echo "Code formatting violations detected. Please apply clang-format." && exit 1)
 
       - name: Run Cppcheck Static Analysis
@@ -32,6 +32,7 @@ jobs:
             --suppress=missingIncludeSystem \
             --suppress=unusedFunction \
             --suppress=unmatchedSuppression \
+            --suppress=normalCheckLevelMaxBranches \
             --error-exitcode=1 \
             -I include include/ src/
 

@@ -399,6 +399,45 @@ void runRepositoryTests() {
         }
         assertTrue(threwMissingCode,
                    "Snippet missing mandatory code field triggers StorageException");
+
+        // 11e: Invalid escape sequence (\q) throws StorageException
+        {
+            std::ofstream out(corruptFile, std::ios::trunc);
+            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"BadEscape\",\n    \"language\": \"cpp\",\n    \"code\": \"int \\q = 0;\"\n  }\n]";
+        }
+        bool threwBadEscape = false;
+        try {
+            (void)emptyRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            threwBadEscape = true;
+        }
+        assertTrue(threwBadEscape, "Invalid escape sequence \\q triggers StorageException");
+
+        // 11f: Non-hexadecimal \u escape (\u12zz) throws StorageException
+        {
+            std::ofstream out(corruptFile, std::ios::trunc);
+            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"BadHex\",\n    \"language\": \"cpp\",\n    \"code\": \"int x = \\u12zz;\"\n  }\n]";
+        }
+        bool threwBadHex = false;
+        try {
+            (void)emptyRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            threwBadHex = true;
+        }
+        assertTrue(threwBadHex, "Non-hex sequence in \\u escape triggers StorageException");
+
+        // 11g: Isolated high surrogate (\ud800 without low surrogate) throws StorageException
+        {
+            std::ofstream out(corruptFile, std::ios::trunc);
+            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"IsolatedSurrogate\",\n    \"language\": \"cpp\",\n    \"code\": \"// \\ud800 lonely\"\n  }\n]";
+        }
+        bool threwSurrogate = false;
+        try {
+            (void)emptyRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            threwSurrogate = true;
+        }
+        assertTrue(threwSurrogate, "Isolated high surrogate triggers StorageException");
     }
 
     // ---------------------------------------------------------

@@ -1,6 +1,7 @@
 #include "snipcli/model/json_snippet_repository.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <charconv>
 #include <chrono>
@@ -10,6 +11,16 @@
 #include <iomanip>
 #include <sstream>
 #include <unordered_map>
+
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 #include "snipcli/common/exceptions.hpp"
 
@@ -145,24 +156,37 @@ std::string unescapeJson(const std::string& input) {
                 case 'u': {
                     unsigned cp = 0;
                     if (!hex4(input, i + 1, cp)) {
-                        out += next;
-                        break;
+                        throw common::StorageException("Invalid hexadecimal sequence in \\u escape.");
                     }
                     i += 4;
-                    if (cp >= 0xD800 && cp <= 0xDBFF && i + 6 < input.size() &&
-                        input[i + 1] == '\\' && input[i + 2] == 'u') {
-                        unsigned lo = 0;
-                        if (hex4(input, i + 3, lo) && lo >= 0xDC00 && lo <= 0xDFFF) {
-                            cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
-                            i += 6;
+                    if (cp >= 0xD800 && cp <= 0xDBFF) {
+                        if (i + 6 < input.size() && input[i + 1] == '\\' && input[i + 2] == 'u') {
+                            unsigned lo = 0;
+                            if (hex4(input, i + 3, lo) && lo >= 0xDC00 && lo <= 0xDFFF) {
+                                cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
+                                i += 6;
+                            } else {
+                                throw common::StorageException(
+                                    "High surrogate \\u without matching low surrogate.");
+                            }
+                        } else {
+                            throw common::StorageException(
+                                "Isolated high surrogate in Unicode escape.");
                         }
+                    } else if (cp >= 0xDC00 && cp <= 0xDFFF) {
+                        throw common::StorageException(
+                            "Isolated low surrogate in Unicode escape.");
+                    }
+                    if (cp > 0x10FFFF) {
+                        throw common::StorageException(
+                            "Unicode code point exceeds 0x10FFFF maximum.");
                     }
                     appendUtf8(out, cp);
                     break;
                 }
                 default:
-                    out += next;
-                    break;
+                    throw common::StorageException(std::string("Invalid escape sequence '\\") + next +
+                                                   "' in JSON string.");
             }
         } else {
             out += input[i];
@@ -449,8 +473,13 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
 void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) const {
     ensureStorageDirectoryExists();
 
-    std::filesystem::path tmpPath = m_storagePath;
-    tmpPath += ".tmp";
+    static std::atomic<uint64_t> s_fileSeq{0};
+    auto nowTicks = std::chrono::steady_clock::now().time_since_epoch().count();
+    std::filesystem::path parentDir = m_storagePath.has_parent_path() ? m_storagePath.parent_path()
+                                                                     : std::filesystem::current_path();
+    std::filesystem::path tmpPath = parentDir / ("." + m_storagePath.filename().string() + ".tmp." +
+                                                std::to_string(nowTicks) + "_" +
+                                                std::to_string(++s_fileSeq));
 
     std::ofstream file(tmpPath, std::ios::trunc);
     if (!file.is_open()) {
@@ -489,17 +518,25 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
     }
     file.close();
 
+#if defined(_WIN32)
+    std::wstring wTmp = tmpPath.wstring();
+    std::wstring wDest = m_storagePath.wstring();
+    if (!MoveFileExW(wTmp.c_str(), wDest.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DWORD err = GetLastError();
+        std::error_code rmEc;
+        std::filesystem::remove(tmpPath, rmEc);
+        throw common::StorageException("Failed to atomically replace storage file on Windows (Error " +
+                                       std::to_string(err) + ")");
+    }
+#else
     std::error_code ec;
     std::filesystem::rename(tmpPath, m_storagePath, ec);
     if (ec) {
-        std::filesystem::copy_file(tmpPath, m_storagePath,
-                                   std::filesystem::copy_options::overwrite_existing, ec);
-        std::filesystem::remove(tmpPath);
-        if (ec) {
-            throw common::StorageException("Failed to atomically commit storage file: " +
-                                           ec.message());
-        }
+        std::error_code rmEc;
+        std::filesystem::remove(tmpPath, rmEc);
+        throw common::StorageException("Failed to atomically replace storage file: " + ec.message());
     }
+#endif
 }
 
 std::vector<Snippet> JsonSnippetRepository::getAll() const {

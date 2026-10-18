@@ -12,6 +12,7 @@
 #include "snipcli/controller/commands/get_command.hpp"
 #include "snipcli/controller/commands/list_command.hpp"
 #include "snipcli/controller/commands/search_command.hpp"
+#include "snipcli/controller/commands/stats_command.hpp"
 #include "snipcli/model/i_snippet_repository.hpp"
 #include "snipcli/model/snippet.hpp"
 #include "snipcli/view/i_snippet_view.hpp"
@@ -106,14 +107,23 @@ public:
     void renderError(const std::string& message) override { errors.push_back(message); }
 
     void renderStats(
-        size_t /*totalSnippets*/, size_t /*totalLines*/,
-        const std::vector<std::pair<std::string, size_t>>& /*languageBreakdown*/) override {}
+        size_t totalSnippets, size_t totalLines,
+        const std::vector<std::pair<std::string, size_t>>& languageBreakdown) override {
+        statsCalls++;
+        lastTotalSnippets = totalSnippets;
+        lastTotalLines = totalLines;
+        lastBreakdown = languageBreakdown;
+    }
 
     std::vector<snipcli::model::Snippet> renderedSnippets;
     std::vector<std::vector<snipcli::model::Snippet>> renderedLists;
     std::vector<std::string> messages;
     std::vector<std::string> successes;
     std::vector<std::string> errors;
+    size_t statsCalls{0};
+    size_t lastTotalSnippets{0};
+    size_t lastTotalLines{0};
+    std::vector<std::pair<std::string, size_t>> lastBreakdown;
 };
 
 }  // namespace
@@ -605,5 +615,51 @@ void runCommandTests() {
                    "Empty list passed to renderSnippetList");
     }
 
-    std::cout << "[PASS] GoF Command Wiring tests passed. (22/22 Scenarios Verified)" << std::endl;
+    // ---------------------------------------------------------
+    // Scenario 23: StatsCommand - Multi-Language Metrics & Line Totals
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        // 2 cpp snippets (3 lines + 2 lines = 5 lines)
+        // 1 python snippet (1 line)
+        repo->addDirect({1, "Dijkstra", "cpp", "line1\nline2\nline3\n", {}, "", ""});
+        repo->addDirect({2, "Floyd", "cpp", "line1\nline2\n", {}, "", ""});
+        repo->addDirect({3, "QuickSort", "python", "x = 1\n", {}, "", ""});
+
+        auto args = snipcli::controller::CliParser::parse({"stats"});
+        snipcli::controller::commands::StatsCommand cmd(args, repo, view);
+        int code = cmd.execute();
+
+        assertTrue(code == 0, "StatsCommand must return 0");
+        assertTrue(view->statsCalls == 1, "renderStats must be invoked once");
+        assertTrue(view->lastTotalSnippets == 3, "Total snippets must be 3");
+        assertTrue(view->lastTotalLines == 6, "Total lines must be 6 (3 + 2 + 1)");
+        assertTrue(view->lastBreakdown.size() == 2, "Breakdown must have 2 languages");
+        assertTrue(view->lastBreakdown[0].first == "cpp" && view->lastBreakdown[0].second == 2,
+                   "Most frequent language 'cpp' (2) must be first in sorted telemetry");
+        assertTrue(view->lastBreakdown[1].first == "python" && view->lastBreakdown[1].second == 1,
+                   "Second language 'python' (1) must be second in sorted telemetry");
+    }
+
+    // ---------------------------------------------------------
+    // Scenario 24: StatsCommand - Empty Repository Telemetry
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        auto args = snipcli::controller::CliParser::parse({"stats"});
+        snipcli::controller::commands::StatsCommand cmd(args, repo, view);
+        int code = cmd.execute();
+
+        assertTrue(code == 0, "StatsCommand on empty repository must succeed");
+        assertTrue(view->statsCalls == 1, "renderStats must be invoked");
+        assertTrue(view->lastTotalSnippets == 0, "Total snippets must be 0");
+        assertTrue(view->lastTotalLines == 0, "Total lines must be 0");
+        assertTrue(view->lastBreakdown.empty(), "Language breakdown must be empty");
+    }
+
+    std::cout << "[PASS] GoF Command Wiring tests passed. (24/24 Scenarios Verified)" << std::endl;
 }

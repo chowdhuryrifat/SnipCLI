@@ -1,7 +1,12 @@
 #include "snipcli/controller/commands/stats_command.hpp"
 
+#include <algorithm>
 #include <map>
+#include <string>
+#include <utility>
 #include <vector>
+
+#include "snipcli/common/exceptions.hpp"
 
 namespace snipcli::controller::commands {
 
@@ -30,11 +35,23 @@ int StatsCommand::execute() {
         }
 
         std::vector<std::pair<std::string, size_t>> breakdown(counts.begin(), counts.end());
+        std::sort(breakdown.begin(), breakdown.end(),
+                  [](const std::pair<std::string, size_t>& a,
+                     const std::pair<std::string, size_t>& b) {
+                      if (a.second != b.second) {
+                          return a.second > b.second;  // Descending count
+                      }
+                      return a.first < b.first;        // Alphabetical secondary
+                  });
+
         m_view->renderStats(totalSnippets, totalLines, breakdown);
         return 0;
-    } catch (const std::exception& ex) {
+    } catch (const common::SnipException& ex) {
         m_view->renderError(ex.what());
         return 1;
+    } catch (const std::exception& ex) {
+        m_view->renderError(std::string("Unexpected error: ") + ex.what());
+        return 2;
     }
 }
 

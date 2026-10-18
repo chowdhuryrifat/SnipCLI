@@ -408,8 +408,7 @@ std::optional<Snippet> JsonSnippetRepository::getById(uint64_t id) const {
     return std::nullopt;
 }
 
-std::optional<Snippet> JsonSnippetRepository::getByTitle(const std::string& title) const {
-    std::lock_guard<std::mutex> lock(m_mutex);
+std::optional<Snippet> JsonSnippetRepository::getByTitleUnlocked(const std::string& title) const {
     auto snippets = loadFromFile();
     for (const auto& s : snippets) {
         if (s.getTitle() == title) {
@@ -419,8 +418,14 @@ std::optional<Snippet> JsonSnippetRepository::getByTitle(const std::string& titl
     return std::nullopt;
 }
 
+std::optional<Snippet> JsonSnippetRepository::getByTitle(const std::string& title) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return getByTitleUnlocked(title);
+}
+
 bool JsonSnippetRepository::exists(const std::string& title) const {
-    return getByTitle(title).has_value();
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return getByTitleUnlocked(title).has_value();
 }
 
 size_t JsonSnippetRepository::count() const {

@@ -74,6 +74,10 @@ void Snippet::setTags(std::vector<std::string> tags) {
     m_tags = std::move(tags);
 }
 
+void Snippet::setCreatedAt(std::string timestamp) {
+    m_createdAt = std::move(timestamp);
+}
+
 void Snippet::setUpdatedAt(std::string timestamp) {
     m_updatedAt = std::move(timestamp);
 }

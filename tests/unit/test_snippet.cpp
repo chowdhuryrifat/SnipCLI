@@ -31,12 +31,14 @@ void runSnippetTests() {
     emptySnippet.setLanguage("cpp");
     emptySnippet.setCode("void sort();");  // 1 line without trailing newline
     emptySnippet.setTags({"sorting", "divide_and_conquer"});
+    emptySnippet.setCreatedAt("2026-10-17T00:00:00Z");
     emptySnippet.setUpdatedAt("2026-10-17T00:00:00Z");
 
     if (emptySnippet.getId() != 42 || emptySnippet.getTitle() != "QuickSort" ||
         emptySnippet.getLanguage() != "cpp" || emptySnippet.getCode() != "void sort();" ||
         emptySnippet.getLineCount() != 1 || !emptySnippet.hasTag("sorting") ||
-        emptySnippet.hasTag("graph") || emptySnippet.getUpdatedAt() != "2026-10-17T00:00:00Z") {
+        emptySnippet.hasTag("graph") || emptySnippet.getCreatedAt() != "2026-10-17T00:00:00Z" ||
+        emptySnippet.getUpdatedAt() != "2026-10-17T00:00:00Z") {
         std::cerr << "Assertion failed in Snippet setter tests!" << std::endl;
         std::exit(1);
     }

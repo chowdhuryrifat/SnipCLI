@@ -47,6 +47,13 @@ OUTPUT_GET=$($BIN get --title "Dijkstra")
 echo "$OUTPUT_GET" | grep -q "vector<int> dist;" || fail "Get command failed to retrieve snippet body"
 pass "Snippet retrieval by title verified"
 
+# Test 5b: Get snippet with --code-only pipe mode
+OUTPUT_CODE_ONLY=$($BIN get --title "Dijkstra" --code-only)
+if [[ "$OUTPUT_CODE_ONLY" != *"vector<int> dist;"* ]]; then
+    fail "Get command --code-only failed to retrieve pure code body"
+fi
+pass "Snippet retrieval with --code-only verified"
+
 # Test 6: Search snippet by tag
 OUTPUT_SEARCH=$($BIN search --tag "graph")
 echo "$OUTPUT_SEARCH" | grep -q "Dijkstra" || fail "Search by tag failed to locate 'Dijkstra'"

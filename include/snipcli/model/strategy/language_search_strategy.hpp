@@ -10,7 +10,8 @@ namespace snipcli::model::strategy {
 /**
  * @brief Concrete strategy for matching snippets by programming language.
  *
- * Implements case-insensitive matching against snippet language identifiers (e.g., "cpp", "python").
+ * Implements case-insensitive matching against snippet language identifiers
+ * (e.g., "cpp", "python").
  * If the criteria is empty or contains only whitespace, an empty vector is returned.
  */
 class LanguageSearchStrategy : public ISearchStrategy {

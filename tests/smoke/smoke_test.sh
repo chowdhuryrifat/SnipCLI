@@ -1,19 +1,29 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# SnipCLI Automated Smoke & Integration Test Suite
-# Tests core CLI verbs: add, list, get, search, stats, delete
+# SnipCLI Automated Smoke & End-to-End Integration Test Suite
+# Tests all core CLI verbs, GoF patterns, multi-format presentation, and error quarantine
 # ==============================================================================
 
 set -euo pipefail
 
 BIN="${1:-./build/snip}"
 TEMP_DIR=$(mktemp -d)
-TEST_STORAGE="$TEMP_DIR/test_snippets.json"
+
+if command -v cygpath >/dev/null 2>&1; then
+    TEST_STORAGE=$(cygpath -m "$TEMP_DIR/test_snippets.json")
+    SAMPLE_FILE=$(cygpath -m "$TEMP_DIR/sample.java")
+else
+    TEST_STORAGE="$TEMP_DIR/test_snippets.json"
+    SAMPLE_FILE="$TEMP_DIR/sample.java"
+fi
+
 export SNIPCLI_STORAGE_PATH="$TEST_STORAGE"
 
+# ANSI Color Codes for reporting
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
 NC='\033[0m'
 
 pass() { echo -e "${GREEN}[PASS]${NC} $1"; }
@@ -22,55 +32,199 @@ info() { echo -e "${BLUE}[INFO]${NC} $1"; }
 
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
-info "Executing SnipCLI Smoke Tests using binary: $BIN"
+info "Executing SnipCLI Automated End-to-End Smoke Test Suite using binary: $BIN"
 
-# Test 1: Binary execution and Help command
-$BIN --help > /dev/null || fail "Help command failed"
-pass "Help command executed successfully"
+# ------------------------------------------------------------------------------
+# Test 1: Binary Existence & CLI Global Flags (--help, --version)
+# ------------------------------------------------------------------------------
+$BIN --help > /dev/null || fail "Help command (--help) failed"
+$BIN -h > /dev/null || fail "Help shortcut (-h) failed"
+OUTPUT_VERSION=$($BIN --version)
+echo "$OUTPUT_VERSION" | grep -qi "SnipCLI" || fail "Version output does not contain application name"
+$BIN -v > /dev/null || fail "Version shortcut (-v) failed"
+pass "Global CLI flags (--help, -h, --version, -v) verified"
 
-# Test 2: Add snippet
-$BIN add --title "Dijkstra" --lang "cpp" --tags "graph,shortest_path" --code "vector<int> dist;" > /dev/null || fail "Failed to add Dijkstra snippet"
+# ------------------------------------------------------------------------------
+# Test 2: Add Snippets with Diverse Metadata & File Loading
+# ------------------------------------------------------------------------------
+# 2a: Add C++ snippet with multiple tags
+$BIN add --title "Dijkstra" --lang "cpp" --tags "graph,shortest_path" --code "vector<int> dist(n, INF);\npriority_queue<pair<int,int>> pq;" > /dev/null || fail "Failed to add Dijkstra snippet"
 pass "Snippet 'Dijkstra' added"
 
-# Test 3: Add second snippet
-$BIN add --title "BinarySearch" --lang "cpp" --tags "binary_search,array" --code "int l = 0, r = n - 1;" > /dev/null || fail "Failed to add BinarySearch snippet"
+# 2b: Add second C++ snippet
+$BIN add --title "BinarySearch" --lang "cpp" --tags "binary_search,array" --code "int l = 0, r = n - 1;\nwhile (l <= r) { int mid = l + (r - l) / 2; }" > /dev/null || fail "Failed to add BinarySearch snippet"
 pass "Snippet 'BinarySearch' added"
 
-# Test 4: List snippets
-OUTPUT_LIST=$($BIN list)
-echo "$OUTPUT_LIST" | grep -q "Dijkstra" || fail "List does not contain 'Dijkstra'"
-echo "$OUTPUT_LIST" | grep -q "BinarySearch" || fail "List does not contain 'BinarySearch'"
-pass "Snippet listing verified"
+# 2c: Add Python snippet
+$BIN add --title "QuickSort" --lang "python" --tags "sorting,divide_conquer" --code "def quicksort(arr):\n    if len(arr) <= 1: return arr" > /dev/null || fail "Failed to add QuickSort snippet"
+pass "Snippet 'QuickSort' added"
 
-# Test 5: Get snippet
+# 2d: Add snippet loaded from an external file
+cat << 'EOF' > "$SAMPLE_FILE"
+public class Factorial {
+    public static long compute(int n) {
+        return (n <= 1) ? 1 : n * compute(n - 1);
+    }
+}
+EOF
+$BIN add --title "Factorial" --lang "java" --tags "math,recursion" --file "$SAMPLE_FILE" > /dev/null || fail "Failed to add Factorial snippet from file"
+pass "Snippet 'Factorial' added via --file input"
+
+# ------------------------------------------------------------------------------
+# Test 3: Defensive Domain Invariants & Validation Quarantine
+# ------------------------------------------------------------------------------
+# 3a: Duplicate title rejection
+if $BIN add --title "Dijkstra" --lang "cpp" --code "int x = 0;" > /dev/null 2>&1; then
+    fail "Duplicate title 'Dijkstra' was incorrectly accepted"
+fi
+pass "Defensive check: Duplicate snippet title successfully rejected"
+
+# 3b: Empty title rejection
+if $BIN add --title "" --lang "cpp" --code "int x = 0;" > /dev/null 2>&1; then
+    fail "Empty snippet title was incorrectly accepted"
+fi
+pass "Defensive check: Empty snippet title rejected"
+
+# 3c: Missing code and file payload rejection
+if $BIN add --title "InvalidSnippet" --lang "cpp" > /dev/null 2>&1; then
+    fail "Snippet without code payload was incorrectly accepted"
+fi
+pass "Defensive check: Missing code/file payload rejected"
+
+# ------------------------------------------------------------------------------
+# Test 4: Tabular Listing & Multi-Format Rendering (Terminal vs Markdown)
+# ------------------------------------------------------------------------------
+# 4a: Terminal table listing
+OUTPUT_LIST=$($BIN list)
+echo "$OUTPUT_LIST" | grep -q "Dijkstra" || fail "Terminal list missing 'Dijkstra'"
+echo "$OUTPUT_LIST" | grep -q "BinarySearch" || fail "Terminal list missing 'BinarySearch'"
+echo "$OUTPUT_LIST" | grep -q "QuickSort" || fail "Terminal list missing 'QuickSort'"
+echo "$OUTPUT_LIST" | grep -q "Factorial" || fail "Terminal list missing 'Factorial'"
+pass "Snippet listing verified in terminal view"
+
+# 4b: Markdown table listing
+OUTPUT_LIST_MD=$($BIN list --format markdown)
+echo "$OUTPUT_LIST_MD" | grep -q "| ID | Title | Language | Lines | Tags |" || fail "Markdown list header missing"
+echo "$OUTPUT_LIST_MD" | grep -q "| Dijkstra | cpp |" || fail "Markdown list entry for Dijkstra missing"
+pass "Snippet listing verified in GitHub-Flavored Markdown table format"
+
+# 4c: Filter listing by tag
+OUTPUT_TAG_LIST=$($BIN list --tag "graph")
+echo "$OUTPUT_TAG_LIST" | grep -q "Dijkstra" || fail "Filtered list missing 'Dijkstra'"
+if echo "$OUTPUT_TAG_LIST" | grep -q "QuickSort"; then
+    fail "Filtered list incorrectly included 'QuickSort'"
+fi
+pass "Snippet listing filtered by category tag verified"
+
+# 4d: Filter listing by language
+OUTPUT_LANG_LIST=$($BIN list --lang "python")
+echo "$OUTPUT_LANG_LIST" | grep -q "QuickSort" || fail "Filtered list missing 'QuickSort'"
+if echo "$OUTPUT_LANG_LIST" | grep -q "Dijkstra"; then
+    fail "Filtered list incorrectly included 'Dijkstra'"
+fi
+pass "Snippet listing filtered by language verified"
+
+# ------------------------------------------------------------------------------
+# Test 5: Snippet Retrieval & Pipe Native Support (get)
+# ------------------------------------------------------------------------------
+# 5a: Standard terminal retrieval by title
 OUTPUT_GET=$($BIN get --title "Dijkstra")
-echo "$OUTPUT_GET" | grep -q "vector<int> dist;" || fail "Get command failed to retrieve snippet body"
+echo "$OUTPUT_GET" | grep -q "vector<int> dist" || fail "Failed to retrieve Dijkstra code in terminal format"
 pass "Snippet retrieval by title verified"
 
-# Test 5b: Get snippet with --code-only pipe mode
+# 5b: Markdown formatted snippet retrieval
+OUTPUT_GET_MD=$($BIN get --title "Dijkstra" --format markdown)
+echo "$OUTPUT_GET_MD" | grep -q "# Dijkstra" || fail "Markdown snippet title header missing"
+echo "$OUTPUT_GET_MD" | grep -q "\`\`\`cpp" || fail "Markdown language fence block missing"
+pass "Snippet retrieval in GitHub-Flavored Markdown format verified"
+
+# 5c: Pipe-friendly pure source code extraction (--code-only)
 OUTPUT_CODE_ONLY=$($BIN get --title "Dijkstra" --code-only)
-if [[ "$OUTPUT_CODE_ONLY" != *"vector<int> dist;"* ]]; then
-    fail "Get command --code-only failed to retrieve pure code body"
+if [[ "$OUTPUT_CODE_ONLY" != *"vector<int> dist"* ]]; then
+    fail "Get command --code-only failed to output pure code"
 fi
-pass "Snippet retrieval with --code-only verified"
-
-# Test 6: Search snippet by tag
-OUTPUT_SEARCH=$($BIN search --tag "graph")
-echo "$OUTPUT_SEARCH" | grep -q "Dijkstra" || fail "Search by tag failed to locate 'Dijkstra'"
-pass "Search by tag verified"
-
-# Test 7: Stats command
-OUTPUT_STATS=$($BIN stats --format markdown)
-echo "$OUTPUT_STATS" | grep -q "Total Snippets:\*\* 2" || fail "Stats command did not report correct count"
-pass "Snippet stats verified"
-
-# Test 8: Delete snippet
-$BIN delete --title "Dijkstra" > /dev/null || fail "Failed to delete Dijkstra snippet"
-OUTPUT_POST_DELETE=$($BIN list)
-if echo "$OUTPUT_POST_DELETE" | grep -q "Dijkstra"; then
-    fail "Dijkstra still present after deletion"
+if echo "$OUTPUT_CODE_ONLY" | grep -q "Language:"; then
+    fail "Get command --code-only leaked metadata headers"
 fi
-pass "Snippet deletion verified"
+pass "Snippet retrieval with pipe-native --code-only verified"
 
-info "All SnipCLI smoke tests passed with 100% success!"
+# 5d: Retrieval of non-existent snippet should fail with exit code 1
+if $BIN get --title "NonExistentSnippet" > /dev/null 2>&1; then
+    fail "Querying non-existent snippet succeeded unexpectedly"
+fi
+pass "Quarantine: Non-existent snippet retrieval correctly exited with error"
+
+# ------------------------------------------------------------------------------
+# Test 6: GoF Strategy Pattern Searching (Substrings, Tags, Languages)
+# ------------------------------------------------------------------------------
+# 6a: Title substring search strategy
+OUTPUT_SEARCH_TITLE=$($BIN search "Quick")
+echo "$OUTPUT_SEARCH_TITLE" | grep -q "QuickSort" || fail "Search by substring failed to locate 'QuickSort'"
+pass "Strategy search by title substring verified"
+
+# 6b: Tag search strategy
+OUTPUT_SEARCH_TAG=$($BIN search --tag "graph")
+echo "$OUTPUT_SEARCH_TAG" | grep -q "Dijkstra" || fail "Search by tag failed to locate 'Dijkstra'"
+pass "Strategy search by category tag verified"
+
+# 6c: Language search strategy
+OUTPUT_SEARCH_LANG=$($BIN search --lang "java")
+echo "$OUTPUT_SEARCH_LANG" | grep -q "Factorial" || fail "Search by language failed to locate 'Factorial'"
+pass "Strategy search by language verified"
+
+# ------------------------------------------------------------------------------
+# Test 7: Repository Telemetry & Aggregation (stats)
+# ------------------------------------------------------------------------------
+# 7a: Terminal stats output
+OUTPUT_STATS=$($BIN stats)
+echo "$OUTPUT_STATS" | grep -q "Total Snippets:" || fail "Terminal stats missing total snippets metric"
+echo "$OUTPUT_STATS" | grep -q "Total Lines of Code:" || fail "Terminal stats missing total lines metric"
+echo "$OUTPUT_STATS" | grep -q "Language Breakdown:" || fail "Terminal stats missing language breakdown"
+pass "Repository telemetry verified in terminal view"
+
+# 7b: Markdown stats output
+OUTPUT_STATS_MD=$($BIN stats --format markdown)
+echo "$OUTPUT_STATS_MD" | grep -q "## SnipCLI Repository Statistics" || fail "Markdown stats header missing"
+echo "$OUTPUT_STATS_MD" | grep -q "| Language | Snippet Count |" || fail "Markdown stats table header missing"
+echo "$OUTPUT_STATS_MD" | grep -q "| cpp | 2 |" || fail "Markdown stats cpp count mismatch"
+pass "Repository telemetry verified in GitHub-Flavored Markdown format"
+
+# ------------------------------------------------------------------------------
+# Test 8: Snippet Deletion & State Mutation (delete)
+# ------------------------------------------------------------------------------
+# 8a: Delete snippet by title
+$BIN delete --title "Factorial" > /dev/null || fail "Failed to delete snippet 'Factorial' by title"
+OUTPUT_CHECK=$($BIN list)
+if echo "$OUTPUT_CHECK" | grep -q "Factorial"; then
+    fail "Snippet 'Factorial' still found in repository after deletion"
+fi
+pass "Snippet deletion by title verified"
+
+# 8b: Delete snippet by ID
+$BIN delete --id 1 > /dev/null || fail "Failed to delete snippet ID #1"
+OUTPUT_CHECK_2=$($BIN list)
+if echo "$OUTPUT_CHECK_2" | grep -q "Dijkstra"; then
+    fail "Snippet 'Dijkstra' (ID #1) still found in repository after deletion"
+fi
+pass "Snippet deletion by ID verified"
+
+# 8c: Deleting non-existent snippet should fail cleanly
+if $BIN delete --id 9999 > /dev/null 2>&1; then
+    fail "Deleting non-existent snippet ID #9999 succeeded unexpectedly"
+fi
+pass "Quarantine: Non-existent snippet deletion cleanly rejected"
+
+# ------------------------------------------------------------------------------
+# Test 9: Unknown Command Dispatch Handling
+# ------------------------------------------------------------------------------
+if $BIN unrecognized_verb > /dev/null 2>&1; then
+    fail "Unrecognized command was accepted unexpectedly"
+fi
+pass "CLI Dispatcher: Unrecognized command verb cleanly rejected with error"
+
+# ------------------------------------------------------------------------------
+# Completion Notice
+# ------------------------------------------------------------------------------
+echo ""
+info "All SnipCLI automated smoke & end-to-end integration tests passed with 100% success!"
 exit 0

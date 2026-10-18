@@ -11,9 +11,13 @@ void MarkdownView::renderSnippet(const model::Snippet& snippet) {
     m_out << "- **Language:** `" << snippet.getLanguage() << "`\n";
     m_out << "- **Lines:** " << snippet.getLineCount() << "\n";
     m_out << "- **Tags:** ";
-    for (size_t i = 0; i < snippet.getTags().size(); ++i) {
-        m_out << "`" << snippet.getTags()[i] << "`"
-              << (i + 1 < snippet.getTags().size() ? ", " : "");
+    if (snippet.getTags().empty()) {
+        m_out << "_none_";
+    } else {
+        for (size_t i = 0; i < snippet.getTags().size(); ++i) {
+            m_out << "`" << snippet.getTags()[i] << "`"
+                  << (i + 1 < snippet.getTags().size() ? ", " : "");
+        }
     }
     m_out << "\n\n```" << snippet.getLanguage() << "\n";
     m_out << snippet.getCode();
@@ -34,10 +38,15 @@ void MarkdownView::renderSnippetList(const std::vector<model::Snippet>& snippets
 
     for (const auto& s : snippets) {
         std::string tagStr;
-        for (size_t i = 0; i < s.getTags().size(); ++i) {
-            tagStr += "`" + s.getTags()[i] + "`";
-            if (i + 1 < s.getTags().size())
-                tagStr += ", ";
+        if (s.getTags().empty()) {
+            tagStr = "-";
+        } else {
+            for (size_t i = 0; i < s.getTags().size(); ++i) {
+                tagStr += "`" + s.getTags()[i] + "`";
+                if (i + 1 < s.getTags().size()) {
+                    tagStr += ", ";
+                }
+            }
         }
 
         m_out << "| " << s.getId() << " | " << s.getTitle() << " | " << s.getLanguage() << " | "

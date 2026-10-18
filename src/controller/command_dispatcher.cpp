@@ -34,7 +34,7 @@ size_t CommandDispatcher::getCommandCount() const noexcept {
     return m_commands.size();
 }
 
-std::vector<std::string> CommandDispatcher::getRegisteredCommands() const {
+const std::vector<std::string>& CommandDispatcher::getRegisteredCommands() const noexcept {
     return m_order;
 }
 

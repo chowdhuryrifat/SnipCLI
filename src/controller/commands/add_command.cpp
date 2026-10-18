@@ -9,20 +9,24 @@
 namespace snipcli::controller::commands {
 
 namespace {
+
 std::vector<std::string> splitTags(const std::string& raw) {
     std::vector<std::string> tags;
+    if (raw.empty()) {
+        return tags;
+    }
     std::stringstream ss(raw);
     std::string item;
     while (std::getline(ss, item, ',')) {
-        // trim whitespace
-        size_t start = item.find_first_not_of(" \t");
-        size_t end = item.find_last_not_of(" \t");
+        size_t start = item.find_first_not_of(" \t\r\n");
+        size_t end = item.find_last_not_of(" \t\r\n");
         if (start != std::string::npos && end != std::string::npos) {
             tags.push_back(item.substr(start, end - start + 1));
         }
     }
     return tags;
 }
+
 }  // namespace
 
 AddCommand::AddCommand(ParsedArgs args, std::shared_ptr<model::ISnippetWriter> writer,
@@ -49,7 +53,7 @@ int AddCommand::execute() {
         }
 
         std::string lang = m_args.getOption("lang", m_args.getOption("language", "cpp"));
-        std::string tagsStr = m_args.getOption("tags");
+        std::string tagsStr = m_args.getOption("tags", m_args.getOption("tag"));
         std::vector<std::string> tags = splitTags(tagsStr);
 
         std::string code = m_args.getOption("code");
@@ -64,17 +68,17 @@ int AddCommand::execute() {
             code = buffer.str();
         }
 
-        if (m_reader->exists(title)) {
-            throw common::ValidationException("A snippet with title '" + title +
-                                              "' already exists.");
-        }
-
         model::Snippet snippet(0, title, lang, code, tags, "", "");
         model::SnippetValidator::validate(snippet);
 
+        if (m_reader->exists(snippet.getTitle())) {
+            throw common::ValidationException("A snippet with title '" + snippet.getTitle() +
+                                              "' already exists.");
+        }
+
         uint64_t newId = m_writer->save(snippet);
-        m_view->renderSuccess("Snippet '" + title + "' created successfully with ID #" +
-                              std::to_string(newId));
+        m_view->renderSuccess("Snippet '" + snippet.getTitle() +
+                              "' created successfully with ID #" + std::to_string(newId));
         return 0;
     } catch (const common::SnipException& ex) {
         m_view->renderError(ex.what());

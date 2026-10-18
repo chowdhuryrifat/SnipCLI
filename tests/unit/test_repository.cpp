@@ -388,7 +388,8 @@ void runRepositoryTests() {
         // 11d: Missing required field (missing code) throws StorageException
         {
             std::ofstream out(corruptFile, std::ios::trunc);
-            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"NoCode\",\n    \"language\": \"cpp\"\n  }\n]";
+            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"NoCode\",\n    \"language\": "
+                   "\"cpp\"\n  }\n]";
         }
         bool threwMissingCode = false;
         try {
@@ -396,7 +397,8 @@ void runRepositoryTests() {
         } catch (const snipcli::common::StorageException&) {
             threwMissingCode = true;
         }
-        assertTrue(threwMissingCode, "Snippet missing mandatory code field triggers StorageException");
+        assertTrue(threwMissingCode,
+                   "Snippet missing mandatory code field triggers StorageException");
     }
 
     // ---------------------------------------------------------

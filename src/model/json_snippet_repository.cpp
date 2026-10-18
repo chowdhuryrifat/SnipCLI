@@ -417,8 +417,9 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
         std::string updatedAt = fields["updatedAt"];
 
         if (title.empty() || code.empty()) {
-            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
-                                           ": snippet object missing mandatory 'title' or 'code' field.");
+            throw common::StorageException(
+                "Corrupt storage file at " + m_storagePath.string() +
+                ": snippet object missing mandatory 'title' or 'code' field.");
         }
 
         uint64_t id = 0;

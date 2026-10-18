@@ -8,8 +8,10 @@
 
 #include "snipcli/controller/cli_parser.hpp"
 #include "snipcli/controller/commands/add_command.hpp"
+#include "snipcli/controller/commands/delete_command.hpp"
 #include "snipcli/controller/commands/get_command.hpp"
 #include "snipcli/controller/commands/list_command.hpp"
+#include "snipcli/controller/commands/search_command.hpp"
 #include "snipcli/model/i_snippet_repository.hpp"
 #include "snipcli/model/snippet.hpp"
 #include "snipcli/view/i_snippet_view.hpp"
@@ -117,7 +119,8 @@ public:
 }  // namespace
 
 void runCommandTests() {
-    std::cout << "[TEST] Running GoF Command Wiring tests (Add, List, Get)..." << std::endl;
+    std::cout << "[TEST] Running GoF Command Wiring tests (Add, List, Get, Delete, Search)..."
+              << std::endl;
 
     // ---------------------------------------------------------
     // Scenario 1: AddCommand - Inline Code and Tag Parsing
@@ -412,5 +415,195 @@ void runCommandTests() {
         assertTrue(cmdNoArg.execute() != 0, "GetCommand without criteria must fail");
     }
 
-    std::cout << "[PASS] GoF Command Wiring tests passed. (13/13 Scenarios Verified)" << std::endl;
+    // ---------------------------------------------------------
+    // Scenario 14: DeleteCommand - Deletion by --id
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        repo->addDirect({10, "ToDeleteById", "cpp", "code", {}, "", ""});
+        assertTrue(repo->count() == 1, "Initial snippet count is 1");
+
+        auto args = snipcli::controller::CliParser::parse({"delete", "--id", "10"});
+        snipcli::controller::commands::DeleteCommand cmd(args, repo, view);
+        int code = cmd.execute();
+
+        assertTrue(code == 0, "DeleteCommand by --id must return 0");
+        assertTrue(repo->count() == 0, "Snippet must be removed from repository");
+        assertTrue(view->successes.size() == 1, "Success notification rendered");
+        assertTrue(view->successes[0].find("ID #10") != std::string::npos,
+                   "Success message references ID #10");
+    }
+
+    // ---------------------------------------------------------
+    // Scenario 15: DeleteCommand - Deletion by --title
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        repo->addDirect({1, "ToDeleteByTitle", "cpp", "code", {}, "", ""});
+        auto args = snipcli::controller::CliParser::parse({"delete", "--title", "ToDeleteByTitle"});
+        snipcli::controller::commands::DeleteCommand cmd(args, repo, view);
+        int code = cmd.execute();
+
+        assertTrue(code == 0, "DeleteCommand by --title must return 0");
+        assertTrue(repo->count() == 0, "Snippet must be removed from repository");
+        assertTrue(view->successes.size() == 1, "Success notification rendered");
+    }
+
+    // ---------------------------------------------------------
+    // Scenario 16: DeleteCommand - Positional Identification (Numeric & Title)
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        repo->addDirect({5, "NumericPositional", "cpp", "code", {}, "", ""});
+        repo->addDirect({6, "StringPositional", "cpp", "code", {}, "", ""});
+
+        // Numeric positional resolves to ID lookup
+        auto argsNum = snipcli::controller::CliParser::parse({"delete", "5"});
+        snipcli::controller::commands::DeleteCommand cmdNum(argsNum, repo, view);
+        assertTrue(cmdNum.execute() == 0, "Positional numeric delete succeeds");
+        assertTrue(repo->count() == 1, "One snippet remaining");
+
+        // String positional resolves to Title lookup
+        auto argsStr = snipcli::controller::CliParser::parse({"delete", "StringPositional"});
+        snipcli::controller::commands::DeleteCommand cmdStr(argsStr, repo, view);
+        assertTrue(cmdStr.execute() == 0, "Positional title delete succeeds");
+        assertTrue(repo->count() == 0, "All snippets removed");
+    }
+
+    // ---------------------------------------------------------
+    // Scenario 17: DeleteCommand - Not Found, Bad ID Format & Missing Args
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        // Non-existent snippet
+        auto argsMissing =
+            snipcli::controller::CliParser::parse({"delete", "--title", "NonExistent"});
+        snipcli::controller::commands::DeleteCommand cmdMissing(argsMissing, repo, view);
+        assertTrue(cmdMissing.execute() != 0, "Delete non-existent snippet must fail");
+
+        // Invalid non-integer ID format
+        auto argsBadId = snipcli::controller::CliParser::parse({"delete", "--id", "bad_id"});
+        snipcli::controller::commands::DeleteCommand cmdBadId(argsBadId, repo, view);
+        assertTrue(cmdBadId.execute() != 0, "Delete with invalid ID format must fail");
+
+        // Missing arguments
+        auto argsNoArg = snipcli::controller::CliParser::parse({"delete"});
+        snipcli::controller::commands::DeleteCommand cmdNoArg(argsNoArg, repo, view);
+        assertTrue(cmdNoArg.execute() != 0, "Delete without criteria must fail");
+    }
+
+    // ---------------------------------------------------------
+    // Scenario 18: SearchCommand - Search by Tag (--tag)
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        repo->addDirect({1, "Dijkstra", "cpp", "code", {"graph", "sp"}, "", ""});
+        repo->addDirect({2, "FloydWarshall", "cpp", "code", {"graph", "all_pairs"}, "", ""});
+        repo->addDirect({3, "Knapsack", "cpp", "code", {"dp"}, "", ""});
+
+        auto args = snipcli::controller::CliParser::parse({"search", "--tag", "graph"});
+        snipcli::controller::commands::SearchCommand cmd(args, repo, view);
+        int code = cmd.execute();
+
+        assertTrue(code == 0, "SearchCommand with --tag must return 0");
+        assertTrue(view->renderedLists.size() == 1, "renderSnippetList called");
+        assertTrue(view->renderedLists[0].size() == 2, "2 graph snippets returned");
+    }
+
+    // ---------------------------------------------------------
+    // Scenario 19: SearchCommand - Search by Language (--lang)
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        repo->addDirect({1, "Dijkstra", "cpp", "code", {}, "", ""});
+        repo->addDirect({2, "BinarySearch", "python", "code", {}, "", ""});
+
+        auto args = snipcli::controller::CliParser::parse({"search", "--lang", "PYTHON"});
+        snipcli::controller::commands::SearchCommand cmd(args, repo, view);
+        int code = cmd.execute();
+
+        assertTrue(code == 0, "SearchCommand with --lang must return 0");
+        assertTrue(view->renderedLists.size() == 1, "renderSnippetList called");
+        assertTrue(view->renderedLists[0].size() == 1, "1 python snippet returned");
+        assertTrue(view->renderedLists[0][0].getTitle() == "BinarySearch",
+                   "Result matches BinarySearch");
+    }
+
+    // ---------------------------------------------------------
+    // Scenario 20: SearchCommand - Search by Title Substring (--title)
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        repo->addDirect({1, "SegmentTreeRangeQuery", "cpp", "code", {}, "", ""});
+        repo->addDirect({2, "BinarySearchTree", "cpp", "code", {}, "", ""});
+        repo->addDirect({3, "Dijkstra", "cpp", "code", {}, "", ""});
+
+        auto args = snipcli::controller::CliParser::parse({"search", "--title", "tree"});
+        snipcli::controller::commands::SearchCommand cmd(args, repo, view);
+        int code = cmd.execute();
+
+        assertTrue(code == 0, "SearchCommand with --title must return 0");
+        assertTrue(view->renderedLists.size() == 1, "renderSnippetList called");
+        assertTrue(view->renderedLists[0].size() == 2,
+                   "2 tree snippets matched (SegmentTree and BinarySearchTree)");
+    }
+
+    // ---------------------------------------------------------
+    // Scenario 21: SearchCommand - Positional Query Substring Search
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        repo->addDirect({1, "DijkstraShortestPath", "cpp", "code", {}, "", ""});
+        repo->addDirect({2, "KnapsackDP", "cpp", "code", {}, "", ""});
+
+        auto args = snipcli::controller::CliParser::parse({"search", "Shortest"});
+        snipcli::controller::commands::SearchCommand cmd(args, repo, view);
+        int code = cmd.execute();
+
+        assertTrue(code == 0, "Positional search must return 0");
+        assertTrue(view->renderedLists.size() == 1, "renderSnippetList called");
+        assertTrue(view->renderedLists[0].size() == 1, "1 match found for 'Shortest'");
+        assertTrue(view->renderedLists[0][0].getTitle() == "DijkstraShortestPath",
+                   "Match is DijkstraShortestPath");
+    }
+
+    // ---------------------------------------------------------
+    // Scenario 22: SearchCommand - Missing Criteria & Empty Results
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        // Missing criteria
+        auto argsEmpty = snipcli::controller::CliParser::parse({"search"});
+        snipcli::controller::commands::SearchCommand cmdEmpty(argsEmpty, repo, view);
+        assertTrue(cmdEmpty.execute() != 0, "Search without criteria must fail");
+        assertTrue(view->errors.size() == 1, "Error message rendered");
+
+        // Non-matching query returns empty list with 0 exit code
+        auto argsNoMatch =
+            snipcli::controller::CliParser::parse({"search", "NonExistentString12345"});
+        snipcli::controller::commands::SearchCommand cmdNoMatch(argsNoMatch, repo, view);
+        assertTrue(cmdNoMatch.execute() == 0, "Search with no matches returns 0");
+        assertTrue(view->renderedLists.size() == 1 && view->renderedLists[0].empty(),
+                   "Empty list passed to renderSnippetList");
+    }
+
+    std::cout << "[PASS] GoF Command Wiring tests passed. (22/22 Scenarios Verified)" << std::endl;
 }

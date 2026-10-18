@@ -1,6 +1,6 @@
 #include "snipcli/controller/commands/get_command.hpp"
 
-#include <iostream>
+#include <string>
 
 #include "snipcli/common/exceptions.hpp"
 
@@ -23,18 +23,42 @@ int GetCommand::execute() {
         std::optional<model::Snippet> snippet;
 
         if (m_args.hasOption("id")) {
-            uint64_t id = std::stoull(m_args.getOption("id"));
-            snippet = m_reader->getById(id);
+            std::string idStr = m_args.getOption("id");
+            try {
+                size_t idx = 0;
+                uint64_t id = std::stoull(idStr, &idx);
+                if (idx != idStr.size()) {
+                    m_view->renderError("Invalid snippet ID format: '" + idStr +
+                                        "'. Expected an integer.");
+                    return 1;
+                }
+                snippet = m_reader->getById(id);
+            } catch (const std::exception&) {
+                m_view->renderError("Invalid snippet ID format: '" + idStr +
+                                    "'. Expected an integer.");
+                return 1;
+            }
         } else if (m_args.hasOption("title")) {
             snippet = m_reader->getByTitle(m_args.getOption("title"));
         } else if (!m_args.positionals.empty()) {
             std::string query = m_args.positionals[0];
             try {
-                uint64_t id = std::stoull(query);
-                snippet = m_reader->getById(id);
+                size_t idx = 0;
+                uint64_t id = std::stoull(query, &idx);
+                if (idx == query.size()) {
+                    snippet = m_reader->getById(id);
+                } else {
+                    snippet = m_reader->getByTitle(query);
+                }
             } catch (...) {
                 snippet = m_reader->getByTitle(query);
             }
+        } else {
+            m_view->renderError(
+                "Snippet lookup criteria missing. Specify --id <id>, --title <title>, or provide "
+                "an "
+                "identifier as an argument.");
+            return 1;
         }
 
         if (!snippet.has_value()) {
@@ -43,18 +67,18 @@ int GetCommand::execute() {
         }
 
         if (m_args.hasFlag("--code-only") || m_args.hasFlag("-c")) {
-            std::cout << snippet->getCode();
-            if (!snippet->getCode().empty() && snippet->getCode().back() != '\n') {
-                std::cout << "\n";
-            }
+            m_view->renderMessage(snippet->getCode());
         } else {
             m_view->renderSnippet(*snippet);
         }
 
         return 0;
-    } catch (const std::exception& ex) {
+    } catch (const common::SnipException& ex) {
         m_view->renderError(ex.what());
         return 1;
+    } catch (const std::exception& ex) {
+        m_view->renderError(std::string("Unexpected error: ") + ex.what());
+        return 2;
     }
 }
 

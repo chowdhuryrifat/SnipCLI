@@ -661,5 +661,45 @@ void runCommandTests() {
         assertTrue(view->lastBreakdown.empty(), "Language breakdown must be empty");
     }
 
-    std::cout << "[PASS] GoF Command Wiring tests passed. (24/24 Scenarios Verified)" << std::endl;
+    // ---------------------------------------------------------
+    // Scenario 25: Strict Positive ID Validation & Storage Quarantine
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        // 1. Negative ID in GetCommand
+        auto argsNegGet = snipcli::controller::CliParser::parse({"get", "--id=-5"});
+        snipcli::controller::commands::GetCommand cmdNegGet(argsNegGet, repo, view);
+        int codeNegGet = cmdNegGet.execute();
+        assertTrue(codeNegGet != 0, "GetCommand with negative ID (--id=-5) must fail");
+        assertTrue(!view->errors.empty(), "Error message must be rendered for negative ID");
+        assertTrue(view->errors.back().find("Invalid snippet ID format") != std::string::npos,
+                   "Error must indicate 'Invalid snippet ID format'");
+
+        // 2. Negative ID with equals syntax in DeleteCommand
+        auto argsNegDel = snipcli::controller::CliParser::parse({"delete", "--id=-5"});
+        snipcli::controller::commands::DeleteCommand cmdNegDel(argsNegDel, repo, view);
+        int codeNegDel = cmdNegDel.execute();
+        assertTrue(codeNegDel != 0, "DeleteCommand with negative ID (--id=-5) must fail");
+        assertTrue(view->errors.back().find("Invalid snippet ID format") != std::string::npos,
+                   "Error must indicate 'Invalid snippet ID format'");
+
+        // 3. Zero ID rejected as non-positive integer
+        auto argsZeroGet = snipcli::controller::CliParser::parse({"get", "--id", "0"});
+        snipcli::controller::commands::GetCommand cmdZeroGet(argsZeroGet, repo, view);
+        assertTrue(cmdZeroGet.execute() != 0, "GetCommand with zero ID (--id 0) must fail");
+
+        auto argsZeroDel = snipcli::controller::CliParser::parse({"delete", "--id", "0"});
+        snipcli::controller::commands::DeleteCommand cmdZeroDel(argsZeroDel, repo, view);
+        assertTrue(cmdZeroDel.execute() != 0, "DeleteCommand with zero ID (--id 0) must fail");
+
+        // 4. Positional numeric query resolved by ID
+        repo->addDirect({1, "Five", "cpp", "int x = 5;", {"algo"}, "", ""});
+        auto argsPos = snipcli::controller::CliParser::parse({"get", "1"});
+        snipcli::controller::commands::GetCommand cmdPos(argsPos, repo, view);
+        assertTrue(cmdPos.execute() == 0, "GetCommand with positional numeric ID 1 must succeed");
+    }
+
+    std::cout << "[PASS] GoF Command Wiring tests passed. (25/25 Scenarios Verified)" << std::endl;
 }

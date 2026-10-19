@@ -75,7 +75,7 @@ cmake --build build --parallel
 
 ### 3. Verify Build & Run Test Suite
 ```bash
-# Run CTest Unit Tests (All 7 Suites - 93 Scenarios & Invariants)
+# Run CTest Unit Tests (All 7 Suites - 98+ Scenarios & Invariants)
 ctest --test-dir build --output-on-failure
 
 # Run Automated End-to-End Smoke & Integration Tests
@@ -279,13 +279,13 @@ flowchart TD
 SnipCLI enforces rigorous multi-layered quality gates across every commit and Pull Request:
 
 ### 1. Multi-Suite Unit Testing (CTest)
-A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 93 domain invariants and behavioral scenarios:
+A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 98 domain invariants and behavioral scenarios:
 - **`Snippet` (10 Invariants):** Immutability, line counting, tag normalization, ISO 8601 timestamps.
 - **`SnippetValidator` (12 Invariants):** Defense against empty titles, illegal characters, empty languages, and missing payloads.
-- **`JsonSnippetRepository` (10 Scenarios):** CRUD operations, ID auto-incrementation, persistence roundtrips, and corrupted JSON recovery.
+- **`JsonSnippetRepository` (13 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, and atomic file replacement.
 - **`Strategy Pattern` (10 Scenarios):** Case-insensitive title substring, exact tag matching, and language filtering.
-- **`CliParser` & `CommandDispatcher` (10 Invariants):** Tokenization, short/long flags, positional arguments, unknown verbs.
-- **`Command Wiring` (24 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution.
+- **`CliParser` & `CommandDispatcher` (11 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, unknown verbs.
+- **`Command Wiring` (25 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution, including strict ID parsing and storage exception quarantine.
 - **`View Engine & Factory` (17 Scenarios):** Stream-injected verification of `TerminalView`, `MarkdownView`, and `ViewFactory`.
 
 ### 2. Automated End-to-End Smoke & Integration Suite

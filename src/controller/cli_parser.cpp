@@ -14,7 +14,7 @@ struct OptionSchema {
     std::string_view name;
     bool isShort;
     bool takesValue;
-    std::initializer_list<std::string_view> allowedVerbs;
+    std::string_view allowedVerbs[6];
 };
 
 constexpr OptionSchema kOptionSchemas[] = {
@@ -67,15 +67,17 @@ bool isKnownShortSwitch(std::string_view s) {
 bool isOptionSupportedByCommand(std::string_view optName, std::string_view verb) {
     for (const auto& opt : kOptionSchemas) {
         if (opt.name == optName) {
-            if (opt.allowedVerbs.size() == 0) {
-                return true;
-            }
-            if (!verb.empty()) {
-                for (auto allowed : opt.allowedVerbs) {
+            bool hasAllowed = false;
+            for (auto allowed : opt.allowedVerbs) {
+                if (!allowed.empty()) {
+                    hasAllowed = true;
                     if (allowed == verb) {
                         return true;
                     }
                 }
+            }
+            if (!hasAllowed) {
+                return true;
             }
         }
     }

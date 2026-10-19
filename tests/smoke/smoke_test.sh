@@ -12,6 +12,7 @@ TEMP_DIR=$(mktemp -d)
 if command -v cygpath >/dev/null 2>&1; then
     TEST_STORAGE=$(cygpath -m "$TEMP_DIR/test_snippets.json")
     SAMPLE_FILE=$(cygpath -m "$TEMP_DIR/sample.java")
+    export PATH="/c/Program Files/CodeBlocks/MinGW/bin:$PATH"
 else
     TEST_STORAGE="$TEMP_DIR/test_snippets.json"
     SAMPLE_FILE="$TEMP_DIR/sample.java"
@@ -239,6 +240,182 @@ if $BIN unrecognized_verb > /dev/null 2>&1; then
     fail "Unrecognized command was accepted unexpectedly"
 fi
 pass "CLI Dispatcher: Unrecognized command verb cleanly rejected with error"
+
+# ------------------------------------------------------------------------------
+# Test 10: Option Schema, Multi-Word Quarantine, & Global Flags (Findings B1-B8)
+# ------------------------------------------------------------------------------
+# 10a: Unquoted multi-word positional rejection
+$BIN add --title "Binary Search" --lang "cpp" --code "int bs = 1;" > /dev/null || fail "Failed to add Binary Search"
+if $BIN delete Binary Search > /dev/null 2>&1; then
+    fail "Unquoted multi-word delete 'Binary Search' was accepted unexpectedly"
+fi
+$BIN get --title "Binary Search" > /dev/null || fail "Snippet 'Binary Search' was deleted by unquoted delete"
+pass "B1: Multi-word unquoted positionals rejected defensively"
+
+# 10b: Valueless option handling
+if $BIN delete --id --title "Binary Search" > /dev/null 2>&1; then
+    fail "Valueless --id followed by --title was accepted unexpectedly"
+fi
+if $BIN delete --id > /dev/null 2>&1; then
+    fail "Valueless --id at end of arguments was accepted unexpectedly"
+fi
+pass "B2: Valueless options correctly rejected with CommandException"
+
+# 10c: Global options before verb
+OUTPUT_GLOBAL=$($BIN --format markdown list)
+echo "$OUTPUT_GLOBAL" | grep -q "| Binary Search |" || fail "Global option before verb failed"
+pass "B3: Global options before verb (--format markdown list) verified"
+
+# 10d: Invalid --format rejection
+if $BIN --format markdwon list > /dev/null 2>&1; then
+    fail "Invalid format 'markdwon' was accepted unexpectedly"
+fi
+if $BIN list --format=invalid > /dev/null 2>&1; then
+    fail "Invalid format '--format=invalid' was accepted unexpectedly"
+fi
+pass "B4: Invalid format correctly rejected"
+
+# 10e: Values starting with dash accepted
+$BIN add --title "DashCode" --lang "cpp" --code "-x;" > /dev/null || fail "Failed to add snippet with code '-x;'"
+pass "B8: Snippet code starting with dash ('-x;') accepted"
+
+# 10f: Byte-exact code-only extraction
+EXTRACTED_DASH=$($BIN get --title "DashCode" --code-only)
+if [ "$EXTRACTED_DASH" != "-x;" ]; then
+    fail "Byte-exact code extraction failed for '-x;'"
+fi
+pass "B7: Byte-exact --code-only output verified"
+
+# 10g: Unknown option rejection
+$BIN add --title "GuardSnippet" --lang "cpp" --code "int guard = 1;" > /dev/null
+if $BIN delete --titel "GuardSnippet" > /dev/null 2>&1; then
+    fail "Unknown option '--titel' was accepted unexpectedly"
+fi
+$BIN get --title "GuardSnippet" > /dev/null || fail "Snippet 'GuardSnippet' was wrongly deleted by unknown option!"
+$BIN delete --title "GuardSnippet" > /dev/null
+pass "Unknown option rejection: typo --titel cleanly rejected, snippet protected"
+
+# 10h: Extra positionals for add rejected
+if $BIN add Unquoted Multi Title --code "int x;" > /dev/null 2>&1; then
+    fail "Add with unquoted multi-word title was accepted unexpectedly"
+fi
+if $BIN get --title "Unquoted" > /dev/null 2>&1; then
+    fail "Snippet 'Unquoted' was wrongly created by unquoted add!"
+fi
+if $BIN add --title "SingleTitle" ExtraArg --code "int x;" > /dev/null 2>&1; then
+    fail "Add with explicit --title and extra positional was accepted unexpectedly"
+fi
+if $BIN get --title "SingleTitle" > /dev/null 2>&1; then
+    fail "Snippet 'SingleTitle' was wrongly created by malformed add!"
+fi
+pass "Add command extra positional rejection verified"
+
+# 10i: Missing command verb with options returns non-zero error
+if $BIN --format markdown > /dev/null 2>&1; then
+    fail "Invocation with options but no command unexpectedly exited with 0"
+fi
+pass "Missing command verb with options returns non-zero error code"
+
+# 10j: Cross-platform CRLF and LF byte-exact round-trip verification
+CRLF_FILE="$TEMP_DIR/test_crlf.txt"
+LF_FILE="$TEMP_DIR/test_lf.txt"
+CRLF_OUT="$TEMP_DIR/out_crlf.txt"
+LF_OUT="$TEMP_DIR/out_lf.txt"
+if command -v cygpath >/dev/null 2>&1; then
+    CRLF_FILE=$(cygpath -m "$CRLF_FILE")
+    LF_FILE=$(cygpath -m "$LF_FILE")
+    CRLF_OUT=$(cygpath -m "$CRLF_OUT")
+    LF_OUT=$(cygpath -m "$LF_OUT")
+fi
+
+printf "int a = 1;\r\nint b = 2;\r\n" > "$CRLF_FILE"
+printf "int c = 3;\nint d = 4;\n" > "$LF_FILE"
+
+$BIN add --title "CrlfSnippet" --lang "cpp" --file "$CRLF_FILE" > /dev/null || fail "Failed to add CRLF snippet"
+$BIN add --title "LfSnippet" --lang "cpp" --file "$LF_FILE" > /dev/null || fail "Failed to add LF snippet"
+
+$BIN get --title "CrlfSnippet" --code-only > "$CRLF_OUT"
+$BIN get --title "LfSnippet" --code-only > "$LF_OUT"
+
+if ! cmp -s "$CRLF_FILE" "$CRLF_OUT"; then
+    fail "CRLF byte-exact roundtrip failed!"
+fi
+if ! cmp -s "$LF_FILE" "$LF_OUT"; then
+    fail "LF byte-exact roundtrip failed!"
+fi
+pass "Byte-exact file roundtrip verified across both CRLF and LF formats"
+
+$BIN delete --title "CrlfSnippet" > /dev/null
+$BIN delete --title "LfSnippet" > /dev/null
+
+# 10k: Command-specific option rejection protects state: snip delete --code unused Binary Search
+if $BIN delete --code unused "Binary Search" > /dev/null 2>&1; then
+    fail "Command-unsupported option '--code' in delete was accepted unexpectedly"
+fi
+$BIN get --title "Binary Search" > /dev/null || fail "Snippet 'Binary Search' was deleted by 'delete --code'!"
+pass "Command-specific option rejection: delete --code cleanly rejected, state protected"
+
+# 10l: Unsupported short switch rejection protects state: snip delete -c unused Binary Search
+if $BIN delete -c unused "Binary Search" > /dev/null 2>&1; then
+    fail "Command-unsupported short switch '-c' in delete was accepted unexpectedly"
+fi
+$BIN get --title "Binary Search" > /dev/null || fail "Snippet 'Binary Search' was deleted by 'delete -c'!"
+pass "Command-specific short switch rejection: delete -c cleanly rejected, state protected"
+
+# 10m: Reject positional when --id is provided
+if $BIN delete --id 1 "Binary Search" > /dev/null 2>&1; then
+    fail "Delete with --id and positional should have failed but succeeded!"
+fi
+$BIN get --title "Binary Search" > /dev/null || fail "Snippet was deleted by 'delete --id with positional'!"
+pass "Selector exclusivity: delete --id with positional cleanly rejected"
+
+# 10n: Reject positional when --title is provided
+if $BIN delete --title "Binary Search" Extra > /dev/null 2>&1; then
+    fail "Delete with --title and positional should have failed but succeeded!"
+fi
+$BIN get --title "Binary Search" > /dev/null || fail "Snippet was deleted by 'delete --title with positional'!"
+pass "Selector exclusivity: delete --title with positional cleanly rejected"
+
+# 10o: Reject conflicting selector options
+if $BIN delete --id 1 --title "Binary Search" > /dev/null 2>&1; then
+    fail "Delete with conflicting --id and --title should have failed but succeeded!"
+fi
+$BIN get --title "Binary Search" > /dev/null || fail "Snippet was deleted by conflicting selector options!"
+pass "Selector exclusivity: conflicting --id and --title cleanly rejected"
+
+# 10p: Get command rejects conflicting and extra selectors
+if $BIN get --id 1 "Binary Search" > /dev/null 2>&1; then
+    fail "Get with --id and positional should have failed but succeeded!"
+fi
+if $BIN get --id 1 --title "Binary Search" > /dev/null 2>&1; then
+    fail "Get with conflicting --id and --title should have failed but succeeded!"
+fi
+pass "Selector exclusivity in get command cleanly rejected"
+
+# 10q: Reject boolean flags with equals syntax
+if $BIN get --code-only=true 1 > /dev/null 2>&1; then
+    fail "Get with --code-only=true should have failed but succeeded!"
+fi
+if $BIN list --help=false > /dev/null 2>&1; then
+    fail "List with --help=false should have failed but succeeded!"
+fi
+if $BIN list --version=false > /dev/null 2>&1; then
+    fail "List with --version=false should have failed but succeeded!"
+fi
+if $BIN list -h=true > /dev/null 2>&1; then
+    fail "List with -h=true should have failed but succeeded!"
+fi
+if $BIN list -v=true > /dev/null 2>&1; then
+    fail "List with -v=true should have failed but succeeded!"
+fi
+if $BIN get -c=true 1 > /dev/null 2>&1; then
+    fail "Get with -c=true should have failed but succeeded!"
+fi
+pass "Boolean flags with equals syntax cleanly rejected before execution"
+
+# Clean up temporary test snippets
+$BIN delete --title "Binary Search" > /dev/null || fail "Failed to delete 'Binary Search'"
+$BIN delete --title "DashCode" > /dev/null || fail "Failed to delete 'DashCode'"
 
 # ------------------------------------------------------------------------------
 # Completion Notice

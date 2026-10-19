@@ -383,7 +383,73 @@ void runViewTests() {
                    "Empty string falls back to TerminalView");
     }
 
-    std::cout << "[PASS] Multi-Format Presentation & Factory tests passed. (17/17 Scenarios "
+    // ---------------------------------------------------------
+    // Test 18: Byte-Exact renderRaw Output (Finding B7)
+    // ---------------------------------------------------------
+    {
+        std::ostringstream out;
+        std::ostringstream err;
+        snipcli::view::TerminalView termView(out, err, false);
+        termView.renderRaw("int main() { return 0; }");
+        assertTrue(
+            out.str() == "int main() { return 0; }",
+            "renderRaw in TerminalView must output byte-exact content without trailing newline");
+
+        std::ostringstream mdOut;
+        std::ostringstream mdErr;
+        snipcli::view::MarkdownView mdView(mdOut, mdErr);
+        mdView.renderRaw("def hello(): pass");
+        assertTrue(
+            mdOut.str() == "def hello(): pass",
+            "renderRaw in MarkdownView must output byte-exact content without trailing newline");
+    }
+
+    // ---------------------------------------------------------
+    // Test 19: NO_COLOR Environment Variable Disables Colors (Finding B6)
+    // ---------------------------------------------------------
+    {
+#if defined(_WIN32)
+        _putenv("NO_COLOR=1");
+#else
+        setenv("NO_COLOR", "1", 1);
+#endif
+        std::ostringstream out;
+        std::ostringstream err;
+        snipcli::view::TerminalView viewNoColor(out, err, true);
+        assertTrue(
+            !viewNoColor.isColorEnabled(),
+            "TerminalView must disable colors when NO_COLOR environment variable is present");
+
+#if defined(_WIN32)
+        _putenv("NO_COLOR=");
+#else
+        unsetenv("NO_COLOR");
+#endif
+    }
+
+    // ---------------------------------------------------------
+    // Test 20: Cross-Platform CRLF and LF Stream Byte Identity (Finding B7)
+    // ---------------------------------------------------------
+    {
+        std::string crlfData = "line1\r\nline2\r\n";
+        std::string lfData = "line1\nline2\n";
+
+        std::ostringstream outCrlf;
+        std::ostringstream errCrlf;
+        snipcli::view::TerminalView viewCrlf(outCrlf, errCrlf, false);
+        viewCrlf.renderRaw(crlfData);
+        assertTrue(outCrlf.str() == crlfData,
+                   "renderRaw must preserve exact CRLF bytes without alteration");
+
+        std::ostringstream outLf;
+        std::ostringstream errLf;
+        snipcli::view::TerminalView viewLf(outLf, errLf, false);
+        viewLf.renderRaw(lfData);
+        assertTrue(outLf.str() == lfData,
+                   "renderRaw must preserve exact LF bytes without alteration");
+    }
+
+    std::cout << "[PASS] Multi-Format Presentation & Factory tests passed. (20/20 Scenarios "
                  "Verified)"
               << std::endl;
 }

@@ -362,6 +362,36 @@ fi
 $BIN get --title "Binary Search" > /dev/null || fail "Snippet 'Binary Search' was deleted by 'delete -c'!"
 pass "Command-specific short switch rejection: delete -c cleanly rejected, state protected"
 
+# 10m: Reject positional when --id is provided
+if $BIN delete --id 1 "Binary Search" > /dev/null 2>&1; then
+    fail "Delete with --id and positional should have failed but succeeded!"
+fi
+$BIN get --title "Binary Search" > /dev/null || fail "Snippet was deleted by 'delete --id with positional'!"
+pass "Selector exclusivity: delete --id with positional cleanly rejected"
+
+# 10n: Reject positional when --title is provided
+if $BIN delete --title "Binary Search" Extra > /dev/null 2>&1; then
+    fail "Delete with --title and positional should have failed but succeeded!"
+fi
+$BIN get --title "Binary Search" > /dev/null || fail "Snippet was deleted by 'delete --title with positional'!"
+pass "Selector exclusivity: delete --title with positional cleanly rejected"
+
+# 10o: Reject conflicting selector options
+if $BIN delete --id 1 --title "Binary Search" > /dev/null 2>&1; then
+    fail "Delete with conflicting --id and --title should have failed but succeeded!"
+fi
+$BIN get --title "Binary Search" > /dev/null || fail "Snippet was deleted by conflicting selector options!"
+pass "Selector exclusivity: conflicting --id and --title cleanly rejected"
+
+# 10p: Get command rejects conflicting and extra selectors
+if $BIN get --id 1 "Binary Search" > /dev/null 2>&1; then
+    fail "Get with --id and positional should have failed but succeeded!"
+fi
+if $BIN get --id 1 --title "Binary Search" > /dev/null 2>&1; then
+    fail "Get with conflicting --id and --title should have failed but succeeded!"
+fi
+pass "Selector exclusivity in get command cleanly rejected"
+
 # Clean up temporary test snippets
 $BIN delete --title "Binary Search" > /dev/null || fail "Failed to delete 'Binary Search'"
 $BIN delete --title "DashCode" > /dev/null || fail "Failed to delete 'DashCode'"

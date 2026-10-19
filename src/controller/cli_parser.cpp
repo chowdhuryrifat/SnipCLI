@@ -1,6 +1,7 @@
 #include "snipcli/controller/cli_parser.hpp"
 
 #include <algorithm>
+#include <cctype>
 
 namespace snipcli::controller {
 
@@ -75,18 +76,21 @@ ParsedArgs CliParser::parse(const std::vector<std::string>& tokens) {
                 // Known standalone boolean flags never consume the next positional argument
                 result.flags.push_back(arg);
             } else if (i + 1 < tokens.size() &&
-                       (tokens[i + 1].empty() || tokens[i + 1][0] != '-')) {
-                // Syntax: --key value
+                       (tokens[i + 1].empty() || tokens[i + 1][0] != '-' ||
+                        (tokens[i + 1].size() > 1 &&
+                         std::isdigit(static_cast<unsigned char>(tokens[i + 1][1]))))) {
+                // Syntax: --key value (including negative numbers like -5)
                 result.options[body] = tokens[++i];
             } else {
                 // Standalone boolean flag: --flag
                 result.flags.push_back(arg);
             }
-        } else if (arg.rfind("-", 0) == 0) {
-            // Short switch: -h, -v, etc.
+        } else if (arg.rfind("-", 0) == 0 && arg.size() > 1 &&
+                   !std::isdigit(static_cast<unsigned char>(arg[1]))) {
+            // Short switch: -h, -v, etc. (excluding negative numbers like -5)
             result.flags.push_back(arg);
         } else {
-            // Positional argument
+            // Positional argument (including negative numbers like -5)
             result.positionals.push_back(arg);
         }
         ++i;

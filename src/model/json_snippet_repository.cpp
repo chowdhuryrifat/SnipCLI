@@ -14,6 +14,7 @@
 #include <limits>
 #include <sstream>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -62,6 +63,14 @@ public:
         std::filesystem::path lockPath = target;
         lockPath += ".lock";
 
+        int timeoutMs = 10000;
+        if (const char* timeoutEnv = std::getenv("SNIPCLI_LOCK_TIMEOUT_MS")) {
+            int val = std::atoi(timeoutEnv);
+            if (val > 0) {
+                timeoutMs = val;
+            }
+        }
+
 #if defined(_WIN32)
         std::wstring wPath = lockPath.wstring();
         m_handle = CreateFileW(wPath.c_str(), GENERIC_READ | GENERIC_WRITE,
@@ -70,11 +79,35 @@ public:
         if (m_handle == INVALID_HANDLE_VALUE) {
             throw common::StorageException("Failed to open lock file: " + lockPath.string());
         }
-        OVERLAPPED ov{};
-        if (!LockFileEx(m_handle, LOCKFILE_EXCLUSIVE_LOCK, 0, MAXDWORD, MAXDWORD, &ov)) {
+        auto start = std::chrono::steady_clock::now();
+        bool acquired = false;
+        while (true) {
+            OVERLAPPED ov{};
+            if (LockFileEx(m_handle, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0,
+                           MAXDWORD, MAXDWORD, &ov)) {
+                acquired = true;
+                break;
+            }
+            DWORD err = GetLastError();
+            if (err != ERROR_LOCK_VIOLATION && err != ERROR_SHARING_VIOLATION) {
+                CloseHandle(m_handle);
+                m_handle = INVALID_HANDLE_VALUE;
+                throw common::StorageException("Failed to acquire lock on Windows: " +
+                                               lockPath.string());
+            }
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                               std::chrono::steady_clock::now() - start)
+                               .count();
+            if (elapsed >= timeoutMs) {
+                break;
+            }
+            Sleep(50);
+        }
+        if (!acquired) {
             CloseHandle(m_handle);
-            throw common::StorageException("Failed to acquire lock on Windows: " +
-                                           lockPath.string());
+            m_handle = INVALID_HANDLE_VALUE;
+            throw common::StorageException("Storage is locked by another snip process (" +
+                                           lockPath.string() + ").");
         }
 #else
         m_fd = ::open(lockPath.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
@@ -82,11 +115,33 @@ public:
             throw common::StorageException("Failed to open lock file: " + lockPath.string() + ": " +
                                            std::strerror(errno));
         }
-        if (::flock(m_fd, LOCK_EX) != 0) {
+        auto start = std::chrono::steady_clock::now();
+        bool acquired = false;
+        while (true) {
+            if (::flock(m_fd, LOCK_EX | LOCK_NB) == 0) {
+                acquired = true;
+                break;
+            }
             int err = errno;
+            if (err != EWOULDBLOCK && err != EAGAIN && err != EINTR) {
+                ::close(m_fd);
+                m_fd = -1;
+                throw common::StorageException("Failed to acquire flock on " + lockPath.string() +
+                                               ": " + std::strerror(err));
+            }
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                               std::chrono::steady_clock::now() - start)
+                               .count();
+            if (elapsed >= timeoutMs) {
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        if (!acquired) {
             ::close(m_fd);
-            throw common::StorageException("Failed to acquire flock on " + lockPath.string() +
-                                           ": " + std::strerror(err));
+            m_fd = -1;
+            throw common::StorageException("Storage is locked by another snip process (" +
+                                           lockPath.string() + ").");
         }
 #endif
     }
@@ -97,11 +152,13 @@ public:
             OVERLAPPED ov{};
             UnlockFileEx(m_handle, 0, MAXDWORD, MAXDWORD, &ov);
             CloseHandle(m_handle);
+            m_handle = INVALID_HANDLE_VALUE;
         }
 #else
         if (m_fd >= 0) {
             ::flock(m_fd, LOCK_UN);
             ::close(m_fd);
+            m_fd = -1;
         }
 #endif
     }
@@ -623,6 +680,7 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
 
     std::vector<Snippet> snippets;
     std::unordered_set<uint64_t> seenIds;
+    std::unordered_set<std::string> seenTitlesLower;
     size_t pos = firstNonWs + 1;
     bool expectComma = false;
     bool closedArray = false;
@@ -718,6 +776,15 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
                                            ": snippet object missing mandatory 'title' field.");
         }
         std::string title = fields["title"];
+        std::string titleLower;
+        titleLower.reserve(title.size());
+        for (char c : title) {
+            titleLower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+        if (!seenTitlesLower.insert(titleLower).second) {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": duplicate snippet title '" + title + "'.");
+        }
 
         if (fields.find("language") == fields.end() || fields["language"].empty()) {
             throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
@@ -819,6 +886,10 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
                                        tmpPath.string());
     }
 
+    std::filesystem::permissions(
+        tmpPath, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+        std::filesystem::perm_options::replace, ec);
+
     file << "[\n";
     for (size_t i = 0; i < snippets.size(); ++i) {
         const auto& s = snippets[i];
@@ -853,12 +924,25 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
 #if defined(_WIN32)
     std::wstring wTmp = tmpPath.wstring();
     std::wstring wDest = target.wstring();
-    if (!MoveFileExW(wTmp.c_str(), wDest.c_str(),
-                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-        DWORD err = GetLastError();
+    bool replaced = false;
+    DWORD lastErr = 0;
+    for (int attempt = 0; attempt < 10; ++attempt) {
+        if (MoveFileExW(wTmp.c_str(), wDest.c_str(),
+                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+            replaced = true;
+            break;
+        }
+        lastErr = GetLastError();
+        if (lastErr == ERROR_SHARING_VIOLATION || lastErr == ERROR_ACCESS_DENIED) {
+            Sleep(50);
+            continue;
+        }
+        break;
+    }
+    if (!replaced) {
         throw common::StorageException(
-            "Failed to atomically replace storage file on Windows (Error " + std::to_string(err) +
-            ")");
+            "Failed to atomically replace storage file on Windows (Error " +
+            std::to_string(lastErr) + ")");
     }
 #else
     std::filesystem::rename(tmpPath, target, ec);

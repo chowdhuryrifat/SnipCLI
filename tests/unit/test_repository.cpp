@@ -6,6 +6,7 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 #include "snipcli/common/exceptions.hpp"
@@ -784,9 +785,81 @@ void runRepositoryTests() {
         assertTrue(caseRepo.count() == 0, "Snippet removed successfully");
     }
 
+    // ---------------------------------------------------------
+    // Test 20: Multi-Instance FileLock Concurrency & Hardening
+    // ---------------------------------------------------------
+    {
+        // 20a: Two repository instances on the same file with 8 concurrent threads (R2a)
+        std::filesystem::path concurrentFile = testDir / "concurrent_store.json";
+        snipcli::model::JsonSnippetRepository repoA(concurrentFile), repoB(concurrentFile);
+        std::vector<std::thread> workers;
+        for (int t = 0; t < 8; ++t) {
+            workers.emplace_back([&, t] {
+                auto& repo = (t % 2) ? repoA : repoB;
+                for (int i = 0; i < 5; ++i) {
+                    snipcli::model::Snippet s(0, "T" + std::to_string(t) + "_" + std::to_string(i),
+                                              "cpp", "int x;", {}, "", "");
+                    (void)repo.save(s);
+                }
+            });
+        }
+        for (auto& w : workers) {
+            w.join();
+        }
+        assertTrue(repoA.count() == 40, "Two repository instances must not lose updates");
+        auto allSnippets = repoA.getAll();
+        std::unordered_set<uint64_t> distinctIds;
+        for (const auto& s : allSnippets) {
+            distinctIds.insert(s.getId());
+        }
+        assertTrue(distinctIds.size() == 40,
+                   "All 40 IDs across separate instances must be distinct");
+
+        // 20b: Nested JSON object in storage must not hoist title or drop code (R2a)
+        std::filesystem::path nestedFile = testDir / "nested_store.json";
+        {
+            std::ofstream out(nestedFile, std::ios::trunc);
+            out << "[\n"
+                << "  {\n"
+                << "    \"id\": 1,\n"
+                << "    \"meta\": {\"title\": \"nested_dummy\", \"author\": \"alice\"},\n"
+                << "    \"title\": \"RealTitle\",\n"
+                << "    \"language\": \"cpp\",\n"
+                << "    \"code\": \"int realCode = 42;\",\n"
+                << "    \"tags\": [\"tree\"]\n"
+                << "  }\n"
+                << "]\n";
+        }
+        snipcli::model::JsonSnippetRepository nestedRepo(nestedFile);
+        auto nestedOpt = nestedRepo.getByTitle("RealTitle");
+        assertTrue(nestedOpt.has_value(), "Snippet with nested object retrieved by actual title");
+        assertTrue(nestedOpt->getTitle() == "RealTitle",
+                   "Actual title not overwritten by nested object");
+        assertTrue(nestedOpt->getCode() == "int realCode = 42;",
+                   "Code preserved with nested object");
+
+        // 20c: Duplicate titles in hand-edited file rejected on load (R4)
+        std::filesystem::path dupTitleFile = testDir / "duptitle_store.json";
+        {
+            std::ofstream out(dupTitleFile, std::ios::trunc);
+            out << "[{\"id\":1,\"title\":\"bfs\",\"language\":\"cpp\",\"code\":\"a\",\"tags\":[]},"
+                << "{\"id\":2,\"title\":\"BFS\",\"language\":\"cpp\",\"code\":\"b\",\"tags\":[]}]";
+        }
+        snipcli::model::JsonSnippetRepository dupTitleRepo(dupTitleFile);
+        bool dupTitleCaught = false;
+        try {
+            (void)dupTitleRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            dupTitleCaught = true;
+        }
+        assertTrue(dupTitleCaught,
+                   "Duplicate titles (case-insensitive) in hand-edited file must throw "
+                   "StorageException");
+    }
+
     // Cleanup test directory
     std::filesystem::remove_all(testDir, ec);
 
-    std::cout << "[PASS] Repository tests passed. (19/19 Invariants & Scenarios Verified)"
+    std::cout << "[PASS] Repository tests passed. (20/20 Invariants & Scenarios Verified)"
               << std::endl;
 }

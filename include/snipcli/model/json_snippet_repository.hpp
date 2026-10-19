@@ -11,13 +11,18 @@
 namespace snipcli::model {
 
 /**
- * @brief Thread-safe snippet repository persisting data in structured JSON format.
+ * @brief Thread-safe and process-safe snippet repository persisting data in structured JSON format.
  *
  * Implements ISnippetRepository to provide persistent disk storage for Snippet entities.
- * Features:
- * - Thread-safe operations guarded by std::mutex and std::lock_guard.
- * - Lightweight zero-dependency JSON serialization and parsing.
- * - Cross-platform storage directory creation and path resolution (Linux, macOS, Windows).
+ * Concurrency & Integrity Architecture:
+ * - In-process thread-safety guarded by mutable std::mutex and std::lock_guard.
+ * - Cross-process writer serialization enforced via advisory file lock (<storagePath>.lock)
+ *   utilizing flock(LOCK_EX | LOCK_NB) on POSIX and LockFileEx(LOCKFILE_EXCLUSIVE_LOCK) on Windows.
+ * - Lock acquisition timeout (default 10 seconds, polling every 50 ms; configurable via
+ *   SNIPCLI_LOCK_TIMEOUT_MS) throws StorageException if held by a stuck external process.
+ * - Reader operations (getAll, getById, getByTitle, count) operate lock-free over atomic
+ *   temporary-file replacement (rename on POSIX, MoveFileExW with retry on Windows).
+ * - Strict JSON grammar validation, duplicate ID/title quarantine, and UTF-8 encoding integrity.
  * - Automatic ID generation and ISO 8601 timestamp tracking.
  */
 class JsonSnippetRepository : public ISnippetRepository {

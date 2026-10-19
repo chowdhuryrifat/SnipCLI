@@ -571,8 +571,7 @@ void runRepositoryTests() {
         {
             std::ofstream out(bomFile, std::ios::binary | std::ios::trunc);
             // Write UTF-8 BOM (0xEF, 0xBB, 0xBF) followed by JSON array
-            out << "\xEF\xBB\xBF"
-                << "[\n"
+            out << "\xEF\xBB\xBF[\n"
                 << "  {\n"
                 << "    \"id\": 1,\n"
                 << "    \"title\": \"BomTest\",\n"

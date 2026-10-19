@@ -224,7 +224,33 @@ if $BIN delete -c unused "Binary" > /dev/null 2>&1; then
     fail "Peer Review Regression: Command-unsupported short switch '-c' in delete should have failed!"
 fi
 $BIN get --title "Binary" > /dev/null || fail "Peer Review Regression: Snippet 'Binary' was deleted by 'delete -c'!"
-pass "Peer Review Regressions: Unknown options, command schema, add positionals, and missing command verified"
+
+# 6. Reject positional when --id is provided: snip delete --id 1 Binary
+if $BIN delete --id 1 "Binary" > /dev/null 2>&1; then
+    fail "Peer Review Regression: 'snip delete --id 1 Binary' should have failed but succeeded!"
+fi
+$BIN get --title "Binary" > /dev/null || fail "Peer Review Regression: Snippet 'Binary' was deleted by 'delete --id 1 Binary'!"
+
+# 7. Reject positional when --title is provided: snip delete --title Binary Extra
+if $BIN delete --title "Binary" Extra > /dev/null 2>&1; then
+    fail "Peer Review Regression: 'snip delete --title Binary Extra' should have failed but succeeded!"
+fi
+$BIN get --title "Binary" > /dev/null || fail "Peer Review Regression: Snippet 'Binary' was deleted by 'delete --title Binary Extra'!"
+
+# 8. Reject conflicting selector options: snip delete --id 1 --title Binary
+if $BIN delete --id 1 --title "Binary" > /dev/null 2>&1; then
+    fail "Peer Review Regression: 'snip delete --id 1 --title Binary' should have failed but succeeded!"
+fi
+$BIN get --title "Binary" > /dev/null || fail "Peer Review Regression: Snippet 'Binary' was deleted by 'delete --id 1 --title Binary'!"
+
+# 9. Get command rejects conflicting and extra selectors
+if $BIN get --id 1 "Binary" > /dev/null 2>&1; then
+    fail "Peer Review Regression: 'snip get --id 1 Binary' should have failed but succeeded!"
+fi
+if $BIN get --id 1 --title "Binary" > /dev/null 2>&1; then
+    fail "Peer Review Regression: 'snip get --id 1 --title Binary' should have failed but succeeded!"
+fi
+pass "Peer Review Regressions: Unknown options, command schema, selector exclusivity, and missing command verified"
 
 # ------------------------------------------------------------------------------
 # Summary

@@ -1,7 +1,15 @@
 #include "snipcli/view/terminal_view.hpp"
 
+#include <cstdlib>
 #include <iomanip>
 #include <sstream>
+
+#if defined(_WIN32)
+#include <io.h>
+#include <stdio.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace snipcli::view {
 
@@ -15,10 +23,32 @@ constexpr const char* kAnsiBlue = "\033[34m";
 constexpr const char* kAnsiCyan = "\033[36m";
 constexpr const char* kAnsiDim = "\033[2m";
 constexpr const char* kEmpty = "";
+
+bool detectColorSupport(std::ostream& outStream, bool useColors) {
+    if (!useColors) {
+        return false;
+    }
+    if (const char* noColor = std::getenv("NO_COLOR"); noColor != nullptr && noColor[0] != '\0') {
+        return false;
+    }
+    if (&outStream == &std::cout) {
+#if defined(_WIN32)
+        if (!_isatty(_fileno(stdout))) {
+            return false;
+        }
+#else
+        if (!isatty(fileno(stdout))) {
+            return false;
+        }
+#endif
+    }
+    return true;
+}
+
 }  // namespace
 
 TerminalView::TerminalView(std::ostream& outStream, std::ostream& errStream, bool useColors)
-    : m_out(outStream), m_err(errStream), m_useColors(useColors) {}
+    : m_out(outStream), m_err(errStream), m_useColors(detectColorSupport(outStream, useColors)) {}
 
 void TerminalView::setColorEnabled(bool enabled) noexcept {
     m_useColors = enabled;
@@ -120,6 +150,10 @@ void TerminalView::renderSnippetList(const std::vector<model::Snippet>& snippets
               << displayTitle << colorReset() << std::setw(12) << s.getLanguage() << std::setw(10)
               << s.getLineCount() << colorDim() << tagStr << colorReset() << "\n";
     }
+}
+
+void TerminalView::renderRaw(const std::string& content) {
+    m_out << content;
 }
 
 void TerminalView::renderMessage(const std::string& message) {

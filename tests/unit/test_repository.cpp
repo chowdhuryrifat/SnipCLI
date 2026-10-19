@@ -1,6 +1,8 @@
 #include <algorithm>
+#include <atomic>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -299,17 +301,24 @@ void runRepositoryTests() {
             (void)mixedRepo.save(s);
         }
 
+        std::atomic<bool> workerSuccess{true};
         std::vector<std::thread> threads;
-        // Reader threads
+        // Reader threads (recording failures safely without calling std::exit from child threads)
         for (int r = 0; r < 4; ++r) {
-            threads.emplace_back([&mixedRepo]() {
+            threads.emplace_back([&mixedRepo, &workerSuccess]() {
                 for (int i = 0; i < 20; ++i) {
                     auto count = mixedRepo.count();
-                    assertTrue(count >= 10, "Count must be at least initial 10");
+                    if (count < 10) {
+                        workerSuccess.store(false);
+                    }
                     auto opt = mixedRepo.getById(1);
-                    assertTrue(opt.has_value(), "Snippet 1 must exist");
+                    if (!opt.has_value()) {
+                        workerSuccess.store(false);
+                    }
                     auto all = mixedRepo.getAll();
-                    assertTrue(!all.empty(), "getAll must not be empty");
+                    if (all.empty()) {
+                        workerSuccess.store(false);
+                    }
                 }
             });
         }
@@ -330,13 +339,192 @@ void runRepositoryTests() {
             t.join();
         }
 
+        assertTrue(workerSuccess.load(), "Concurrent reader threads completed without errors");
         assertTrue(mixedRepo.count() == 10 + (4 * 5),
                    "Mixed concurrent operations preserved all records");
+    }
+
+    // ---------------------------------------------------------
+    // Test 11: Fail-Closed Corrupted JSON Handling & Quarantine
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path corruptFile = testDir / "corrupted_store.json";
+
+        // 11a: Empty and whitespace-only file returns count 0
+        {
+            std::ofstream out(corruptFile, std::ios::trunc);
+            out << "   \n\t  \r\n";
+        }
+        snipcli::model::JsonSnippetRepository emptyRepo(corruptFile);
+        assertTrue(emptyRepo.count() == 0, "Whitespace-only JSON file treated as empty repository");
+        assertTrue(emptyRepo.getAll().empty(), "Whitespace-only JSON getAll is empty");
+
+        // 11b: Truncated JSON file throws StorageException
+        {
+            std::ofstream out(corruptFile, std::ios::trunc);
+            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"Truncated\",\n    \"code\": \"int x;";
+        }
+        bool threwTruncated = false;
+        try {
+            (void)emptyRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            threwTruncated = true;
+        }
+        assertTrue(threwTruncated, "Truncated JSON file correctly triggers StorageException");
+
+        // 11c: Non-array root token throws StorageException
+        {
+            std::ofstream out(corruptFile, std::ios::trunc);
+            out << "{\"not_an_array\": true}";
+        }
+        bool threwNonArray = false;
+        try {
+            (void)emptyRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            threwNonArray = true;
+        }
+        assertTrue(threwNonArray, "Non-array root JSON object correctly triggers StorageException");
+
+        // 11d: Missing required field (missing code) throws StorageException
+        {
+            std::ofstream out(corruptFile, std::ios::trunc);
+            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"NoCode\",\n    \"language\": "
+                   "\"cpp\"\n  }\n]";
+        }
+        bool threwMissingCode = false;
+        try {
+            (void)emptyRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            threwMissingCode = true;
+        }
+        assertTrue(threwMissingCode,
+                   "Snippet missing mandatory code field triggers StorageException");
+
+        // 11e: Invalid escape sequence (\q) throws StorageException
+        {
+            std::ofstream out(corruptFile, std::ios::trunc);
+            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"BadEscape\",\n    \"language\": "
+                   "\"cpp\",\n    \"code\": \"int \\q = 0;\"\n  }\n]";
+        }
+        bool threwBadEscape = false;
+        try {
+            (void)emptyRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            threwBadEscape = true;
+        }
+        assertTrue(threwBadEscape, "Invalid escape sequence \\q triggers StorageException");
+
+        // 11f: Non-hexadecimal \u escape (\u12zz) throws StorageException
+        {
+            std::ofstream out(corruptFile, std::ios::trunc);
+            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"BadHex\",\n    \"language\": "
+                   "\"cpp\",\n    \"code\": \"int x = \\u12zz;\"\n  }\n]";
+        }
+        bool threwBadHex = false;
+        try {
+            (void)emptyRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            threwBadHex = true;
+        }
+        assertTrue(threwBadHex, "Non-hex sequence in \\u escape triggers StorageException");
+
+        // 11g: Isolated high surrogate (\ud800 without low surrogate) throws StorageException
+        {
+            std::ofstream out(corruptFile, std::ios::trunc);
+            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"IsolatedSurrogate\",\n    "
+                   "\"language\": \"cpp\",\n    \"code\": \"// \\ud800 lonely\"\n  }\n]";
+        }
+        bool threwSurrogate = false;
+        try {
+            (void)emptyRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            threwSurrogate = true;
+        }
+        assertTrue(threwSurrogate, "Isolated high surrogate triggers StorageException");
+    }
+
+    // ---------------------------------------------------------
+    // Test 12: Unicode \\uXXXX Decoding & UTF-8 Round-Trip
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path unicodeFile = testDir / "unicode_store.json";
+        {
+            std::ofstream out(unicodeFile, std::ios::trunc);
+            out << "[\n"
+                << "  {\n"
+                << "    \"id\": 1,\n"
+                << "    \"title\": \"UnicodeTest\",\n"
+                << "    \"language\": \"cpp\",\n"
+                << "    \"code\": \"// caf\\u00e9 \\u4e2d\\u6587 \\ud83d\\ude00\",\n"
+                << "    \"tags\": [\"unicode\"]\n"
+                << "  }\n"
+                << "]\n";
+        }
+
+        snipcli::model::JsonSnippetRepository unicodeRepo(unicodeFile);
+        auto opt = unicodeRepo.getByTitle("UnicodeTest");
+        assertTrue(opt.has_value(), "Unicode snippet found by title");
+        assertTrue(opt->getCode() == "// café 中文 😀",
+                   "Unicode \\u escapes correctly decoded to UTF-8 including surrogate pairs");
+
+        // Verify save preserves the UTF-8 bytes intact
+        snipcli::model::Snippet copy = *opt;
+        (void)unicodeRepo.save(copy);
+        auto reloaded = unicodeRepo.getByTitle("UnicodeTest");
+        assertTrue(reloaded.has_value(), "Reloaded unicode snippet found");
+        assertTrue(reloaded->getCode() == "// café 中文 😀",
+                   "UTF-8 code roundtrips cleanly across save and reload");
+    }
+
+    // ---------------------------------------------------------
+    // Test 13: Atomic Title Uniqueness & Strong Exception Safety
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path uniqFile = testDir / "uniqueness_store.json";
+        snipcli::model::JsonSnippetRepository uniqRepo(uniqFile);
+
+        snipcli::model::Snippet s1(0, "UniqueTitle", "cpp", "code();", {"algo"}, "", "");
+        uint64_t id1 = uniqRepo.save(s1);
+        assertTrue(id1 == 1, "First snippet saved with ID 1");
+
+        // Attempt duplicate insertion
+        snipcli::model::Snippet dup(0, "UniqueTitle", "python", "pass", {"algo"}, "", "");
+        bool duplicateCaught = false;
+        try {
+            (void)uniqRepo.save(dup);
+        } catch (const snipcli::common::ValidationException&) {
+            duplicateCaught = true;
+        }
+        assertTrue(duplicateCaught, "Duplicate snippet title correctly rejected by repository");
+        assertTrue(dup.getId() == 0,
+                   "Caller's snippet ID remains 0 upon rejected save (Strong Exception Safety)");
+        assertTrue(dup.getCreatedAt().empty(),
+                   "Caller's snippet createdAt remains empty upon rejected save");
+
+        // Updating snippet 1 with its own title is allowed
+        s1.setCode("new_code();");
+        uint64_t updateId = uniqRepo.save(s1);
+        assertTrue(updateId == 1, "In-place update with existing title succeeded");
+
+        // Creating snippet 2 and attempting to rename to snippet 1's title fails
+        snipcli::model::Snippet s2(0, "SecondTitle", "cpp", "s2();", {"test"}, "", "");
+        uint64_t id2 = uniqRepo.save(s2);
+        assertTrue(id2 == 2, "Second snippet saved with ID 2");
+
+        s2.setTitle("UniqueTitle");  // Attempt collision with s1
+        bool renameConflictCaught = false;
+        try {
+            (void)uniqRepo.save(s2);
+        } catch (const snipcli::common::ValidationException&) {
+            renameConflictCaught = true;
+        }
+        assertTrue(renameConflictCaught,
+                   "Renaming snippet to existing title rejected with ValidationException");
     }
 
     // Cleanup test directory
     std::filesystem::remove_all(testDir, ec);
 
-    std::cout << "[PASS] Repository tests passed. (10/10 Invariants & Scenarios Verified)"
+    std::cout << "[PASS] Repository tests passed. (13/13 Invariants & Scenarios Verified)"
               << std::endl;
 }

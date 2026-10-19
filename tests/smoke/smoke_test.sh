@@ -214,6 +214,24 @@ if $BIN delete --id 9999 > /dev/null 2>&1; then
 fi
 pass "Quarantine: Non-existent snippet deletion cleanly rejected"
 
+# 8d: Add snippet titled "0" to verify positional '0' does NOT delete it
+$BIN add --title "0" --lang "cpp" --code "int zero = 0;" > /dev/null || fail "Failed to add snippet titled '0'"
+if $BIN delete 0 > /dev/null 2>&1; then
+    fail "Positional delete with '0' succeeded unexpectedly"
+fi
+$BIN get --title "0" > /dev/null || fail "Snippet titled '0' was wrongly deleted by positional delete 0"
+$BIN delete --title "0" > /dev/null || fail "Failed to delete snippet titled '0' via explicit --title"
+pass "Quarantine: Positional delete 0 rejected and protected snippet titled '0'"
+
+# 8e: Spaced negative ID in delete and get rejected
+if $BIN delete --id -5 > /dev/null 2>&1; then
+    fail "Delete with spaced negative ID '--id -5' succeeded unexpectedly"
+fi
+if $BIN get --id -5 > /dev/null 2>&1; then
+    fail "Get with spaced negative ID '--id -5' succeeded unexpectedly"
+fi
+pass "Defensive check: Spaced negative ID (--id -5) cleanly rejected"
+
 # ------------------------------------------------------------------------------
 # Test 9: Unknown Command Dispatch Handling
 # ------------------------------------------------------------------------------

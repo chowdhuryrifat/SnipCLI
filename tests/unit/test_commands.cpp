@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "snipcli/common/exceptions.hpp"
 #include "snipcli/controller/cli_parser.hpp"
 #include "snipcli/controller/commands/add_command.hpp"
 #include "snipcli/controller/commands/delete_command.hpp"
@@ -29,6 +30,11 @@ void assertTrue(bool condition, const std::string& message) {
 // In-Memory Repository Mock conforming to ISP (ISnippetReader & ISnippetWriter)
 class MockRepository : public snipcli::model::ISnippetRepository {
 public:
+    bool throwOnGetById{false};
+    bool throwOnRemoveById{false};
+    bool removeByIdCalled{false};
+    bool removeByTitleCalled{false};
+
     uint64_t save(snipcli::model::Snippet& snippet) override {
         uint64_t id = m_nextId++;
         snipcli::model::Snippet saved(id, snippet.getTitle(), snippet.getLanguage(),
@@ -39,6 +45,9 @@ public:
     }
 
     std::optional<snipcli::model::Snippet> getById(uint64_t id) const override {
+        if (throwOnGetById) {
+            throw snipcli::common::StorageException("Simulated disk read failure");
+        }
         for (const auto& s : m_snippets) {
             if (s.getId() == id) {
                 return s;
@@ -63,6 +72,10 @@ public:
     size_t count() const override { return m_snippets.size(); }
 
     bool removeById(uint64_t id) override {
+        removeByIdCalled = true;
+        if (throwOnRemoveById) {
+            throw snipcli::common::StorageException("Simulated disk write failure");
+        }
         for (auto it = m_snippets.begin(); it != m_snippets.end(); ++it) {
             if (it->getId() == id) {
                 m_snippets.erase(it);
@@ -73,6 +86,7 @@ public:
     }
 
     bool removeByTitle(const std::string& title) override {
+        removeByTitleCalled = true;
         for (auto it = m_snippets.begin(); it != m_snippets.end(); ++it) {
             if (it->getTitle() == title) {
                 m_snippets.erase(it);
@@ -668,7 +682,7 @@ void runCommandTests() {
         auto repo = std::make_shared<MockRepository>();
         auto view = std::make_shared<MockView>();
 
-        // 1. Negative ID in GetCommand
+        // 1. Negative ID in GetCommand (--id=-5 and --id -5)
         auto argsNegGet = snipcli::controller::CliParser::parse({"get", "--id=-5"});
         snipcli::controller::commands::GetCommand cmdNegGet(argsNegGet, repo, view);
         int codeNegGet = cmdNegGet.execute();
@@ -677,11 +691,26 @@ void runCommandTests() {
         assertTrue(view->errors.back().find("Invalid snippet ID format") != std::string::npos,
                    "Error must indicate 'Invalid snippet ID format'");
 
-        // 2. Negative ID with equals syntax in DeleteCommand
+        auto argsNegGetSpaced = snipcli::controller::CliParser::parse({"get", "--id", "-5"});
+        snipcli::controller::commands::GetCommand cmdNegGetSpaced(argsNegGetSpaced, repo, view);
+        int codeNegGetSpaced = cmdNegGetSpaced.execute();
+        assertTrue(codeNegGetSpaced != 0, "GetCommand with spaced negative ID (--id -5) must fail");
+        assertTrue(view->errors.back().find("Invalid snippet ID format") != std::string::npos,
+                   "Error must indicate 'Invalid snippet ID format'");
+
+        // 2. Negative ID in DeleteCommand (--id=-5 and --id -5)
         auto argsNegDel = snipcli::controller::CliParser::parse({"delete", "--id=-5"});
         snipcli::controller::commands::DeleteCommand cmdNegDel(argsNegDel, repo, view);
         int codeNegDel = cmdNegDel.execute();
         assertTrue(codeNegDel != 0, "DeleteCommand with negative ID (--id=-5) must fail");
+        assertTrue(view->errors.back().find("Invalid snippet ID format") != std::string::npos,
+                   "Error must indicate 'Invalid snippet ID format'");
+
+        auto argsNegDelSpaced = snipcli::controller::CliParser::parse({"delete", "--id", "-5"});
+        snipcli::controller::commands::DeleteCommand cmdNegDelSpaced(argsNegDelSpaced, repo, view);
+        int codeNegDelSpaced = cmdNegDelSpaced.execute();
+        assertTrue(codeNegDelSpaced != 0,
+                   "DeleteCommand with spaced negative ID (--id -5) must fail");
         assertTrue(view->errors.back().find("Invalid snippet ID format") != std::string::npos,
                    "Error must indicate 'Invalid snippet ID format'");
 
@@ -694,11 +723,75 @@ void runCommandTests() {
         snipcli::controller::commands::DeleteCommand cmdZeroDel(argsZeroDel, repo, view);
         assertTrue(cmdZeroDel.execute() != 0, "DeleteCommand with zero ID (--id 0) must fail");
 
-        // 4. Positional numeric query resolved by ID
+        // 4. Positional '0' with snippet titled '0' present: must reject as invalid ID and NOT
+        // delete snippet
+        repo->addDirect({10, "0", "cpp", "int zero = 0;", {}, "", ""});
+        auto argsZeroPos = snipcli::controller::CliParser::parse({"delete", "0"});
+        snipcli::controller::commands::DeleteCommand cmdZeroPos(argsZeroPos, repo, view);
+        int codeZeroPos = cmdZeroPos.execute();
+        assertTrue(codeZeroPos != 0, "DeleteCommand with positional '0' must fail as invalid ID");
+        assertTrue(view->errors.back().find("Invalid snippet ID format: '0'") != std::string::npos,
+                   "Error must indicate invalid ID format for positional '0'");
+        assertTrue(repo->exists("0"),
+                   "Snippet titled '0' must NOT have been deleted by positional '0'");
+
+        // 5. Positional '0' in GetCommand: must reject as invalid ID
+        auto argsZeroGetPos = snipcli::controller::CliParser::parse({"get", "0"});
+        snipcli::controller::commands::GetCommand cmdZeroGetPos(argsZeroGetPos, repo, view);
+        assertTrue(cmdZeroGetPos.execute() != 0,
+                   "GetCommand with positional '0' must fail as invalid ID");
+        assertTrue(view->errors.back().find("Invalid snippet ID format: '0'") != std::string::npos,
+                   "Error must indicate invalid ID format for positional '0'");
+
+        // 6. Ordinary text title positional lookup succeeds
+        repo->addDirect({20, "DijkstraAlgo", "cpp", "int d = 1;", {}, "", ""});
+        auto argsTitlePos = snipcli::controller::CliParser::parse({"delete", "DijkstraAlgo"});
+        snipcli::controller::commands::DeleteCommand cmdTitlePos(argsTitlePos, repo, view);
+        assertTrue(cmdTitlePos.execute() == 0, "DeleteCommand with text title must succeed");
+        assertTrue(!repo->exists("DijkstraAlgo"), "Snippet 'DijkstraAlgo' must be deleted");
+
+        // 7. Explicit --title 0 can still target snippet titled '0'
+        auto argsExplicitTitle = snipcli::controller::CliParser::parse({"delete", "--title", "0"});
+        snipcli::controller::commands::DeleteCommand cmdExplicitTitle(argsExplicitTitle, repo,
+                                                                      view);
+        assertTrue(cmdExplicitTitle.execute() == 0,
+                   "DeleteCommand with explicit --title 0 must succeed");
+        assertTrue(!repo->exists("0"), "Snippet titled '0' must be deleted via explicit --title 0");
+
+        // 8. Positional numeric query resolved by valid ID
         repo->addDirect({1, "Five", "cpp", "int x = 5;", {"algo"}, "", ""});
         auto argsPos = snipcli::controller::CliParser::parse({"get", "1"});
         snipcli::controller::commands::GetCommand cmdPos(argsPos, repo, view);
         assertTrue(cmdPos.execute() == 0, "GetCommand with positional numeric ID 1 must succeed");
+
+        // 9. StorageException quarantine: removeById throws StorageException
+        repo->throwOnRemoveById = true;
+        repo->removeByTitleCalled = false;
+        auto argsStorageDel = snipcli::controller::CliParser::parse({"delete", "--id", "1"});
+        snipcli::controller::commands::DeleteCommand cmdStorageDel(argsStorageDel, repo, view);
+        int codeStorageDel = cmdStorageDel.execute();
+        assertTrue(codeStorageDel != 0,
+                   "DeleteCommand must fail when removeById throws StorageException");
+        assertTrue(view->errors.back().find("Simulated disk write failure") != std::string::npos,
+                   "Error must report StorageException message");
+        assertTrue(view->errors.back().find("Invalid snippet ID format") == std::string::npos,
+                   "StorageException must NOT be masked as ID format error");
+        assertTrue(!repo->removeByTitleCalled,
+                   "DeleteCommand must NOT retry by title when removeById throws StorageException");
+        repo->throwOnRemoveById = false;
+
+        // 10. StorageException quarantine: getById throws StorageException
+        repo->throwOnGetById = true;
+        auto argsStorageGet = snipcli::controller::CliParser::parse({"get", "--id", "1"});
+        snipcli::controller::commands::GetCommand cmdStorageGet(argsStorageGet, repo, view);
+        int codeStorageGet = cmdStorageGet.execute();
+        assertTrue(codeStorageGet != 0,
+                   "GetCommand must fail when getById throws StorageException");
+        assertTrue(view->errors.back().find("Simulated disk read failure") != std::string::npos,
+                   "Error must report StorageException message");
+        assertTrue(view->errors.back().find("Invalid snippet ID format") == std::string::npos,
+                   "StorageException must NOT be masked as ID format error");
+        repo->throwOnGetById = false;
     }
 
     std::cout << "[PASS] GoF Command Wiring tests passed. (25/25 Scenarios Verified)" << std::endl;

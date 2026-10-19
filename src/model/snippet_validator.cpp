@@ -18,6 +18,11 @@ void SnippetValidator::validateTitle(const std::string& title) {
     if (title.empty()) {
         throw common::ValidationException("Snippet title cannot be empty.");
     }
+    if (std::isspace(static_cast<unsigned char>(title.front())) ||
+        std::isspace(static_cast<unsigned char>(title.back()))) {
+        throw common::ValidationException(
+            "Snippet title must not have leading or trailing whitespace.");
+    }
     if (title.length() > kMaxTitleLength) {
         throw common::ValidationException("Snippet title exceeds maximum length of " +
                                           std::to_string(kMaxTitleLength) + " characters.");
@@ -25,8 +30,8 @@ void SnippetValidator::validateTitle(const std::string& title) {
     for (char c : title) {
         if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_' && c != '-' && c != ' ') {
             throw common::ValidationException(
-                "Snippet title contains invalid characters. Only alphanumeric, dashes, and "
-                "underscores allowed.");
+                "Snippet title contains invalid characters. Only alphanumeric, dashes, "
+                "underscores, and spaces allowed.");
         }
     }
 }

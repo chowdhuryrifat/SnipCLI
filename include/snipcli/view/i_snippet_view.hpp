@@ -40,6 +40,12 @@ public:
     virtual void renderMessage(const std::string& message) = 0;
 
     /**
+     * @brief Renders raw unformatted content directly to output stream without trailing newline.
+     * @param content Raw string content to output.
+     */
+    virtual void renderRaw(const std::string& content) = 0;
+
+    /**
      * @brief Renders a positive confirmation or operation success message.
      * @param message Text content describing the successful operation.
      */

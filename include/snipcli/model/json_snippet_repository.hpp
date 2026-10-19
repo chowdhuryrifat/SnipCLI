@@ -116,6 +116,7 @@ private:
     void ensureStorageDirectoryExists() const;
     [[nodiscard]] std::vector<Snippet> loadFromFile() const;
     void saveToFile(const std::vector<Snippet>& snippets) const;
+    [[nodiscard]] std::optional<Snippet> getByTitleUnlocked(const std::string& title) const;
 
     std::filesystem::path m_storagePath;
     mutable std::mutex m_mutex;

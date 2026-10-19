@@ -92,6 +92,12 @@ void runValidatorTests() {
     assertThrowsValidationException("Title with newline character", []() {
         snipcli::model::SnippetValidator::validateTitle("Invalid\nTitle");
     });
+    assertThrowsValidationException("Title with leading space", []() {
+        snipcli::model::SnippetValidator::validateTitle(" LeadingSpace");
+    });
+    assertThrowsValidationException("Title with trailing space", []() {
+        snipcli::model::SnippetValidator::validateTitle("TrailingSpace ");
+    });
 
     // ---------------------------------------------------------
     // Invariant 6: Title Character Constraints (Allowed Characters)

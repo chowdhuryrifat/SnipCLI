@@ -212,7 +212,19 @@ fi
 if $BIN --format markdown > /dev/null 2>&1; then
     fail "Peer Review Regression: 'snip --format markdown' without command should exit non-zero!"
 fi
-pass "Peer Review Regressions: Unknown options, add positionals, and missing command verified"
+
+# 4. Command-specific option rejection protects state: snip delete --code unused Binary
+if $BIN delete --code unused "Binary" > /dev/null 2>&1; then
+    fail "Peer Review Regression: Command-unsupported option '--code' in delete should have failed!"
+fi
+$BIN get --title "Binary" > /dev/null || fail "Peer Review Regression: Snippet 'Binary' was deleted by 'delete --code'!"
+
+# 5. Command-specific short switch rejection protects state: snip delete -c unused Binary
+if $BIN delete -c unused "Binary" > /dev/null 2>&1; then
+    fail "Peer Review Regression: Command-unsupported short switch '-c' in delete should have failed!"
+fi
+$BIN get --title "Binary" > /dev/null || fail "Peer Review Regression: Snippet 'Binary' was deleted by 'delete -c'!"
+pass "Peer Review Regressions: Unknown options, command schema, add positionals, and missing command verified"
 
 # ------------------------------------------------------------------------------
 # Summary

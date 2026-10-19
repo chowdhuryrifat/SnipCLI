@@ -859,5 +859,65 @@ void runCommandTests() {
                    "'Binary' and 'Search' remain");
     }
 
-    std::cout << "[PASS] GoF Command Wiring tests passed. (26/26 Scenarios Verified)" << std::endl;
+    // ---------------------------------------------------------
+    // Scenario 27: AddCommand - Extra Positional Argument Rejection (Review Finding 2)
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        // 1. Unquoted multi-word title positional: snip add Binary Search --code "int x;"
+        auto argsMulti =
+            snipcli::controller::CliParser::parse({"add", "Binary", "Search", "--code", "int x;"});
+        snipcli::controller::commands::AddCommand cmdMulti(argsMulti, repo, repo, view);
+        int codeMulti = cmdMulti.execute();
+        assertTrue(codeMulti != 0, "AddCommand with multi-word positional title must fail");
+        assertTrue(repo->count() == 0, "No snippet should be added on multi-word add error");
+        assertTrue(!repo->exists("Binary") && !repo->exists("Binary Search"),
+                   "Neither 'Binary' nor 'Binary Search' should be created");
+        assertTrue(!view->errors.empty(), "Error message must be rendered");
+        assertTrue(view->errors.back().find("Unexpected extra argument(s)") != std::string::npos,
+                   "Error must advise enclosing in quotes");
+
+        // 2. Extra positional when --title is already provided: snip add --title "MySnippet" Extra
+        // --code "int x;"
+        auto argsExtra = snipcli::controller::CliParser::parse(
+            {"add", "--title", "MySnippet", "Extra", "--code", "int x;"});
+        snipcli::controller::commands::AddCommand cmdExtra(argsExtra, repo, repo, view);
+        int codeExtra = cmdExtra.execute();
+        assertTrue(codeExtra != 0,
+                   "AddCommand with explicit --title and extra positional must fail");
+        assertTrue(repo->count() == 0, "No snippet created on extra positional argument");
+    }
+
+    // ---------------------------------------------------------
+    // Scenario 28: End-to-End Regression - Unknown Option Rejection Protects State (Review Finding
+    // 1)
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        repo->addDirect({1, "Binary", "cpp", "int a = 1;", {}, "", ""});
+        assertTrue(repo->exists("Binary"), "Snippet 'Binary' exists in repository");
+
+        // snip delete --titel Binary: unknown option must throw CommandException
+        bool threwException = false;
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"delete", "--titel", "Binary"}));
+        } catch (const snipcli::common::CommandException& ex) {
+            threwException = true;
+            std::string msg = ex.what();
+            assertTrue(msg.find("Unknown option '--titel'") != std::string::npos,
+                       "Error message must specify unknown option");
+        }
+        assertTrue(threwException, "Parser must throw CommandException on unknown option");
+
+        // Verify snippet 'Binary' was NOT deleted
+        assertTrue(repo->exists("Binary"), "Snippet 'Binary' must remain untouched in repository");
+        assertTrue(repo->count() == 1, "Repository count must remain 1");
+    }
+
+    std::cout << "[PASS] GoF Command Wiring tests passed. (28/28 Scenarios Verified)" << std::endl;
 }

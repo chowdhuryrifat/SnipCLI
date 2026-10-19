@@ -82,6 +82,12 @@ jobs:
           chmod +x ./tests/smoke/smoke_test.sh
           ./tests/smoke/smoke_test.sh ./build/snip
 
+      - name: Run Adversarial Audit Reproduction Suite (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          chmod +x ./scripts/snipcli_audit_repro.sh
+          ./scripts/snipcli_audit_repro.sh ./build/snip
+
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
         with:

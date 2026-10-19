@@ -47,6 +47,14 @@ std::string AddCommand::getDescription() const {
 
 int AddCommand::execute() {
     try {
+        if ((m_args.hasOption("title") && !m_args.positionals.empty()) ||
+            m_args.positionals.size() > 1) {
+            m_view->renderError(
+                "Unexpected extra argument(s). For multi-word snippet titles, please enclose in "
+                "quotes (e.g., 'Binary Search').");
+            return 1;
+        }
+
         std::string title = m_args.getOption("title");
         if (title.empty() && !m_args.positionals.empty()) {
             title = m_args.positionals[0];
@@ -59,7 +67,7 @@ int AddCommand::execute() {
         std::string code = m_args.getOption("code");
         if (code.empty() && m_args.hasOption("file")) {
             std::string filePath = m_args.getOption("file");
-            std::ifstream file(filePath);
+            std::ifstream file(filePath, std::ios::binary);
             if (!file.is_open()) {
                 throw common::StorageException("Unable to read source code file: " + filePath);
             }

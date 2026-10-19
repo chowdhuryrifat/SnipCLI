@@ -3,14 +3,19 @@
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <cerrno>
 #include <charconv>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <fstream>
 #include <iomanip>
+#include <limits>
 #include <sstream>
+#include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -20,6 +25,10 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#else
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
 #endif
 
 #include "snipcli/common/exceptions.hpp"
@@ -27,6 +36,99 @@
 namespace snipcli::model {
 
 namespace {
+
+class FileLock {
+public:
+    explicit FileLock(const std::filesystem::path& storagePath) {
+        std::error_code ec;
+        std::filesystem::path target = storagePath;
+        if (std::filesystem::is_symlink(target, ec)) {
+            target = std::filesystem::weakly_canonical(target, ec);
+            if (ec) {
+                ec.clear();
+                target = std::filesystem::canonical(storagePath, ec);
+                if (ec) {
+                    target = storagePath;
+                }
+            }
+        }
+        if (target.has_parent_path()) {
+            std::filesystem::create_directories(target.parent_path(), ec);
+            if (ec) {
+                throw common::StorageException("Unable to create storage directory for lock: " +
+                                               target.parent_path().string());
+            }
+        }
+        std::filesystem::path lockPath = target;
+        lockPath += ".lock";
+
+#if defined(_WIN32)
+        std::wstring wPath = lockPath.wstring();
+        m_handle = CreateFileW(wPath.c_str(), GENERIC_READ | GENERIC_WRITE,
+                               FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                               FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (m_handle == INVALID_HANDLE_VALUE) {
+            throw common::StorageException("Failed to open lock file: " + lockPath.string());
+        }
+        OVERLAPPED ov{};
+        if (!LockFileEx(m_handle, LOCKFILE_EXCLUSIVE_LOCK, 0, MAXDWORD, MAXDWORD, &ov)) {
+            CloseHandle(m_handle);
+            throw common::StorageException("Failed to acquire lock on Windows: " +
+                                           lockPath.string());
+        }
+#else
+        m_fd = ::open(lockPath.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+        if (m_fd < 0) {
+            throw common::StorageException("Failed to open lock file: " + lockPath.string() + ": " +
+                                           std::strerror(errno));
+        }
+        if (::flock(m_fd, LOCK_EX) != 0) {
+            int err = errno;
+            ::close(m_fd);
+            throw common::StorageException("Failed to acquire flock on " + lockPath.string() +
+                                           ": " + std::strerror(err));
+        }
+#endif
+    }
+
+    ~FileLock() {
+#if defined(_WIN32)
+        if (m_handle != INVALID_HANDLE_VALUE) {
+            OVERLAPPED ov{};
+            UnlockFileEx(m_handle, 0, MAXDWORD, MAXDWORD, &ov);
+            CloseHandle(m_handle);
+        }
+#else
+        if (m_fd >= 0) {
+            ::flock(m_fd, LOCK_UN);
+            ::close(m_fd);
+        }
+#endif
+    }
+
+    FileLock(const FileLock&) = delete;
+    FileLock& operator=(const FileLock&) = delete;
+
+private:
+#if defined(_WIN32)
+    HANDLE m_handle{INVALID_HANDLE_VALUE};
+#else
+    int m_fd{-1};
+#endif
+};
+
+bool equalsIgnoreCase(std::string_view a, std::string_view b) noexcept {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (std::tolower(static_cast<unsigned char>(a[i])) !=
+            std::tolower(static_cast<unsigned char>(b[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
 
 std::string getIsoTimestamp() {
     auto now = std::chrono::system_clock::now();
@@ -126,7 +228,10 @@ std::string unescapeJson(const std::string& input) {
     std::string out;
     out.reserve(input.size());
     for (size_t i = 0; i < input.size(); ++i) {
-        if (input[i] == '\\' && i + 1 < input.size()) {
+        if (input[i] == '\\') {
+            if (i + 1 >= input.size()) {
+                throw common::StorageException("Dangling backslash escape at end of JSON string.");
+            }
             char next = input[++i];
             switch (next) {
                 case '"':
@@ -160,6 +265,10 @@ std::string unescapeJson(const std::string& input) {
                             "Invalid hexadecimal sequence in \\u escape.");
                     }
                     i += 4;
+                    if (cp == 0) {
+                        throw common::StorageException(
+                            "Embedded NUL character '\\u0000' is not permitted in JSON string.");
+                    }
                     if (cp >= 0xD800 && cp <= 0xDBFF) {
                         if (i + 6 < input.size() && input[i + 1] == '\\' && input[i + 2] == 'u') {
                             unsigned lo = 0;
@@ -189,6 +298,14 @@ std::string unescapeJson(const std::string& input) {
                                                    next + "' in JSON string.");
             }
         } else {
+            if (input[i] == '\0') {
+                throw common::StorageException(
+                    "Embedded NUL character is not permitted in JSON string.");
+            }
+            if (static_cast<unsigned char>(input[i]) < 0x20) {
+                throw common::StorageException(
+                    "Corrupt storage file: unescaped control character in JSON string.");
+            }
             out += input[i];
         }
     }
@@ -197,56 +314,91 @@ std::string unescapeJson(const std::string& input) {
 
 std::unordered_map<std::string, std::string> parseJsonObject(const std::string& objStr) {
     std::unordered_map<std::string, std::string> fields;
-    size_t idx = 0;
-    while (idx < objStr.size()) {
-        while (idx < objStr.size() && (std::isspace(static_cast<unsigned char>(objStr[idx])) ||
-                                       objStr[idx] == '{' || objStr[idx] == ',')) {
+    size_t first = objStr.find_first_not_of(" \t\n\r");
+    size_t last = objStr.find_last_not_of(" \t\n\r");
+    if (first == std::string::npos || objStr[first] != '{' || last == std::string::npos ||
+        objStr[last] != '}') {
+        throw common::StorageException("Corrupt storage file: invalid JSON object format.");
+    }
+
+    size_t idx = first + 1;
+    bool expectComma = false;
+
+    while (idx < last) {
+        while (idx < last && std::isspace(static_cast<unsigned char>(objStr[idx]))) {
             idx++;
         }
-        if (idx >= objStr.size() || objStr[idx] == '}') {
+        if (idx >= last) {
             break;
         }
 
-        if (objStr[idx] != '"') {
+        if (expectComma) {
+            if (objStr[idx] != ',') {
+                throw common::StorageException(
+                    "Corrupt storage file: expected ',' between object fields.");
+            }
             idx++;
-            continue;
+            while (idx < last && std::isspace(static_cast<unsigned char>(objStr[idx]))) {
+                idx++;
+            }
+            if (idx >= last) {
+                throw common::StorageException(
+                    "Corrupt storage file: trailing comma in JSON object.");
+            }
+        }
+
+        if (objStr[idx] != '"') {
+            throw common::StorageException(
+                "Corrupt storage file: object key must be a string literal.");
         }
 
         size_t keyStart = idx + 1;
         size_t keyEnd = keyStart;
-        while (keyEnd < objStr.size() && (objStr[keyEnd] != '"' || isEscaped(objStr, keyEnd))) {
+        while (keyEnd < last && (objStr[keyEnd] != '"' || isEscaped(objStr, keyEnd))) {
+            if (static_cast<unsigned char>(objStr[keyEnd]) < 0x20) {
+                throw common::StorageException(
+                    "Corrupt storage file: unescaped control character in JSON key.");
+            }
             keyEnd++;
         }
-        if (keyEnd >= objStr.size()) {
-            break;
+        if (keyEnd >= last || objStr[keyEnd] != '"') {
+            throw common::StorageException(
+                "Corrupt storage file: unterminated key string in JSON object.");
         }
         std::string key = objStr.substr(keyStart, keyEnd - keyStart);
         idx = keyEnd + 1;
 
-        while (idx < objStr.size() && std::isspace(static_cast<unsigned char>(objStr[idx]))) {
+        while (idx < last && std::isspace(static_cast<unsigned char>(objStr[idx]))) {
             idx++;
         }
-        if (idx >= objStr.size() || objStr[idx] != ':') {
-            break;
+        if (idx >= last || objStr[idx] != ':') {
+            throw common::StorageException("Corrupt storage file: expected ':' after key '" + key +
+                                           "'.");
         }
         idx++;  // skip ':'
 
-        while (idx < objStr.size() && std::isspace(static_cast<unsigned char>(objStr[idx]))) {
+        while (idx < last && std::isspace(static_cast<unsigned char>(objStr[idx]))) {
             idx++;
         }
-        if (idx >= objStr.size()) {
-            break;
+        if (idx >= last) {
+            throw common::StorageException(
+                "Corrupt storage file: expected value after ':' for key '" + key + "'.");
         }
 
         std::string value;
         if (objStr[idx] == '"') {
             size_t valStart = idx + 1;
             size_t valEnd = valStart;
-            while (valEnd < objStr.size() && (objStr[valEnd] != '"' || isEscaped(objStr, valEnd))) {
+            while (valEnd < last && (objStr[valEnd] != '"' || isEscaped(objStr, valEnd))) {
+                if (static_cast<unsigned char>(objStr[valEnd]) < 0x20) {
+                    throw common::StorageException(
+                        "Corrupt storage file: unescaped control character in JSON string.");
+                }
                 valEnd++;
             }
-            if (valEnd >= objStr.size()) {
-                break;
+            if (valEnd >= last || objStr[valEnd] != '"') {
+                throw common::StorageException(
+                    "Corrupt storage file: unterminated value string in JSON object.");
             }
             value = unescapeJson(objStr.substr(valStart, valEnd - valStart));
             idx = valEnd + 1;
@@ -255,7 +407,7 @@ std::unordered_map<std::string, std::string> parseJsonObject(const std::string& 
             size_t arrEnd = idx + 1;
             int bracketDepth = 1;
             bool inStr = false;
-            while (arrEnd < objStr.size() && bracketDepth > 0) {
+            while (arrEnd < last && bracketDepth > 0) {
                 if (objStr[arrEnd] == '"' && !isEscaped(objStr, arrEnd)) {
                     inStr = !inStr;
                 } else if (!inStr) {
@@ -267,6 +419,10 @@ std::unordered_map<std::string, std::string> parseJsonObject(const std::string& 
                 }
                 arrEnd++;
             }
+            if (bracketDepth != 0) {
+                throw common::StorageException(
+                    "Corrupt storage file: unclosed array in JSON object.");
+            }
             value = objStr.substr(arrStart, arrEnd - arrStart);
             idx = arrEnd;
         } else if (objStr[idx] == '{') {
@@ -274,7 +430,7 @@ std::unordered_map<std::string, std::string> parseJsonObject(const std::string& 
             size_t subEnd = idx + 1;
             int braceDepth = 1;
             bool inStr = false;
-            while (subEnd < objStr.size() && braceDepth > 0) {
+            while (subEnd < last && braceDepth > 0) {
                 if (objStr[subEnd] == '"' && !isEscaped(objStr, subEnd)) {
                     inStr = !inStr;
                 } else if (!inStr) {
@@ -286,36 +442,81 @@ std::unordered_map<std::string, std::string> parseJsonObject(const std::string& 
                 }
                 subEnd++;
             }
+            if (braceDepth != 0) {
+                throw common::StorageException(
+                    "Corrupt storage file: unclosed nested object in JSON object.");
+            }
             value = objStr.substr(subStart, subEnd - subStart);
             idx = subEnd;
         } else {
             size_t valStart = idx;
-            while (idx < objStr.size() && objStr[idx] != ',' && objStr[idx] != '}' &&
+            while (idx < last && objStr[idx] != ',' &&
                    !std::isspace(static_cast<unsigned char>(objStr[idx]))) {
                 idx++;
             }
             value = objStr.substr(valStart, idx - valStart);
         }
+
+        if (fields.count(key)) {
+            throw common::StorageException("Corrupt storage file: duplicate key '" + key +
+                                           "' in JSON object.");
+        }
         fields[key] = std::move(value);
+        expectComma = true;
     }
+
     return fields;
 }
 
 std::vector<std::string> parseJsonArray(const std::string& arrStr) {
+    size_t first = arrStr.find_first_not_of(" \t\n\r");
+    size_t last = arrStr.find_last_not_of(" \t\n\r");
+    if (first == std::string::npos || arrStr[first] != '[' || last == std::string::npos ||
+        arrStr[last] != ']') {
+        throw common::StorageException("Corrupt storage file: invalid tags array format.");
+    }
     std::vector<std::string> elements;
-    size_t i = 0;
-    while (i < arrStr.size()) {
-        size_t start = arrStr.find('"', i);
-        if (start == std::string::npos)
+    size_t i = first + 1;
+    bool expectComma = false;
+    while (i < last) {
+        while (i < last && std::isspace(static_cast<unsigned char>(arrStr[i]))) {
+            i++;
+        }
+        if (i >= last) {
             break;
-        size_t end = start + 1;
-        while (end < arrStr.size() && (arrStr[end] != '"' || isEscaped(arrStr, end))) {
+        }
+        if (expectComma) {
+            if (arrStr[i] != ',') {
+                throw common::StorageException("Corrupt storage file: expected ',' in tags array.");
+            }
+            i++;
+            while (i < last && std::isspace(static_cast<unsigned char>(arrStr[i]))) {
+                i++;
+            }
+            if (i >= last) {
+                throw common::StorageException(
+                    "Corrupt storage file: trailing comma in tags array.");
+            }
+        }
+        if (arrStr[i] != '"') {
+            throw common::StorageException(
+                "Corrupt storage file: tags array elements must be string literals.");
+        }
+        size_t end = i + 1;
+        while (end < last && (arrStr[end] != '"' || isEscaped(arrStr, end))) {
+            if (static_cast<unsigned char>(arrStr[end]) < 0x20) {
+                throw common::StorageException(
+                    "Corrupt storage file: unescaped control character in tag string.");
+            }
             end++;
         }
-        if (end >= arrStr.size())
-            break;
-        elements.push_back(unescapeJson(arrStr.substr(start + 1, end - (start + 1))));
+        if (end >= last || arrStr[end] != '"') {
+            throw common::StorageException(
+                "Corrupt storage file: unterminated string in tags array.");
+        }
+        elements.push_back(unescapeJson(arrStr.substr(i + 1, end - (i + 1))));
         i = end + 1;
+        expectComma = true;
     }
     return elements;
 }
@@ -331,64 +532,77 @@ std::filesystem::path JsonSnippetRepository::getDefaultStoragePath() {
 #if defined(_WIN32)
     const char* appData = std::getenv("APPDATA");
     if (appData && std::string(appData).length() > 0) {
-        std::filesystem::path candidate =
-            std::filesystem::path(appData) / "SnipCLI" / "snippets.json";
-        std::error_code ec;
-        if (std::filesystem::exists(candidate.parent_path()) ||
-            std::filesystem::create_directories(candidate.parent_path(), ec)) {
-            return candidate;
-        }
+        return std::filesystem::path(appData) / "SnipCLI" / "snippets.json";
     }
 #else
     const char* home = std::getenv("HOME");
     if (home && std::string(home).length() > 0) {
-        std::filesystem::path candidate =
-            std::filesystem::path(home) / ".snipcli" / "snippets.json";
-        std::error_code ec;
-        if (std::filesystem::exists(candidate.parent_path()) ||
-            std::filesystem::create_directories(candidate.parent_path(), ec)) {
-            return candidate;
-        }
+        return std::filesystem::path(home) / ".snipcli" / "snippets.json";
     }
 #endif
-    return std::filesystem::current_path() / ".snipcli_snippets.json";
+    throw common::StorageException(
+        "Cannot determine storage location. Please set SNIPCLI_STORAGE_PATH.");
 }
 
 JsonSnippetRepository::JsonSnippetRepository() : JsonSnippetRepository(getDefaultStoragePath()) {}
 
 JsonSnippetRepository::JsonSnippetRepository(std::filesystem::path storagePath)
-    : m_storagePath(std::move(storagePath)) {
-    ensureStorageDirectoryExists();
-}
+    : m_storagePath(std::move(storagePath)) {}
 
 const std::filesystem::path& JsonSnippetRepository::getStoragePath() const noexcept {
     return m_storagePath;
 }
 
 void JsonSnippetRepository::ensureStorageDirectoryExists() const {
-    if (m_storagePath.has_parent_path()) {
-        std::error_code ec;
-        std::filesystem::create_directories(m_storagePath.parent_path(), ec);
+    std::error_code ec;
+    std::filesystem::path target = m_storagePath;
+    if (std::filesystem::is_symlink(target, ec)) {
+        target = std::filesystem::weakly_canonical(target, ec);
+        if (ec) {
+            ec.clear();
+            target = std::filesystem::canonical(m_storagePath, ec);
+            if (ec) {
+                target = m_storagePath;
+            }
+        }
+    }
+    if (target.has_parent_path()) {
+        std::filesystem::create_directories(target.parent_path(), ec);
         if (ec) {
             throw common::StorageException("Unable to create directory: " +
-                                           m_storagePath.parent_path().string());
+                                           target.parent_path().string());
         }
     }
 }
 
 std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
-    if (!std::filesystem::exists(m_storagePath)) {
+    std::error_code ec;
+    if (std::filesystem::is_directory(m_storagePath, ec)) {
+        throw common::StorageException("Storage path is a directory, not a file: " +
+                                       m_storagePath.string());
+    }
+    if (!std::filesystem::exists(m_storagePath, ec)) {
         return {};
     }
 
-    std::ifstream file(m_storagePath);
+    std::ifstream file(m_storagePath, std::ios::binary);
     if (!file.is_open()) {
         throw common::StorageException("Failed to open storage file: " + m_storagePath.string());
     }
 
     std::stringstream buffer;
     buffer << file.rdbuf();
+    if (file.bad()) {
+        throw common::StorageException("Failed to read storage file: " + m_storagePath.string());
+    }
     std::string content = buffer.str();
+
+    // Strip UTF-8 BOM if present
+    if (content.size() >= 3 && static_cast<unsigned char>(content[0]) == 0xEF &&
+        static_cast<unsigned char>(content[1]) == 0xBB &&
+        static_cast<unsigned char>(content[2]) == 0xBF) {
+        content.erase(0, 3);
+    }
 
     bool emptyOrWhitespace = true;
     for (char c : content) {
@@ -408,8 +622,49 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
     }
 
     std::vector<Snippet> snippets;
-    size_t pos = 0;
-    while ((pos = content.find('{', pos)) != std::string::npos) {
+    std::unordered_set<uint64_t> seenIds;
+    size_t pos = firstNonWs + 1;
+    bool expectComma = false;
+    bool closedArray = false;
+
+    while (pos < content.size()) {
+        while (pos < content.size() && std::isspace(static_cast<unsigned char>(content[pos]))) {
+            pos++;
+        }
+        if (pos >= content.size()) {
+            break;
+        }
+
+        if (content[pos] == ']') {
+            closedArray = true;
+            pos++;
+            break;
+        }
+
+        if (expectComma) {
+            if (content[pos] != ',') {
+                throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                               ": expected ',' or ']' after object.");
+            }
+            pos++;
+            while (pos < content.size() && std::isspace(static_cast<unsigned char>(content[pos]))) {
+                pos++;
+            }
+            if (pos >= content.size()) {
+                throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                               ": unexpected end of file after comma.");
+            }
+            if (content[pos] == ']') {
+                throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                               ": trailing comma before ']' is not permitted.");
+            }
+        }
+
+        if (content[pos] != '{') {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": expected '{' for snippet object.");
+        }
+
         size_t end = pos + 1;
         int depth = 1;
         bool inStr = false;
@@ -417,10 +672,11 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
             if (content[end] == '"' && !isEscaped(content, end)) {
                 inStr = !inStr;
             } else if (!inStr) {
-                if (content[end] == '{')
+                if (content[end] == '{') {
                     depth++;
-                else if (content[end] == '}')
+                } else if (content[end] == '}') {
                     depth--;
+                }
             }
             end++;
         }
@@ -432,39 +688,80 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
         std::string objStr = content.substr(pos, end - pos);
         auto fields = parseJsonObject(objStr);
 
+        if (fields.find("id") == fields.end()) {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": snippet object missing required numeric 'id' field.");
+        }
         std::string idStr = fields["id"];
-        std::string title = fields["title"];
-        std::string language = fields["language"];
-        std::string code = fields["code"];
-        std::string tagsStr = fields["tags"];
-        std::string createdAt = fields["createdAt"];
-        std::string updatedAt = fields["updatedAt"];
-
-        if (title.empty() || code.empty()) {
-            throw common::StorageException(
-                "Corrupt storage file at " + m_storagePath.string() +
-                ": snippet object missing mandatory 'title' or 'code' field.");
+        if (idStr.empty()) {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": snippet object has empty 'id' field.");
         }
 
         uint64_t id = 0;
-        if (!idStr.empty()) {
-            auto [p, ec] = std::from_chars(idStr.data(), idStr.data() + idStr.size(), id);
-            if (ec != std::errc{} || p != idStr.data() + idStr.size()) {
-                throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
-                                               ": invalid numeric ID '" + idStr + "'.");
-            }
+        auto [p, parseEc] = std::from_chars(idStr.data(), idStr.data() + idStr.size(), id);
+        if (parseEc != std::errc{} || p != idStr.data() + idStr.size()) {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": invalid numeric ID '" + idStr + "'.");
+        }
+        if (id == 0) {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": snippet id must be greater than zero.");
+        }
+        if (!seenIds.insert(id).second) {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": duplicate snippet ID " + std::to_string(id) + ".");
         }
 
-        std::vector<std::string> tags = parseJsonArray(tagsStr);
+        if (fields.find("title") == fields.end() || fields["title"].empty()) {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": snippet object missing mandatory 'title' field.");
+        }
+        std::string title = fields["title"];
+
+        if (fields.find("language") == fields.end() || fields["language"].empty()) {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": snippet object missing mandatory 'language' field.");
+        }
+        std::string language = fields["language"];
+
+        if (fields.find("code") == fields.end() || fields["code"].empty()) {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": snippet object missing mandatory 'code' field.");
+        }
+        std::string code = fields["code"];
+
+        if (fields.find("tags") == fields.end()) {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": snippet object missing mandatory 'tags' field.");
+        }
+        std::vector<std::string> tags = parseJsonArray(fields["tags"]);
+
+        std::string createdAt = fields.count("createdAt") && !fields["createdAt"].empty()
+                                    ? fields["createdAt"]
+                                    : getIsoTimestamp();
+        std::string updatedAt = fields.count("updatedAt") && !fields["updatedAt"].empty()
+                                    ? fields["updatedAt"]
+                                    : createdAt;
+
         snippets.emplace_back(id, std::move(title), std::move(language), std::move(code),
                               std::move(tags), std::move(createdAt), std::move(updatedAt));
+
         pos = end;
+        expectComma = true;
     }
 
-    size_t lastNonWs = content.find_last_not_of(" \t\n\r");
-    if (lastNonWs == std::string::npos || content[lastNonWs] != ']') {
+    if (!closedArray) {
         throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
                                        ": expected JSON array ending with ']'.");
+    }
+
+    while (pos < content.size()) {
+        if (!std::isspace(static_cast<unsigned char>(content[pos]))) {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": unexpected characters after closing ']'.");
+        }
+        pos++;
     }
 
     return snippets;
@@ -473,16 +770,50 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
 void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) const {
     ensureStorageDirectoryExists();
 
+    std::error_code ec;
+    std::filesystem::path target = m_storagePath;
+    if (std::filesystem::is_symlink(target, ec)) {
+        target = std::filesystem::weakly_canonical(target, ec);
+        if (ec) {
+            ec.clear();
+            target = std::filesystem::canonical(m_storagePath, ec);
+            if (ec) {
+                target = m_storagePath;
+            }
+        }
+    }
+
+    if (std::filesystem::is_directory(target, ec)) {
+        throw common::StorageException("Storage target is a directory, not a file: " +
+                                       target.string());
+    }
+
+    std::filesystem::perms targetPerms =
+        std::filesystem::perms::owner_read | std::filesystem::perms::owner_write;
+    if (std::filesystem::exists(target, ec)) {
+        targetPerms = std::filesystem::status(target, ec).permissions();
+    }
+
     static std::atomic<uint64_t> s_fileSeq{0};
     auto nowTicks = std::chrono::steady_clock::now().time_since_epoch().count();
-    std::filesystem::path parentDir = m_storagePath.has_parent_path()
-                                          ? m_storagePath.parent_path()
-                                          : std::filesystem::current_path();
+    std::filesystem::path parentDir =
+        target.has_parent_path() ? target.parent_path() : std::filesystem::current_path();
     std::filesystem::path tmpPath =
-        parentDir / ("." + m_storagePath.filename().string() + ".tmp." + std::to_string(nowTicks) +
-                     "_" + std::to_string(++s_fileSeq));
+        parentDir / ("." + target.filename().string() + ".tmp." + std::to_string(nowTicks) + "_" +
+                     std::to_string(++s_fileSeq));
 
-    std::ofstream file(tmpPath, std::ios::trunc);
+    struct TempFileGuard {
+        std::filesystem::path path;
+        bool committed{false};
+        ~TempFileGuard() {
+            if (!committed) {
+                std::error_code rmEc;
+                std::filesystem::remove(path, rmEc);
+            }
+        }
+    } guard{tmpPath};
+
+    std::ofstream file(tmpPath, std::ios::trunc | std::ios::binary);
     if (!file.is_open()) {
         throw common::StorageException("Failed to write to temporary storage file: " +
                                        tmpPath.string());
@@ -512,35 +843,32 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
 
     file.flush();
     if (!file.good()) {
-        std::error_code ec;
-        std::filesystem::remove(tmpPath, ec);
         throw common::StorageException("Stream error during write to temporary file: " +
                                        tmpPath.string());
     }
     file.close();
 
+    std::filesystem::permissions(tmpPath, targetPerms, std::filesystem::perm_options::replace, ec);
+
 #if defined(_WIN32)
     std::wstring wTmp = tmpPath.wstring();
-    std::wstring wDest = m_storagePath.wstring();
+    std::wstring wDest = target.wstring();
     if (!MoveFileExW(wTmp.c_str(), wDest.c_str(),
                      MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         DWORD err = GetLastError();
-        std::error_code rmEc;
-        std::filesystem::remove(tmpPath, rmEc);
         throw common::StorageException(
             "Failed to atomically replace storage file on Windows (Error " + std::to_string(err) +
             ")");
     }
 #else
-    std::error_code ec;
-    std::filesystem::rename(tmpPath, m_storagePath, ec);
+    std::filesystem::rename(tmpPath, target, ec);
     if (ec) {
-        std::error_code rmEc;
-        std::filesystem::remove(tmpPath, rmEc);
         throw common::StorageException("Failed to atomically replace storage file: " +
                                        ec.message());
     }
 #endif
+
+    guard.committed = true;
 }
 
 std::vector<Snippet> JsonSnippetRepository::getAll() const {
@@ -562,7 +890,7 @@ std::optional<Snippet> JsonSnippetRepository::getById(uint64_t id) const {
 std::optional<Snippet> JsonSnippetRepository::getByTitleUnlocked(const std::string& title) const {
     auto snippets = loadFromFile();
     for (const auto& s : snippets) {
-        if (s.getTitle() == title) {
+        if (equalsIgnoreCase(s.getTitle(), title)) {
             return s;
         }
     }
@@ -586,14 +914,15 @@ size_t JsonSnippetRepository::count() const {
 
 uint64_t JsonSnippetRepository::save(Snippet& snippet) {
     std::lock_guard<std::mutex> lock(m_mutex);
+    FileLock fl(m_storagePath);
     auto snippets = loadFromFile();
     std::string now = getIsoTimestamp();
 
     Snippet working = snippet;
 
-    // Enforce atomic title uniqueness under m_mutex
+    // Enforce atomic title uniqueness (case-insensitive) under file lock
     for (const auto& s : snippets) {
-        if (s.getTitle() == working.getTitle() && s.getId() != working.getId()) {
+        if (equalsIgnoreCase(s.getTitle(), working.getTitle()) && s.getId() != working.getId()) {
             throw common::ValidationException("A snippet with title '" + working.getTitle() +
                                               "' already exists.");
         }
@@ -604,6 +933,9 @@ uint64_t JsonSnippetRepository::save(Snippet& snippet) {
         for (const auto& s : snippets) {
             if (s.getId() > maxId)
                 maxId = s.getId();
+        }
+        if (maxId == std::numeric_limits<uint64_t>::max()) {
+            throw common::StorageException("Maximum snippet ID reached (uint64 overflow).");
         }
         working.setId(maxId + 1);
         if (working.getCreatedAt().empty()) {
@@ -641,6 +973,7 @@ uint64_t JsonSnippetRepository::save(Snippet& snippet) {
 
 bool JsonSnippetRepository::removeById(uint64_t id) {
     std::lock_guard<std::mutex> lock(m_mutex);
+    FileLock fl(m_storagePath);
     auto snippets = loadFromFile();
     auto it = std::remove_if(snippets.begin(), snippets.end(),
                              [id](const Snippet& s) { return s.getId() == id; });
@@ -656,9 +989,11 @@ bool JsonSnippetRepository::removeById(uint64_t id) {
 
 bool JsonSnippetRepository::removeByTitle(const std::string& title) {
     std::lock_guard<std::mutex> lock(m_mutex);
+    FileLock fl(m_storagePath);
     auto snippets = loadFromFile();
-    auto it = std::remove_if(snippets.begin(), snippets.end(),
-                             [&title](const Snippet& s) { return s.getTitle() == title; });
+    auto it = std::remove_if(snippets.begin(), snippets.end(), [&title](const Snippet& s) {
+        return equalsIgnoreCase(s.getTitle(), title);
+    });
 
     if (it == snippets.end()) {
         return false;

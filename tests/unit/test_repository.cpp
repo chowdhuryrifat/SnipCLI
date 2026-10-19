@@ -41,6 +41,15 @@ void unsetEnvVar(const char* name) {
 void runRepositoryTests() {
     std::cout << "[TEST] Running Repository tests..." << std::endl;
 
+    static_assert(std::is_nothrow_move_assignable_v<snipcli::model::Snippet>,
+                  "Snippet must be nothrow move assignable for strong exception safety");
+    static_assert(
+        std::is_base_of_v<snipcli::common::SnipException, snipcli::common::StorageException>,
+        "StorageException must derive from SnipException");
+    static_assert(
+        std::is_base_of_v<snipcli::common::SnipException, snipcli::common::ValidationException>,
+        "ValidationException must derive from SnipException");
+
     std::filesystem::path testDir = std::filesystem::temp_directory_path() / "snipcli_repo_tests";
     std::error_code ec;
     std::filesystem::remove_all(testDir, ec);
@@ -522,9 +531,263 @@ void runRepositoryTests() {
                    "Renaming snippet to existing title rejected with ValidationException");
     }
 
+    // ---------------------------------------------------------
+    // Test 14: Directory Storage Path Rejection & Deferred I/O
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path dirStore = testDir / "sub_dir_store";
+        std::filesystem::create_directories(dirStore, ec);
+
+        snipcli::model::JsonSnippetRepository dirRepo(dirStore);
+        bool dirExCaught = false;
+        try {
+            (void)dirRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            dirExCaught = true;
+        }
+        assertTrue(dirExCaught, "getAll() on directory path must throw StorageException");
+
+        // Verify deferred directory creation: constructing repo must not create parent directory
+        std::filesystem::path deferredDir = testDir / "deferred_dir";
+        std::filesystem::path deferredFile = deferredDir / "nested" / "store.json";
+        assertTrue(!std::filesystem::exists(deferredDir),
+                   "Directory must not exist before repo constructor");
+        snipcli::model::JsonSnippetRepository deferredRepo(deferredFile);
+        assertTrue(!std::filesystem::exists(deferredDir),
+                   "Repo constructor must not create directory (I/O free)");
+
+        snipcli::model::Snippet snip(0, "DeferredTest", "cpp", "int x;", {}, "", "");
+        uint64_t id = deferredRepo.save(snip);
+        assertTrue(id == 1, "Save succeeded on deferred repo");
+        assertTrue(std::filesystem::exists(deferredFile),
+                   "Storage file and parent directories created upon save");
+    }
+
+    // ---------------------------------------------------------
+    // Test 15: UTF-8 BOM Stripping
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path bomFile = testDir / "bom_store.json";
+        {
+            std::ofstream out(bomFile, std::ios::binary | std::ios::trunc);
+            // Write UTF-8 BOM (0xEF, 0xBB, 0xBF) followed by JSON array
+            out << "\xEF\xBB\xBF"
+                << "[\n"
+                << "  {\n"
+                << "    \"id\": 1,\n"
+                << "    \"title\": \"BomTest\",\n"
+                << "    \"language\": \"cpp\",\n"
+                << "    \"code\": \"int bom = 1;\",\n"
+                << "    \"tags\": [\"bom\"]\n"
+                << "  }\n"
+                << "]\n";
+        }
+        snipcli::model::JsonSnippetRepository bomRepo(bomFile);
+        auto snippets = bomRepo.getAll();
+        assertTrue(snippets.size() == 1, "BOM file correctly loaded 1 snippet");
+        assertTrue(snippets[0].getTitle() == "BomTest", "BOM snippet title matches");
+    }
+
+    // ---------------------------------------------------------
+    // Test 16: Strict ID & Schema Validation in Storage
+    // ---------------------------------------------------------
+    {
+        // 16a: Missing ID
+        std::filesystem::path noIdFile = testDir / "no_id.json";
+        {
+            std::ofstream out(noIdFile, std::ios::trunc);
+            out << "[{\"title\":\"NoId\",\"language\":\"cpp\",\"code\":\"x\",\"tags\":[]}]";
+        }
+        snipcli::model::JsonSnippetRepository noIdRepo(noIdFile);
+        bool noIdCaught = false;
+        try {
+            (void)noIdRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            noIdCaught = true;
+        }
+        assertTrue(noIdCaught, "Missing ID field must throw StorageException");
+
+        // 16b: Zero ID
+        std::filesystem::path zeroIdFile = testDir / "zero_id.json";
+        {
+            std::ofstream out(zeroIdFile, std::ios::trunc);
+            out << "[{\"id\":0,\"title\":\"ZeroId\",\"language\":\"cpp\",\"code\":\"x\",\"tags\":[]"
+                   "}]";
+        }
+        snipcli::model::JsonSnippetRepository zeroIdRepo(zeroIdFile);
+        bool zeroIdCaught = false;
+        try {
+            (void)zeroIdRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            zeroIdCaught = true;
+        }
+        assertTrue(zeroIdCaught, "ID 0 must throw StorageException");
+
+        // 16c: Duplicate IDs
+        std::filesystem::path dupIdFile = testDir / "dup_id.json";
+        {
+            std::ofstream out(dupIdFile, std::ios::trunc);
+            out << "[{\"id\":1,\"title\":\"D1\",\"language\":\"cpp\",\"code\":\"x\",\"tags\":[]},"
+                << "{\"id\":1,\"title\":\"D2\",\"language\":\"cpp\",\"code\":\"y\",\"tags\":[]}]";
+        }
+        snipcli::model::JsonSnippetRepository dupIdRepo(dupIdFile);
+        bool dupIdCaught = false;
+        try {
+            (void)dupIdRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            dupIdCaught = true;
+        }
+        assertTrue(dupIdCaught, "Duplicate IDs must throw StorageException");
+
+        // 16d: Max uint64 ID overflow prevention on next save
+        std::filesystem::path maxIdFile = testDir / "max_id.json";
+        {
+            std::ofstream out(maxIdFile, std::ios::trunc);
+            out << "[{\"id\":18446744073709551615,\"title\":\"MaxId\",\"language\":\"cpp\","
+                   "\"code\":\"x\",\"tags\":[]}]";
+        }
+        snipcli::model::JsonSnippetRepository maxIdRepo(maxIdFile);
+        snipcli::model::Snippet next(0, "Next", "cpp", "z", {}, "", "");
+        bool overflowCaught = false;
+        try {
+            (void)maxIdRepo.save(next);
+        } catch (const snipcli::common::StorageException&) {
+            overflowCaught = true;
+        }
+        assertTrue(overflowCaught, "Saving after max uint64 ID must throw StorageException");
+    }
+
+    // ---------------------------------------------------------
+    // Test 17: Parsing Strictness (NUL, Control Chars, Garbage, Unterminated)
+    // ---------------------------------------------------------
+    {
+        // 17a: Embedded NUL \u0000
+        std::filesystem::path nulFile = testDir / "nul.json";
+        {
+            std::ofstream out(nulFile, std::ios::trunc);
+            out << "[{\"id\":1,\"title\":\"Nul\",\"language\":\"cpp\",\"code\":\"a\\u0000b\","
+                   "\"tags\":[]}]";
+        }
+        snipcli::model::JsonSnippetRepository nulRepo(nulFile);
+        bool nulCaught = false;
+        try {
+            (void)nulRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            nulCaught = true;
+        }
+        assertTrue(nulCaught, "Embedded NUL \\u0000 must throw StorageException");
+
+        // 17b: Inter-object garbage
+        std::filesystem::path garbageFile = testDir / "garbage.json";
+        {
+            std::ofstream out(garbageFile, std::ios::trunc);
+            out << "[{\"id\":1,\"title\":\"A\",\"language\":\"cpp\",\"code\":\"a\",\"tags\":[]} "
+                   "GARBAGE "
+                   "{\"id\":2,\"title\":\"B\",\"language\":\"cpp\",\"code\":\"b\",\"tags\":[]}]";
+        }
+        snipcli::model::JsonSnippetRepository garbageRepo(garbageFile);
+        bool garbageCaught = false;
+        try {
+            (void)garbageRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            garbageCaught = true;
+        }
+        assertTrue(garbageCaught, "Inter-object garbage must throw StorageException");
+
+        // 17c: Unescaped literal newline inside string
+        std::filesystem::path newlineFile = testDir / "raw_newline.json";
+        {
+            std::ofstream out(newlineFile, std::ios::trunc);
+            out << "[{\"id\":1,\"title\":\"A\",\"language\":\"cpp\",\"code\":\"line1\nline2\","
+                   "\"tags\":[]}]";
+        }
+        snipcli::model::JsonSnippetRepository newlineRepo(newlineFile);
+        bool newlineCaught = false;
+        try {
+            (void)newlineRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            newlineCaught = true;
+        }
+        assertTrue(newlineCaught,
+                   "Unescaped literal newline inside JSON string must throw StorageException");
+
+        // 17d: Unterminated JSON array (missing closing bracket)
+        std::filesystem::path untermFile = testDir / "unterm.json";
+        {
+            std::ofstream out(untermFile, std::ios::trunc);
+            out << "[{\"id\":1,\"title\":\"A\",\"language\":\"cpp\",\"code\":\"a\",\"tags\":[]}";
+        }
+        snipcli::model::JsonSnippetRepository untermRepo(untermFile);
+        bool untermCaught = false;
+        try {
+            (void)untermRepo.getAll();
+        } catch (const snipcli::common::StorageException&) {
+            untermCaught = true;
+        }
+        assertTrue(untermCaught, "Unterminated JSON array must throw StorageException");
+    }
+
+    // ---------------------------------------------------------
+    // Test 18: Symlink Preservation & File Permissions
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path realDir = testDir / "real_dir";
+        std::filesystem::create_directories(realDir, ec);
+        std::filesystem::path realFile = realDir / "target.json";
+        std::filesystem::path symlinkFile = testDir / "symlink_store.json";
+
+        snipcli::model::JsonSnippetRepository initRepo(realFile);
+        snipcli::model::Snippet s1(0, "Sym1", "cpp", "int a;", {}, "", "");
+        (void)initRepo.save(s1);
+
+        // Create symlink
+        std::filesystem::create_symlink(realFile, symlinkFile, ec);
+        if (!ec) {
+            snipcli::model::JsonSnippetRepository symRepo(symlinkFile);
+            snipcli::model::Snippet s2(0, "Sym2", "cpp", "int b;", {}, "", "");
+            (void)symRepo.save(s2);
+
+            assertTrue(std::filesystem::is_symlink(symlinkFile),
+                       "Symlink must be preserved after save()");
+            snipcli::model::JsonSnippetRepository verifyRepo(realFile);
+            assertTrue(verifyRepo.count() == 2,
+                       "Target file must contain both snippets after saving via symlink");
+        }
+    }
+
+    // ---------------------------------------------------------
+    // Test 19: Case-Insensitive Title Collision & Lookup
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path caseFile = testDir / "case_store.json";
+        snipcli::model::JsonSnippetRepository caseRepo(caseFile);
+
+        snipcli::model::Snippet s1(0, "bfs", "cpp", "int a;", {}, "", "");
+        (void)caseRepo.save(s1);
+
+        snipcli::model::Snippet s2(0, "BFS", "cpp", "int b;", {}, "", "");
+        bool caseCollisionCaught = false;
+        try {
+            (void)caseRepo.save(s2);
+        } catch (const snipcli::common::ValidationException&) {
+            caseCollisionCaught = true;
+        }
+        assertTrue(caseCollisionCaught,
+                   "Case-insensitive title collision must throw ValidationException");
+
+        // Lookup with different casing succeeds
+        auto found = caseRepo.getByTitle("BFS");
+        assertTrue(found.has_value(), "getByTitle matches case-insensitively");
+        assertTrue(found->getTitle() == "bfs", "Original casing preserved");
+
+        // Remove by title matches case-insensitively
+        assertTrue(caseRepo.removeByTitle("BfS"), "removeByTitle matches case-insensitively");
+        assertTrue(caseRepo.count() == 0, "Snippet removed successfully");
+    }
+
     // Cleanup test directory
     std::filesystem::remove_all(testDir, ec);
 
-    std::cout << "[PASS] Repository tests passed. (13/13 Invariants & Scenarios Verified)"
+    std::cout << "[PASS] Repository tests passed. (19/19 Invariants & Scenarios Verified)"
               << std::endl;
 }

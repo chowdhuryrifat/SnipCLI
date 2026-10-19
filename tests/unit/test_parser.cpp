@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "snipcli/common/exceptions.hpp"
 #include "snipcli/controller/cli_parser.hpp"
 #include "snipcli/controller/command_dispatcher.hpp"
 #include "snipcli/controller/i_command.hpp"
@@ -190,6 +191,382 @@ void runParserTests() {
         }
     }
 
-    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (12/12 Invariants Verified)"
+    // Test 13: Global options before verb (Finding B3)
+    {
+        std::vector<std::string> tokens = {"--format", "markdown", "list"};
+        auto args = snipcli::controller::CliParser::parse(tokens);
+        if (args.getVerb() != "list" || args.getOption("format") != "markdown" ||
+            !args.getPositionals().empty()) {
+            std::cerr << "[FAIL] Global options before verb failed!" << std::endl;
+            std::exit(1);
+        }
+
+        std::vector<std::string> flagTokens = {"-v", "list"};
+        auto flagArgs = snipcli::controller::CliParser::parse(flagTokens);
+        if (flagArgs.getVerb() != "list" || !flagArgs.hasFlag("-v") ||
+            !flagArgs.getPositionals().empty()) {
+            std::cerr << "[FAIL] Global flag before verb failed!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    // Test 14: Valueless option handling throws CommandException (Finding B2)
+    {
+        // Option followed by another option: --id --title X
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"delete", "--id", "--title", "X"}));
+            std::cerr << "[FAIL] Valueless --id followed by --title did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--id' requires a value") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+
+        // Option at end of line without value: --id
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"delete", "--id"}));
+            std::cerr << "[FAIL] Valueless --id at end of arguments did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            // Expected
+        }
+
+        // Valueless --code followed by flag -h: --code -h
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"add", "--code", "-h"}));
+            std::cerr << "[FAIL] Valueless --code followed by -h did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            // Expected
+        }
+
+        // Valueless short option: -t
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"add", "-t"}));
+            std::cerr << "[FAIL] Valueless -t did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            // Expected
+        }
+
+        // Valueless -c when verb is add: add -c
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"add", "-c"}));
+            std::cerr << "[FAIL] Valueless -c in add did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            // Expected
+        }
+    }
+
+    // Test 15: Invalid --format validation (Finding B4)
+    {
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"--format", "markdwon", "list"}));
+            std::cerr << "[FAIL] Invalid --format markdwon did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Invalid format 'markdwon'") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected format error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"list", "--format=html"}));
+            std::cerr << "[FAIL] Invalid --format=html did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            // Expected
+        }
+    }
+
+    // Test 16: Values starting with dash accepted for options requiring values (Finding B8)
+    {
+        std::vector<std::string> tokens = {"add", "--title", "DashSnippet", "--code", "-x;"};
+        auto args = snipcli::controller::CliParser::parse(tokens);
+        if (args.getVerb() != "add" || args.getOption("title") != "DashSnippet" ||
+            args.getOption("code") != "-x;") {
+            std::cerr << "[FAIL] Value starting with dash '-x;' was not parsed as option value!"
+                      << std::endl;
+            std::exit(1);
+        }
+
+        std::vector<std::string> shortTokens = {"add", "-t", "ShortDash", "-c", "-y;"};
+        auto shortArgs = snipcli::controller::CliParser::parse(shortTokens);
+        if (shortArgs.getVerb() != "add" || shortArgs.getOption("title") != "ShortDash" ||
+            shortArgs.getOption("code") != "-y;") {
+            std::cerr << "[FAIL] Short option -c with value '-y;' failed!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    // Test 17: Standard end-of-options delimiter (--) (Finding B8)
+    {
+        std::vector<std::string> tokens = {"delete", "--", "-5"};
+        auto args = snipcli::controller::CliParser::parse(tokens);
+        if (args.getVerb() != "delete" || args.getPositionals().size() != 1 ||
+            args.getPositionals()[0] != "-5") {
+            std::cerr << "[FAIL] End-of-options delimiter -- handling failed!" << std::endl;
+            std::exit(1);
+        }
+
+        std::vector<std::string> multiTokens = {"delete", "--", "Binary", "Search"};
+        auto multiArgs = snipcli::controller::CliParser::parse(multiTokens);
+        if (multiArgs.getPositionals().size() != 2 || multiArgs.getPositionals()[0] != "Binary" ||
+            multiArgs.getPositionals()[1] != "Search") {
+            std::cerr << "[FAIL] End-of-options delimiter with multiple positionals failed!"
+                      << std::endl;
+            std::exit(1);
+        }
+    }
+
+    // Test 18: Short option aliases (-t, -l, -f, -c)
+    {
+        std::vector<std::string> tokens = {"add", "-t", "Quick", "-l", "python", "-f", "quick.py"};
+        auto args = snipcli::controller::CliParser::parse(tokens);
+        if (args.getVerb() != "add" || args.getOption("title") != "Quick" ||
+            args.getOption("lang") != "python" || args.getOption("file") != "quick.py") {
+            std::cerr << "[FAIL] Short option aliases (-t, -l, -f) failed!" << std::endl;
+            std::exit(1);
+        }
+
+        // -c in get command is standalone --code-only flag
+        std::vector<std::string> getTokens = {"get", "-c", "5"};
+        auto getArgs = snipcli::controller::CliParser::parse(getTokens);
+        if (getArgs.getVerb() != "get" || !getArgs.hasFlag("-c") ||
+            getArgs.getPositionals().size() != 1 || getArgs.getPositionals()[0] != "5") {
+            std::cerr << "[FAIL] Short switch -c in get command failed!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    // Test 19: Unknown long option rejection (Review Finding 1)
+    {
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"delete", "--titel", "Binary"}));
+            std::cerr << "[FAIL] Unknown long option --titel did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Unknown option '--titel'") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected unknown option error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 20: Unknown short switch rejection (Review Finding 1)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"add", "-x"}));
+            std::cerr << "[FAIL] Unknown short switch -x did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Unknown option '-x'") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected unknown switch error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 21: Unknown option with equals syntax rejection (Review Finding 1)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"list", "--bogus=123"}));
+            std::cerr << "[FAIL] Unknown option with equals syntax did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Unknown option '--bogus'") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected unknown equals error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 22: Command-specific long option rejection (Review P1)
+    {
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"delete", "--code", "unused", "Binary"}));
+            std::cerr << "[FAIL] delete with unsupported --code did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--code' is not supported by command 'delete'") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 23: Unsupported option for add command (Review P1)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"add", "--id", "5"}));
+            std::cerr << "[FAIL] add with unsupported --id did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--id' is not supported by command 'add'") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 24: Unsupported option for stats command (Review P1)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"stats", "--title", "Foo"}));
+            std::cerr << "[FAIL] stats with unsupported --title did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--title' is not supported by command 'stats'") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 25: Unsupported short option by command (Review P1)
+    {
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"delete", "-c", "unused", "Binary"}));
+            std::cerr << "[FAIL] delete with unsupported -c did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '-c' is not supported by command 'delete'") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 26: Unsupported option without a command (Review P1)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"--code", "foo"}));
+            std::cerr << "[FAIL] --code without command did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--code' is not supported without a command") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 27: Boolean flag --code-only with equals syntax rejection (Review P2)
+    {
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"get", "--code-only=true", "1"}));
+            std::cerr << "[FAIL] get --code-only=true did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--code-only' is a boolean flag and does not accept a value") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 28: Boolean flag --help with equals syntax rejection (Review P2)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"list", "--help=false"}));
+            std::cerr << "[FAIL] list --help=false did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--help' is a boolean flag and does not accept a value") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 29: Boolean flag --version with equals syntax rejection (Review P2)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"list", "--version=false"}));
+            std::cerr << "[FAIL] list --version=false did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--version' is a boolean flag and does not accept a value") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 30: Short boolean flags -h and -v with equals syntax rejection (Review P2)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"list", "-h=true"}));
+            std::cerr << "[FAIL] list -h=true did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '-h' is a boolean flag and does not accept a value") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"list", "-v=true"}));
+            std::cerr << "[FAIL] list -v=true did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '-v' is a boolean flag and does not accept a value") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 31: Short flag -c in get command with equals syntax rejection (Review P2)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"get", "-c=true", "1"}));
+            std::cerr << "[FAIL] get -c=true did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '-c' is a boolean flag and does not accept a value") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (31/31 Invariants Verified)"
               << std::endl;
 }

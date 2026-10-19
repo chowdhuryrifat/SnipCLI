@@ -473,6 +473,100 @@ void runParserTests() {
         }
     }
 
-    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (26/26 Invariants Verified)"
+    // Test 27: Boolean flag --code-only with equals syntax rejection (Review P2)
+    {
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"get", "--code-only=true", "1"}));
+            std::cerr << "[FAIL] get --code-only=true did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--code-only' is a boolean flag and does not accept a value") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 28: Boolean flag --help with equals syntax rejection (Review P2)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"list", "--help=false"}));
+            std::cerr << "[FAIL] list --help=false did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--help' is a boolean flag and does not accept a value") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 29: Boolean flag --version with equals syntax rejection (Review P2)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"list", "--version=false"}));
+            std::cerr << "[FAIL] list --version=false did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--version' is a boolean flag and does not accept a value") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 30: Short boolean flags -h and -v with equals syntax rejection (Review P2)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"list", "-h=true"}));
+            std::cerr << "[FAIL] list -h=true did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '-h' is a boolean flag and does not accept a value") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"list", "-v=true"}));
+            std::cerr << "[FAIL] list -v=true did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '-v' is a boolean flag and does not accept a value") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 31: Short flag -c in get command with equals syntax rejection (Review P2)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"get", "-c=true", "1"}));
+            std::cerr << "[FAIL] get -c=true did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '-c' is a boolean flag and does not accept a value") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (31/31 Invariants Verified)"
               << std::endl;
 }

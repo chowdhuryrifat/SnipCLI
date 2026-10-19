@@ -392,6 +392,27 @@ if $BIN get --id 1 --title "Binary Search" > /dev/null 2>&1; then
 fi
 pass "Selector exclusivity in get command cleanly rejected"
 
+# 10q: Reject boolean flags with equals syntax
+if $BIN get --code-only=true 1 > /dev/null 2>&1; then
+    fail "Get with --code-only=true should have failed but succeeded!"
+fi
+if $BIN list --help=false > /dev/null 2>&1; then
+    fail "List with --help=false should have failed but succeeded!"
+fi
+if $BIN list --version=false > /dev/null 2>&1; then
+    fail "List with --version=false should have failed but succeeded!"
+fi
+if $BIN list -h=true > /dev/null 2>&1; then
+    fail "List with -h=true should have failed but succeeded!"
+fi
+if $BIN list -v=true > /dev/null 2>&1; then
+    fail "List with -v=true should have failed but succeeded!"
+fi
+if $BIN get -c=true 1 > /dev/null 2>&1; then
+    fail "Get with -c=true should have failed but succeeded!"
+fi
+pass "Boolean flags with equals syntax cleanly rejected before execution"
+
 # Clean up temporary test snippets
 $BIN delete --title "Binary Search" > /dev/null || fail "Failed to delete 'Binary Search'"
 $BIN delete --title "DashCode" > /dev/null || fail "Failed to delete 'DashCode'"

@@ -27,8 +27,18 @@ int main(int argc, char* argv[]) {
             return 0;
         }
 
+        const bool wantsHelp = args.hasFlag("--help") || args.hasFlag("-h") ||
+                               args.verb == "help" || args.verb.empty();
+
         // Storage and View Initialization (Dependency Injection)
-        auto repository = std::make_shared<model::JsonSnippetRepository>();
+        std::shared_ptr<model::JsonSnippetRepository> repository;
+        try {
+            repository = std::make_shared<model::JsonSnippetRepository>();
+        } catch (const common::StorageException&) {
+            if (!wantsHelp) {
+                throw;
+            }
+        }
 
         std::string formatOpt = args.getOption("format", "terminal");
         std::shared_ptr<view::ISnippetView> view = view::ViewFactory::fromString(formatOpt);

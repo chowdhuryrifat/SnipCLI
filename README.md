@@ -76,7 +76,7 @@ cmake --build build --parallel
 
 ### 3. Verify Build & Run Test Suite
 ```bash
-# Run CTest Unit Tests (All 7 Suites - 119 Scenarios & Invariants)
+# Run CTest Unit Tests (All 7 Suites - 134 Scenarios & Invariants)
 ctest --test-dir build --output-on-failure
 
 # Run Automated End-to-End Smoke & Integration Tests
@@ -93,6 +93,9 @@ ctest --test-dir build --output-on-failure
 ```bash
 # Add a snippet with inline code and multiple category tags
 ./build/snip add --title "Dijkstra" --lang "cpp" --tags "graph,shortest_path" --code "vector<int> dist(n, INF); priority_queue<pair<int,int>> pq;"
+
+# Add code starting with hyphens or comments using equals syntax
+./build/snip add --title "SqlComment" --lang "sql" --code="-- comment starting with dashes"
 
 # Add a complex template directly from a source file
 ./build/snip add --title "SegmentTree" --lang "cpp" --tags "tree,range_query" --file ./templates/segtree.cpp
@@ -258,6 +261,7 @@ flowchart TD
 1. **Model (`snipcli::model`):** Pure domain logic and persistence. Completely isolated from terminal widths, ANSI escapes, or CLI flags.
 2. **View (`snipcli::view`):** Pure presentation. Implements `ISnippetView` to format data to any `std::ostream`. Completely isolated from business logic and database queries.
 3. **Controller (`snipcli::controller`):** Mediator. Executes CLI verbs through the Command Pattern, catches exceptions, and routes results to the View.
+4. **Storage Concurrency & Integrity:** In-process thread-safety guarded by `std::mutex`, cross-process writer exclusion guarded by advisory `<storagePath>.lock` (`flock` on POSIX, `LockFileEx` on Windows) with bounded timeout (default 10s, configurable via `SNIPCLI_LOCK_TIMEOUT_MS`), and lock-free reader operations over atomic file replacement.
 
 ---
 
@@ -282,10 +286,10 @@ flowchart TD
 SnipCLI enforces rigorous multi-layered quality gates across every commit and Pull Request:
 
 ### 1. Multi-Suite Unit Testing (CTest)
-A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 133 domain invariants and behavioral scenarios:
+A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 134 domain invariants and behavioral scenarios:
 - **`Snippet` (10 Invariants):** Immutability, line counting, tag normalization, ISO 8601 timestamps.
 - **`SnippetValidator` (12 Invariants):** Defense against empty titles, illegal characters, empty languages, and missing payloads.
-- **`JsonSnippetRepository` (19 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, atomic file replacement, and multi-line CRLF preservation.
+- **`JsonSnippetRepository` (20 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, atomic file replacement, multi-line CRLF preservation, cross-process advisory lock synchronization with bounded timeout, and duplicate-title rejection.
 - **`Strategy Pattern` (10 Scenarios):** Case-insensitive title substring, exact tag matching, and language filtering.
 - **`CliParser` & `CommandDispatcher` (31 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, spaced negative values, valueless option schema validation, global options before verb, `--` delimiter, strict unknown option rejection, command-specific option schema enforcement, and boolean flag equals-syntax rejection.
 - **`Command Wiring` (31 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution, including strict ID parsing, multi-word argument defense, add-command positional quarantine, unknown option state protection, command-specific option rejection state protection, mutually exclusive selector enforcement, and storage exception quarantine.
@@ -297,6 +301,8 @@ The bash test suite (`tests/smoke/smoke_test.sh`) verifies the final binary end-
 - Dual presentation engines (ANSI terminal formatting vs GitHub-Flavored Markdown).
 - Pipe-native extraction (`--code-only`) ensuring zero extraneous metadata leaks into shell pipes.
 - Error quarantine: cleanly exits with non-zero exit codes upon duplicate titles, invalid verbs, missing IDs, unquoted multi-word positionals, or unsupported command options.
+- Cross-process concurrency: 20 parallel adds and race safety verified without lost updates.
+- Isolated environment resilience: `--help` execution under stripped environment (containers, cron, `env -i`).
 - Cross-platform path normalization (`cygpath`) for seamless execution across Linux, macOS, and Windows Git Bash.
 
 ### 3. GitHub Actions CI/CD Matrix

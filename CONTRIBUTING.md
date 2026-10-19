@@ -90,6 +90,7 @@ git commit -m "dev a finished part 2"
   2. Are all new classes accompanied by Doxygen docstrings?
   3. Does it violate MVC or SOLID boundaries?
   4. Is there zero memory leak / zero raw owning pointers?
+  5. Does it strictly conform to pinned Clang-Format 18 styling?
 - All PRs are merged using **Squash and Merge** to maintain a linear, clean commit history on `dev`.
 
 ### 3.2 Pull Request Template (`.github/pull_request_template.md`)

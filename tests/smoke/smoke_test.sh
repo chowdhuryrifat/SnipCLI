@@ -45,6 +45,9 @@ echo "$OUTPUT_VERSION" | grep -qi "SnipCLI" || fail "Version output does not con
 $BIN -v > /dev/null || fail "Version shortcut (-v) failed"
 pass "Global CLI flags (--help, -h, --version, -v) verified"
 
+env -i "$BIN" --help > /dev/null || fail "Help command failed under isolated environment (env -i)"
+pass "Help command verified under isolated container/cron environment (env -i)"
+
 # ------------------------------------------------------------------------------
 # Test 2: Add Snippets with Diverse Metadata & File Loading
 # ------------------------------------------------------------------------------
@@ -416,6 +419,45 @@ pass "Boolean flags with equals syntax cleanly rejected before execution"
 # Clean up temporary test snippets
 $BIN delete --title "Binary Search" > /dev/null || fail "Failed to delete 'Binary Search'"
 $BIN delete --title "DashCode" > /dev/null || fail "Failed to delete 'DashCode'"
+
+# ------------------------------------------------------------------------------
+# Test 11: Cross-Process Concurrency & Strict Command Schema Validation
+# ------------------------------------------------------------------------------
+# 11a: Concurrent cross-process additions (R2b)
+if [ -z "${WINDIR:-}" ] && [ -z "${COMSPEC:-}" ]; then
+    PARALLEL_STORAGE="$TEMP_DIR/parallel_snippets.json"
+    export SNIPCLI_STORAGE_PATH="$PARALLEL_STORAGE"
+    for i in $(seq 1 20); do
+        ( "$BIN" add --title "P$i" --code "int x$i;" > /dev/null 2>&1 ) &
+    done
+    wait
+
+    COUNT_PARALLEL=$("$BIN" list --format markdown | grep -c '^| [0-9]' || true)
+    [ "$COUNT_PARALLEL" -eq 20 ] || fail "Parallel adds lost updates: expected 20 snippets, found $COUNT_PARALLEL"
+    pass "Concurrent cross-process writes preserved: 20/20 parallel adds persisted"
+
+    # Same-title race: 8 parallel adds with identical title
+    SAME_RACE_STORAGE="$TEMP_DIR/same_race.json"
+    export SNIPCLI_STORAGE_PATH="$SAME_RACE_STORAGE"
+    for i in $(seq 1 8); do
+        ( "$BIN" add --title "RaceTitle" --code "int val = $i;" > /dev/null 2>&1 ) &
+    done
+    wait
+
+    COUNT_RACE=$("$BIN" list --format markdown | grep -c '^| [0-9]' || true)
+    [ "$COUNT_RACE" -eq 1 ] || fail "Concurrent same-title race failed: expected exactly 1 snippet, found $COUNT_RACE"
+    pass "Concurrent same-title race safety verified: exactly 1 snippet persisted"
+    export SNIPCLI_STORAGE_PATH="$TEST_STORAGE"
+fi
+
+# 11b: Extra positional arguments on list and stats rejected (R7)
+if $BIN stats extra > /dev/null 2>&1; then
+    fail "Stats with extra positional argument should have failed but succeeded!"
+fi
+if $BIN list extra > /dev/null 2>&1; then
+    fail "List with extra positional argument should have failed but succeeded!"
+fi
+pass "Command positionals schema: unexpected positionals on list/stats rejected"
 
 # ------------------------------------------------------------------------------
 # Completion Notice

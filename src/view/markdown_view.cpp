@@ -1,5 +1,11 @@
 #include "snipcli/view/markdown_view.hpp"
 
+#if defined(_WIN32)
+#include <fcntl.h>
+#include <io.h>
+#include <stdio.h>
+#endif
+
 namespace snipcli::view {
 
 MarkdownView::MarkdownView(std::ostream& outStream, std::ostream& errStream)
@@ -59,7 +65,20 @@ void MarkdownView::renderMessage(const std::string& message) {
 }
 
 void MarkdownView::renderRaw(const std::string& content) {
+#if defined(_WIN32)
+    if (&m_out == &std::cout) {
+        m_out.flush();
+        int prevMode = _setmode(_fileno(stdout), _O_BINARY);
+        m_out.write(content.data(), static_cast<std::streamsize>(content.size()));
+        m_out.flush();
+        if (prevMode != -1) {
+            _setmode(_fileno(stdout), prevMode);
+        }
+        return;
+    }
+#endif
     m_out << content;
+    m_out.flush();
 }
 
 void MarkdownView::renderSuccess(const std::string& message) {

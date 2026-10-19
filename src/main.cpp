@@ -48,9 +48,19 @@ int main(int argc, char* argv[]) {
         dispatcher.registerCommand(
             std::make_unique<controller::commands::StatsCommand>(args, repository, view));
 
-        if (args.verb.empty() || args.hasFlag("--help") || args.hasFlag("-h")) {
+        if (args.hasFlag("--help") || args.hasFlag("-h") || args.verb == "help") {
             dispatcher.printHelp();
             return 0;
+        }
+
+        if (args.verb.empty()) {
+            if (argc <= 1) {
+                dispatcher.printHelp();
+                return 0;
+            }
+            std::cerr
+                << "[✗] Error: No command specified. Use --help to view available commands.\n";
+            return 1;
         }
 
         return dispatcher.dispatch(args.verb);

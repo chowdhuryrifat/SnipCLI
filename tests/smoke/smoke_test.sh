@@ -286,6 +286,68 @@ if [ "$EXTRACTED_DASH" != "-x;" ]; then
 fi
 pass "B7: Byte-exact --code-only output verified"
 
+# 10g: Unknown option rejection
+$BIN add --title "GuardSnippet" --lang "cpp" --code "int guard = 1;" > /dev/null
+if $BIN delete --titel "GuardSnippet" > /dev/null 2>&1; then
+    fail "Unknown option '--titel' was accepted unexpectedly"
+fi
+$BIN get --title "GuardSnippet" > /dev/null || fail "Snippet 'GuardSnippet' was wrongly deleted by unknown option!"
+$BIN delete --title "GuardSnippet" > /dev/null
+pass "Unknown option rejection: typo --titel cleanly rejected, snippet protected"
+
+# 10h: Extra positionals for add rejected
+if $BIN add Unquoted Multi Title --code "int x;" > /dev/null 2>&1; then
+    fail "Add with unquoted multi-word title was accepted unexpectedly"
+fi
+if $BIN get --title "Unquoted" > /dev/null 2>&1; then
+    fail "Snippet 'Unquoted' was wrongly created by unquoted add!"
+fi
+if $BIN add --title "SingleTitle" ExtraArg --code "int x;" > /dev/null 2>&1; then
+    fail "Add with explicit --title and extra positional was accepted unexpectedly"
+fi
+if $BIN get --title "SingleTitle" > /dev/null 2>&1; then
+    fail "Snippet 'SingleTitle' was wrongly created by malformed add!"
+fi
+pass "Add command extra positional rejection verified"
+
+# 10i: Missing command verb with options returns non-zero error
+if $BIN --format markdown > /dev/null 2>&1; then
+    fail "Invocation with options but no command unexpectedly exited with 0"
+fi
+pass "Missing command verb with options returns non-zero error code"
+
+# 10j: Cross-platform CRLF and LF byte-exact round-trip verification
+CRLF_FILE="$TEMP_DIR/test_crlf.txt"
+LF_FILE="$TEMP_DIR/test_lf.txt"
+CRLF_OUT="$TEMP_DIR/out_crlf.txt"
+LF_OUT="$TEMP_DIR/out_lf.txt"
+if command -v cygpath >/dev/null 2>&1; then
+    CRLF_FILE=$(cygpath -m "$CRLF_FILE")
+    LF_FILE=$(cygpath -m "$LF_FILE")
+    CRLF_OUT=$(cygpath -m "$CRLF_OUT")
+    LF_OUT=$(cygpath -m "$LF_OUT")
+fi
+
+printf "int a = 1;\r\nint b = 2;\r\n" > "$CRLF_FILE"
+printf "int c = 3;\nint d = 4;\n" > "$LF_FILE"
+
+$BIN add --title "CrlfSnippet" --lang "cpp" --file "$CRLF_FILE" > /dev/null || fail "Failed to add CRLF snippet"
+$BIN add --title "LfSnippet" --lang "cpp" --file "$LF_FILE" > /dev/null || fail "Failed to add LF snippet"
+
+$BIN get --title "CrlfSnippet" --code-only > "$CRLF_OUT"
+$BIN get --title "LfSnippet" --code-only > "$LF_OUT"
+
+if ! cmp -s "$CRLF_FILE" "$CRLF_OUT"; then
+    fail "CRLF byte-exact roundtrip failed!"
+fi
+if ! cmp -s "$LF_FILE" "$LF_OUT"; then
+    fail "LF byte-exact roundtrip failed!"
+fi
+pass "Byte-exact file roundtrip verified across both CRLF and LF formats"
+
+$BIN delete --title "CrlfSnippet" > /dev/null
+$BIN delete --title "LfSnippet" > /dev/null
+
 # Clean up temporary test snippets
 $BIN delete --title "Binary Search" > /dev/null || fail "Failed to delete 'Binary Search'"
 $BIN delete --title "DashCode" > /dev/null || fail "Failed to delete 'DashCode'"

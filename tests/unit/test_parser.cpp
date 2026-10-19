@@ -347,6 +347,52 @@ void runParserTests() {
         }
     }
 
-    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (18/18 Invariants Verified)"
+    // Test 19: Unknown long option rejection (Review Finding 1)
+    {
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"delete", "--titel", "Binary"}));
+            std::cerr << "[FAIL] Unknown long option --titel did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Unknown option '--titel'") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected unknown option error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 20: Unknown short switch rejection (Review Finding 1)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"add", "-x"}));
+            std::cerr << "[FAIL] Unknown short switch -x did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Unknown option '-x'") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected unknown switch error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 21: Unknown option with equals syntax rejection (Review Finding 1)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"list", "--bogus=123"}));
+            std::cerr << "[FAIL] Unknown option with equals syntax did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Unknown option '--bogus'") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected unknown equals error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (21/21 Invariants Verified)"
               << std::endl;
 }

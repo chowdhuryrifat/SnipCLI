@@ -5,6 +5,7 @@
 #include <sstream>
 
 #if defined(_WIN32)
+#include <fcntl.h>
 #include <io.h>
 #include <stdio.h>
 #else
@@ -153,7 +154,20 @@ void TerminalView::renderSnippetList(const std::vector<model::Snippet>& snippets
 }
 
 void TerminalView::renderRaw(const std::string& content) {
+#if defined(_WIN32)
+    if (&m_out == &std::cout) {
+        m_out.flush();
+        int prevMode = _setmode(_fileno(stdout), _O_BINARY);
+        m_out.write(content.data(), static_cast<std::streamsize>(content.size()));
+        m_out.flush();
+        if (prevMode != -1) {
+            _setmode(_fileno(stdout), prevMode);
+        }
+        return;
+    }
+#endif
     m_out << content;
+    m_out.flush();
 }
 
 void TerminalView::renderMessage(const std::string& message) {

@@ -403,7 +403,8 @@ void runRepositoryTests() {
         // 11e: Invalid escape sequence (\q) throws StorageException
         {
             std::ofstream out(corruptFile, std::ios::trunc);
-            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"BadEscape\",\n    \"language\": \"cpp\",\n    \"code\": \"int \\q = 0;\"\n  }\n]";
+            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"BadEscape\",\n    \"language\": "
+                   "\"cpp\",\n    \"code\": \"int \\q = 0;\"\n  }\n]";
         }
         bool threwBadEscape = false;
         try {
@@ -416,7 +417,8 @@ void runRepositoryTests() {
         // 11f: Non-hexadecimal \u escape (\u12zz) throws StorageException
         {
             std::ofstream out(corruptFile, std::ios::trunc);
-            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"BadHex\",\n    \"language\": \"cpp\",\n    \"code\": \"int x = \\u12zz;\"\n  }\n]";
+            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"BadHex\",\n    \"language\": "
+                   "\"cpp\",\n    \"code\": \"int x = \\u12zz;\"\n  }\n]";
         }
         bool threwBadHex = false;
         try {
@@ -429,7 +431,8 @@ void runRepositoryTests() {
         // 11g: Isolated high surrogate (\ud800 without low surrogate) throws StorageException
         {
             std::ofstream out(corruptFile, std::ios::trunc);
-            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"IsolatedSurrogate\",\n    \"language\": \"cpp\",\n    \"code\": \"// \\ud800 lonely\"\n  }\n]";
+            out << "[\n  {\n    \"id\": 1,\n    \"title\": \"IsolatedSurrogate\",\n    "
+                   "\"language\": \"cpp\",\n    \"code\": \"// \\ud800 lonely\"\n  }\n]";
         }
         bool threwSurrogate = false;
         try {

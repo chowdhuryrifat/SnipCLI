@@ -160,6 +160,18 @@ void runParserTests() {
         }
     }
 
-    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (10/10 Invariants Verified)"
+    // Test 11: Standalone boolean flags never swallow subsequent positional arguments
+    {
+        std::vector<std::string> tokens = {"get", "--code-only", "5"};
+        auto args = snipcli::controller::CliParser::parse(tokens);
+        if (args.getVerb() != "get" || !args.hasFlag("--code-only") ||
+            args.hasOption("code-only") || args.getPositionals().size() != 1 ||
+            args.getPositionals()[0] != "5") {
+            std::cerr << "[FAIL] Standalone flag swallowed positional argument!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (11/11 Invariants Verified)"
               << std::endl;
 }

@@ -1,5 +1,6 @@
 #include "snipcli/controller/commands/get_command.hpp"
 
+#include <cctype>
 #include <charconv>
 #include <optional>
 #include <string>
@@ -10,6 +11,22 @@
 namespace snipcli::controller::commands {
 
 namespace {
+
+bool isNumeric(std::string_view s) {
+    if (s.empty()) {
+        return false;
+    }
+    size_t start = (s[0] == '+' || s[0] == '-') ? 1 : 0;
+    if (start >= s.size()) {
+        return false;
+    }
+    for (size_t i = start; i < s.size(); ++i) {
+        if (!std::isdigit(static_cast<unsigned char>(s[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
 
 std::optional<uint64_t> parseStrictId(std::string_view s) {
     if (s.empty()) {
@@ -54,8 +71,13 @@ int GetCommand::execute() {
             snippet = m_reader->getByTitle(m_args.getOption("title"));
         } else if (!m_args.positionals.empty()) {
             std::string query = m_args.positionals[0];
-            auto parsedId = parseStrictId(query);
-            if (parsedId.has_value()) {
+            if (isNumeric(query)) {
+                auto parsedId = parseStrictId(query);
+                if (!parsedId.has_value()) {
+                    m_view->renderError("Invalid snippet ID format: '" + query +
+                                        "'. Expected a positive integer.");
+                    return 1;
+                }
                 snippet = m_reader->getById(*parsedId);
             } else {
                 snippet = m_reader->getByTitle(query);

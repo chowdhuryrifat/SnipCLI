@@ -160,6 +160,36 @@ void runParserTests() {
         }
     }
 
-    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (10/10 Invariants Verified)"
+    // Test 11: Standalone boolean flags never swallow subsequent positional arguments
+    {
+        std::vector<std::string> tokens = {"get", "--code-only", "5"};
+        auto args = snipcli::controller::CliParser::parse(tokens);
+        if (args.getVerb() != "get" || !args.hasFlag("--code-only") ||
+            args.hasOption("code-only") || args.getPositionals().size() != 1 ||
+            args.getPositionals()[0] != "5") {
+            std::cerr << "[FAIL] Standalone flag swallowed positional argument!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    // Test 12: Negative numeric option values (--id -5) and negative positionals
+    {
+        std::vector<std::string> tokens = {"get", "--id", "-5"};
+        auto args = snipcli::controller::CliParser::parse(tokens);
+        if (args.getVerb() != "get" || !args.hasOption("id") || args.getOption("id") != "-5") {
+            std::cerr << "[FAIL] Spaced negative numeric option value parsing failed!" << std::endl;
+            std::exit(1);
+        }
+
+        std::vector<std::string> posTokens = {"delete", "-5"};
+        auto posArgs = snipcli::controller::CliParser::parse(posTokens);
+        if (posArgs.getVerb() != "delete" || posArgs.getPositionals().size() != 1 ||
+            posArgs.getPositionals()[0] != "-5") {
+            std::cerr << "[FAIL] Negative numeric positional argument parsing failed!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (12/12 Invariants Verified)"
               << std::endl;
 }

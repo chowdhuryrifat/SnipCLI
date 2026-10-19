@@ -1,10 +1,46 @@
 #include "snipcli/controller/commands/delete_command.hpp"
 
+#include <cctype>
+#include <charconv>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "snipcli/common/exceptions.hpp"
 
 namespace snipcli::controller::commands {
+
+namespace {
+
+bool isNumeric(std::string_view s) {
+    if (s.empty()) {
+        return false;
+    }
+    size_t start = (s[0] == '+' || s[0] == '-') ? 1 : 0;
+    if (start >= s.size()) {
+        return false;
+    }
+    for (size_t i = start; i < s.size(); ++i) {
+        if (!std::isdigit(static_cast<unsigned char>(s[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::optional<uint64_t> parseStrictId(std::string_view s) {
+    if (s.empty()) {
+        return std::nullopt;
+    }
+    uint64_t id = 0;
+    auto [p, ec] = std::from_chars(s.data(), s.data() + s.size(), id);
+    if (ec != std::errc{} || p != s.data() + s.size() || id == 0) {
+        return std::nullopt;
+    }
+    return id;
+}
+
+}  // namespace
 
 DeleteCommand::DeleteCommand(ParsedArgs args, std::shared_ptr<model::ISnippetWriter> writer,
                              std::shared_ptr<view::ISnippetView> view)
@@ -25,38 +61,30 @@ int DeleteCommand::execute() {
 
         if (m_args.hasOption("id")) {
             std::string idStr = m_args.getOption("id");
-            try {
-                size_t idx = 0;
-                uint64_t id = std::stoull(idStr, &idx);
-                if (idx != idStr.size()) {
-                    m_view->renderError("Invalid snippet ID format: '" + idStr +
-                                        "'. Expected an integer.");
-                    return 1;
-                }
-                identifier = "ID #" + std::to_string(id);
-                deleted = m_writer->removeById(id);
-            } catch (const std::exception&) {
+            auto parsedId = parseStrictId(idStr);
+            if (!parsedId.has_value()) {
                 m_view->renderError("Invalid snippet ID format: '" + idStr +
-                                    "'. Expected an integer.");
+                                    "'. Expected a positive integer.");
                 return 1;
             }
+            identifier = "ID #" + std::to_string(*parsedId);
+            deleted = m_writer->removeById(*parsedId);
         } else if (m_args.hasOption("title")) {
             std::string title = m_args.getOption("title");
             identifier = "'" + title + "'";
             deleted = m_writer->removeByTitle(title);
         } else if (!m_args.positionals.empty()) {
             std::string query = m_args.positionals[0];
-            try {
-                size_t idx = 0;
-                uint64_t id = std::stoull(query, &idx);
-                if (idx == query.size()) {
-                    identifier = "ID #" + std::to_string(id);
-                    deleted = m_writer->removeById(id);
-                } else {
-                    identifier = "'" + query + "'";
-                    deleted = m_writer->removeByTitle(query);
+            if (isNumeric(query)) {
+                auto parsedId = parseStrictId(query);
+                if (!parsedId.has_value()) {
+                    m_view->renderError("Invalid snippet ID format: '" + query +
+                                        "'. Expected a positive integer.");
+                    return 1;
                 }
-            } catch (...) {
+                identifier = "ID #" + std::to_string(*parsedId);
+                deleted = m_writer->removeById(*parsedId);
+            } else {
                 identifier = "'" + query + "'";
                 deleted = m_writer->removeByTitle(query);
             }

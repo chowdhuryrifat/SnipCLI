@@ -143,10 +143,28 @@ $BIN add --title "ExactSnippet" --lang "cpp" --file "$TEMP_SRC" > /dev/null
 
 $BIN get --title "ExactSnippet" --code-only > "$TEMP_OUT"
 
-if ! cmp -s "$TEMP_SRC" "$TEMP_OUT"; then
-    fail "B7: Extracted code does not byte-exact match original input (extra newline or whitespace detected)!"
+# CRLF and LF byte-exact round-trip verification across platforms
+TEMP_CRLF=$(cygpath -m "$TEMP_DIR/crlf.txt" 2>/dev/null || echo "$TEMP_DIR/crlf.txt")
+TEMP_LF=$(cygpath -m "$TEMP_DIR/lf.txt" 2>/dev/null || echo "$TEMP_DIR/lf.txt")
+TEMP_CRLF_OUT=$(cygpath -m "$TEMP_DIR/crlf_out.txt" 2>/dev/null || echo "$TEMP_DIR/crlf_out.txt")
+TEMP_LF_OUT=$(cygpath -m "$TEMP_DIR/lf_out.txt" 2>/dev/null || echo "$TEMP_DIR/lf_out.txt")
+
+printf "line1\r\nline2\r\n" > "$TEMP_CRLF"
+printf "line1\nline2\n" > "$TEMP_LF"
+
+$BIN add --title "CrlfExact" --lang "cpp" --file "$TEMP_CRLF" > /dev/null
+$BIN add --title "LfExact" --lang "cpp" --file "$TEMP_LF" > /dev/null
+
+$BIN get --title "CrlfExact" --code-only > "$TEMP_CRLF_OUT"
+$BIN get --title "LfExact" --code-only > "$TEMP_LF_OUT"
+
+if ! cmp -s "$TEMP_CRLF" "$TEMP_CRLF_OUT"; then
+    fail "B7: CRLF file extraction failed byte-exact identity!"
 fi
-pass "B7: Byte-exact --code-only output verified with cmp"
+if ! cmp -s "$TEMP_LF" "$TEMP_LF_OUT"; then
+    fail "B7: LF file extraction failed byte-exact identity!"
+fi
+pass "B7: Cross-platform byte-exact output verified for both CRLF and LF inputs"
 
 # ------------------------------------------------------------------------------
 # B8: Values Starting with '-' & '--' Terminator
@@ -171,6 +189,30 @@ if $BIN delete -- Binary Search > /dev/null 2>&1; then
     fail "B8: 'snip delete -- Binary Search' should have failed multi-word check!"
 fi
 pass "B8: Values starting with '-' and '--' terminator behave according to POSIX CLI standards"
+
+# ------------------------------------------------------------------------------
+# Regressions from Peer Review: Unknown Options, Add Positionals, Missing Command
+# ------------------------------------------------------------------------------
+info "Testing Peer Review Regressions..."
+# 1. Unknown option rejection protects state: snip delete --titel Binary
+if $BIN delete --titel "Binary" > /dev/null 2>&1; then
+    fail "Peer Review Regression: Unknown option '--titel' should have failed but succeeded!"
+fi
+$BIN get --title "Binary" > /dev/null || fail "Peer Review Regression: Snippet 'Binary' was deleted by typo '--titel'!"
+
+# 2. Add extra positionals rejected
+if $BIN add Unquoted Multi Title --code "int x;" > /dev/null 2>&1; then
+    fail "Peer Review Regression: Unquoted multi-word title in add should have failed!"
+fi
+if $BIN get --title "Unquoted" > /dev/null 2>&1; then
+    fail "Peer Review Regression: Snippet 'Unquoted' was wrongly created!"
+fi
+
+# 3. Missing command with options exits non-zero
+if $BIN --format markdown > /dev/null 2>&1; then
+    fail "Peer Review Regression: 'snip --format markdown' without command should exit non-zero!"
+fi
+pass "Peer Review Regressions: Unknown options, add positionals, and missing command verified"
 
 # ------------------------------------------------------------------------------
 # Summary

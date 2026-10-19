@@ -10,6 +10,16 @@ namespace snipcli::controller {
 
 namespace {
 
+bool isKnownLongOptionOrFlag(std::string_view name) {
+    return name == "help" || name == "version" || name == "code-only" || name == "id" ||
+           name == "title" || name == "format" || name == "code" || name == "file" ||
+           name == "lang" || name == "language" || name == "tag" || name == "tags";
+}
+
+bool isKnownShortSwitch(std::string_view s) {
+    return s == "h" || s == "v" || s == "c" || s == "t" || s == "l" || s == "f";
+}
+
 bool isValueOption(std::string_view opt, std::string_view verb) {
     if (opt == "id" || opt == "title" || opt == "format" || opt == "code" || opt == "file" ||
         opt == "lang" || opt == "language" || opt == "tag" || opt == "tags" || opt == "t" ||
@@ -165,6 +175,9 @@ ParsedArgs CliParser::parse(const std::vector<std::string>& tokens) {
             if (eqPos != std::string::npos) {
                 std::string key = body.substr(0, eqPos);
                 std::string val = body.substr(eqPos + 1);
+                if (!isKnownLongOptionOrFlag(key)) {
+                    throw common::CommandException("Unknown option '--" + key + "'.");
+                }
                 if (isValueOption(key, verb) && val.empty()) {
                     throw common::CommandException("Option '--" + key + "' requires a value.");
                 }
@@ -184,13 +197,16 @@ ParsedArgs CliParser::parse(const std::vector<std::string>& tokens) {
                 }
                 result.options[body] = val;
             } else {
-                result.flags.push_back(arg);
+                throw common::CommandException("Unknown option '" + arg + "'.");
             }
         } else if (arg.rfind("-", 0) == 0 && arg.size() > 1) {
             size_t eqPos = arg.find('=');
             if (eqPos != std::string::npos) {
                 std::string key = arg.substr(1, eqPos - 1);
                 std::string val = arg.substr(eqPos + 1);
+                if (!isKnownShortSwitch(key)) {
+                    throw common::CommandException("Unknown option '-" + key + "'.");
+                }
                 if (isValueOption(key, verb) && val.empty()) {
                     throw common::CommandException("Option '-" + key + "' requires a value.");
                 }
@@ -238,7 +254,7 @@ ParsedArgs CliParser::parse(const std::vector<std::string>& tokens) {
                     result.positionals.push_back(arg);
                 }
             } else {
-                result.flags.push_back(arg);
+                throw common::CommandException("Unknown option '" + arg + "'.");
             }
         } else {
             if (!verbConsumed && !verb.empty() && arg == verb) {

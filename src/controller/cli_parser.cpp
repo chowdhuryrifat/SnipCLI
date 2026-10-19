@@ -20,6 +20,48 @@ bool isKnownShortSwitch(std::string_view s) {
     return s == "h" || s == "v" || s == "c" || s == "t" || s == "l" || s == "f";
 }
 
+bool isOptionSupportedByCommand(std::string_view optName, std::string_view verb) {
+    if (optName == "help" || optName == "h" || optName == "version" || optName == "v" ||
+        optName == "format") {
+        return true;
+    }
+
+    if (verb.empty()) {
+        return false;
+    }
+
+    if (verb == "add") {
+        return optName == "title" || optName == "t" || optName == "lang" || optName == "language" ||
+               optName == "l" || optName == "code" || optName == "c" || optName == "file" ||
+               optName == "f" || optName == "tag" || optName == "tags";
+    }
+
+    if (verb == "list") {
+        return optName == "tag" || optName == "tags" || optName == "lang" ||
+               optName == "language" || optName == "l";
+    }
+
+    if (verb == "get") {
+        return optName == "id" || optName == "title" || optName == "t" || optName == "code-only" ||
+               optName == "c";
+    }
+
+    if (verb == "delete") {
+        return optName == "id" || optName == "title" || optName == "t";
+    }
+
+    if (verb == "search") {
+        return optName == "title" || optName == "t" || optName == "tag" || optName == "tags" ||
+               optName == "lang" || optName == "language" || optName == "l";
+    }
+
+    if (verb == "stats" || verb == "help") {
+        return false;
+    }
+
+    return false;
+}
+
 bool isValueOption(std::string_view opt, std::string_view verb) {
     if (opt == "id" || opt == "title" || opt == "format" || opt == "code" || opt == "file" ||
         opt == "lang" || opt == "language" || opt == "tag" || opt == "tags" || opt == "t" ||
@@ -49,6 +91,11 @@ bool isNextTokenAnOptionOrFlag(std::string_view token, std::string_view verb) {
     return false;
 }
 
+bool isKnownVerb(std::string_view v) {
+    return v == "add" || v == "list" || v == "get" || v == "delete" || v == "search" ||
+           v == "stats" || v == "help";
+}
+
 std::string findVerb(const std::vector<std::string>& tokens) {
     bool endOfOptions = false;
     for (size_t i = 0; i < tokens.size(); ++i) {
@@ -74,6 +121,10 @@ std::string findVerb(const std::vector<std::string>& tokens) {
             }
         } else if (tok == "-t" || tok == "-l" || tok == "-f") {
             if (i + 1 < tokens.size()) {
+                ++i;
+            }
+        } else if (tok == "-c") {
+            if (i + 1 < tokens.size() && !isKnownVerb(tokens[i + 1])) {
                 ++i;
             }
         } else if (tok == "-h" || tok == "-v") {
@@ -178,6 +229,14 @@ ParsedArgs CliParser::parse(const std::vector<std::string>& tokens) {
                 if (!isKnownLongOptionOrFlag(key)) {
                     throw common::CommandException("Unknown option '--" + key + "'.");
                 }
+                if (!isOptionSupportedByCommand(key, verb)) {
+                    if (verb.empty()) {
+                        throw common::CommandException("Option '--" + key +
+                                                       "' is not supported without a command.");
+                    }
+                    throw common::CommandException("Option '--" + key +
+                                                   "' is not supported by command '" + verb + "'.");
+                }
                 if (isValueOption(key, verb) && val.empty()) {
                     throw common::CommandException("Option '--" + key + "' requires a value.");
                 }
@@ -186,8 +245,24 @@ ParsedArgs CliParser::parse(const std::vector<std::string>& tokens) {
                 }
                 result.options[key] = val;
             } else if (body == "code-only" || body == "help" || body == "version") {
+                if (!isOptionSupportedByCommand(body, verb)) {
+                    if (verb.empty()) {
+                        throw common::CommandException("Option '" + arg +
+                                                       "' is not supported without a command.");
+                    }
+                    throw common::CommandException("Option '" + arg +
+                                                   "' is not supported by command '" + verb + "'.");
+                }
                 result.flags.push_back(arg);
             } else if (isValueOption(body, verb)) {
+                if (!isOptionSupportedByCommand(body, verb)) {
+                    if (verb.empty()) {
+                        throw common::CommandException("Option '" + arg +
+                                                       "' is not supported without a command.");
+                    }
+                    throw common::CommandException("Option '" + arg +
+                                                   "' is not supported by command '" + verb + "'.");
+                }
                 if (i + 1 >= tokens.size() || isNextTokenAnOptionOrFlag(tokens[i + 1], verb)) {
                     throw common::CommandException("Option '" + arg + "' requires a value.");
                 }
@@ -206,6 +281,14 @@ ParsedArgs CliParser::parse(const std::vector<std::string>& tokens) {
                 std::string val = arg.substr(eqPos + 1);
                 if (!isKnownShortSwitch(key)) {
                     throw common::CommandException("Unknown option '-" + key + "'.");
+                }
+                if (!isOptionSupportedByCommand(key, verb)) {
+                    if (verb.empty()) {
+                        throw common::CommandException("Option '-" + key +
+                                                       "' is not supported without a command.");
+                    }
+                    throw common::CommandException("Option '-" + key +
+                                                   "' is not supported by command '" + verb + "'.");
                 }
                 if (isValueOption(key, verb) && val.empty()) {
                     throw common::CommandException("Option '-" + key + "' requires a value.");
@@ -226,14 +309,26 @@ ParsedArgs CliParser::parse(const std::vector<std::string>& tokens) {
             } else if (arg == "-h" || arg == "-v") {
                 result.flags.push_back(arg);
             } else if (arg == "-c" && verb == "get") {
+                if (!isOptionSupportedByCommand("c", verb)) {
+                    throw common::CommandException("Option '" + arg +
+                                                   "' is not supported by command '" + verb + "'.");
+                }
                 result.flags.push_back(arg);
             } else if (arg == "-t" || arg == "-l" || arg == "-f" ||
                        (arg == "-c" && verb != "get")) {
+                std::string key = arg.substr(1);
+                if (!isOptionSupportedByCommand(key, verb)) {
+                    if (verb.empty()) {
+                        throw common::CommandException("Option '" + arg +
+                                                       "' is not supported without a command.");
+                    }
+                    throw common::CommandException("Option '" + arg +
+                                                   "' is not supported by command '" + verb + "'.");
+                }
                 if (i + 1 >= tokens.size() || isNextTokenAnOptionOrFlag(tokens[i + 1], verb)) {
                     throw common::CommandException("Option '" + arg + "' requires a value.");
                 }
                 std::string val = tokens[++i];
-                std::string key = arg.substr(1);
                 result.options[key] = val;
                 if (key == "t") {
                     result.options["title"] = val;

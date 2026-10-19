@@ -48,10 +48,17 @@ jobs:
             compiler: GCC
             artifact_name: snipcli-linux-x86_64
             binary_path: build/snip
+            cmake_flags: ""
+          - os: ubuntu-latest
+            compiler: GCC-Sanitizers
+            artifact_name: snipcli-linux-sanitizers
+            binary_path: build/snip
+            cmake_flags: -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
           - os: windows-latest
             compiler: MSVC
             artifact_name: snipcli-windows-x86_64
             binary_path: build/Release/snip.exe
+            cmake_flags: ""
 
     steps:
       - name: Checkout Code
@@ -59,7 +66,7 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_flags }}
 
       - name: Build Library, CLI, and Test Suite
         run: |

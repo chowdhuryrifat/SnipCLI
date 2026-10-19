@@ -58,6 +58,10 @@ void MarkdownView::renderMessage(const std::string& message) {
     m_out << message << "\n";
 }
 
+void MarkdownView::renderRaw(const std::string& content) {
+    m_out << content;
+}
+
 void MarkdownView::renderSuccess(const std::string& message) {
     m_out << "> **Success:** " << message << "\n";
 }

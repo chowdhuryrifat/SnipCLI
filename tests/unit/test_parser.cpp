@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "snipcli/common/exceptions.hpp"
 #include "snipcli/controller/cli_parser.hpp"
 #include "snipcli/controller/command_dispatcher.hpp"
 #include "snipcli/controller/i_command.hpp"
@@ -190,6 +191,162 @@ void runParserTests() {
         }
     }
 
-    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (12/12 Invariants Verified)"
+    // Test 13: Global options before verb (Finding B3)
+    {
+        std::vector<std::string> tokens = {"--format", "markdown", "list"};
+        auto args = snipcli::controller::CliParser::parse(tokens);
+        if (args.getVerb() != "list" || args.getOption("format") != "markdown" ||
+            !args.getPositionals().empty()) {
+            std::cerr << "[FAIL] Global options before verb failed!" << std::endl;
+            std::exit(1);
+        }
+
+        std::vector<std::string> flagTokens = {"-v", "list"};
+        auto flagArgs = snipcli::controller::CliParser::parse(flagTokens);
+        if (flagArgs.getVerb() != "list" || !flagArgs.hasFlag("-v") ||
+            !flagArgs.getPositionals().empty()) {
+            std::cerr << "[FAIL] Global flag before verb failed!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    // Test 14: Valueless option handling throws CommandException (Finding B2)
+    {
+        // Option followed by another option: --id --title X
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"delete", "--id", "--title", "X"}));
+            std::cerr << "[FAIL] Valueless --id followed by --title did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--id' requires a value") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+
+        // Option at end of line without value: --id
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"delete", "--id"}));
+            std::cerr << "[FAIL] Valueless --id at end of arguments did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            // Expected
+        }
+
+        // Valueless --code followed by flag -h: --code -h
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"add", "--code", "-h"}));
+            std::cerr << "[FAIL] Valueless --code followed by -h did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            // Expected
+        }
+
+        // Valueless short option: -t
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"add", "-t"}));
+            std::cerr << "[FAIL] Valueless -t did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            // Expected
+        }
+
+        // Valueless -c when verb is add: add -c
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"add", "-c"}));
+            std::cerr << "[FAIL] Valueless -c in add did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            // Expected
+        }
+    }
+
+    // Test 15: Invalid --format validation (Finding B4)
+    {
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"--format", "markdwon", "list"}));
+            std::cerr << "[FAIL] Invalid --format markdwon did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Invalid format 'markdwon'") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected format error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"list", "--format=html"}));
+            std::cerr << "[FAIL] Invalid --format=html did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            // Expected
+        }
+    }
+
+    // Test 16: Values starting with dash accepted for options requiring values (Finding B8)
+    {
+        std::vector<std::string> tokens = {"add", "--title", "DashSnippet", "--code", "-x;"};
+        auto args = snipcli::controller::CliParser::parse(tokens);
+        if (args.getVerb() != "add" || args.getOption("title") != "DashSnippet" ||
+            args.getOption("code") != "-x;") {
+            std::cerr << "[FAIL] Value starting with dash '-x;' was not parsed as option value!"
+                      << std::endl;
+            std::exit(1);
+        }
+
+        std::vector<std::string> shortTokens = {"add", "-t", "ShortDash", "-c", "-y;"};
+        auto shortArgs = snipcli::controller::CliParser::parse(shortTokens);
+        if (shortArgs.getVerb() != "add" || shortArgs.getOption("title") != "ShortDash" ||
+            shortArgs.getOption("code") != "-y;") {
+            std::cerr << "[FAIL] Short option -c with value '-y;' failed!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    // Test 17: Standard end-of-options delimiter (--) (Finding B8)
+    {
+        std::vector<std::string> tokens = {"delete", "--", "-5"};
+        auto args = snipcli::controller::CliParser::parse(tokens);
+        if (args.getVerb() != "delete" || args.getPositionals().size() != 1 ||
+            args.getPositionals()[0] != "-5") {
+            std::cerr << "[FAIL] End-of-options delimiter -- handling failed!" << std::endl;
+            std::exit(1);
+        }
+
+        std::vector<std::string> multiTokens = {"delete", "--", "Binary", "Search"};
+        auto multiArgs = snipcli::controller::CliParser::parse(multiTokens);
+        if (multiArgs.getPositionals().size() != 2 || multiArgs.getPositionals()[0] != "Binary" ||
+            multiArgs.getPositionals()[1] != "Search") {
+            std::cerr << "[FAIL] End-of-options delimiter with multiple positionals failed!"
+                      << std::endl;
+            std::exit(1);
+        }
+    }
+
+    // Test 18: Short option aliases (-t, -l, -f, -c)
+    {
+        std::vector<std::string> tokens = {"add", "-t", "Quick", "-l", "python", "-f", "quick.py"};
+        auto args = snipcli::controller::CliParser::parse(tokens);
+        if (args.getVerb() != "add" || args.getOption("title") != "Quick" ||
+            args.getOption("lang") != "python" || args.getOption("file") != "quick.py") {
+            std::cerr << "[FAIL] Short option aliases (-t, -l, -f) failed!" << std::endl;
+            std::exit(1);
+        }
+
+        // -c in get command is standalone --code-only flag
+        std::vector<std::string> getTokens = {"get", "-c", "5"};
+        auto getArgs = snipcli::controller::CliParser::parse(getTokens);
+        if (getArgs.getVerb() != "get" || !getArgs.hasFlag("-c") ||
+            getArgs.getPositionals().size() != 1 || getArgs.getPositionals()[0] != "5") {
+            std::cerr << "[FAIL] Short switch -c in get command failed!" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (18/18 Invariants Verified)"
               << std::endl;
 }

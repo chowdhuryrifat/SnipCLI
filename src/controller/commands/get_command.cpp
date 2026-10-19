@@ -56,6 +56,13 @@ std::string GetCommand::getDescription() const {
 
 int GetCommand::execute() {
     try {
+        if (m_args.positionals.size() > 1) {
+            m_view->renderError(
+                "Unexpected extra argument(s). For multi-word snippet titles, please enclose in "
+                "quotes (e.g., 'Binary Search').");
+            return 1;
+        }
+
         std::optional<model::Snippet> snippet;
 
         if (m_args.hasOption("id")) {
@@ -95,7 +102,7 @@ int GetCommand::execute() {
         }
 
         if (m_args.hasFlag("--code-only") || m_args.hasFlag("-c")) {
-            m_view->renderMessage(snippet->getCode());
+            m_view->renderRaw(snippet->getCode());
         } else {
             m_view->renderSnippet(*snippet);
         }

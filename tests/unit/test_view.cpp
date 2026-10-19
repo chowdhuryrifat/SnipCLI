@@ -383,7 +383,51 @@ void runViewTests() {
                    "Empty string falls back to TerminalView");
     }
 
-    std::cout << "[PASS] Multi-Format Presentation & Factory tests passed. (17/17 Scenarios "
+    // ---------------------------------------------------------
+    // Test 18: Byte-Exact renderRaw Output (Finding B7)
+    // ---------------------------------------------------------
+    {
+        std::ostringstream out;
+        std::ostringstream err;
+        snipcli::view::TerminalView termView(out, err, false);
+        termView.renderRaw("int main() { return 0; }");
+        assertTrue(
+            out.str() == "int main() { return 0; }",
+            "renderRaw in TerminalView must output byte-exact content without trailing newline");
+
+        std::ostringstream mdOut;
+        std::ostringstream mdErr;
+        snipcli::view::MarkdownView mdView(mdOut, mdErr);
+        mdView.renderRaw("def hello(): pass");
+        assertTrue(
+            mdOut.str() == "def hello(): pass",
+            "renderRaw in MarkdownView must output byte-exact content without trailing newline");
+    }
+
+    // ---------------------------------------------------------
+    // Test 19: NO_COLOR Environment Variable Disables Colors (Finding B6)
+    // ---------------------------------------------------------
+    {
+#if defined(_WIN32)
+        _putenv("NO_COLOR=1");
+#else
+        setenv("NO_COLOR", "1", 1);
+#endif
+        std::ostringstream out;
+        std::ostringstream err;
+        snipcli::view::TerminalView viewNoColor(out, err, true);
+        assertTrue(
+            !viewNoColor.isColorEnabled(),
+            "TerminalView must disable colors when NO_COLOR environment variable is present");
+
+#if defined(_WIN32)
+        _putenv("NO_COLOR=");
+#else
+        unsetenv("NO_COLOR");
+#endif
+    }
+
+    std::cout << "[PASS] Multi-Format Presentation & Factory tests passed. (19/19 Scenarios "
                  "Verified)"
               << std::endl;
 }

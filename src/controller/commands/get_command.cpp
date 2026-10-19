@@ -1,10 +1,29 @@
 #include "snipcli/controller/commands/get_command.hpp"
 
+#include <charconv>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #include "snipcli/common/exceptions.hpp"
 
 namespace snipcli::controller::commands {
+
+namespace {
+
+std::optional<uint64_t> parseStrictId(std::string_view s) {
+    if (s.empty()) {
+        return std::nullopt;
+    }
+    uint64_t id = 0;
+    auto [p, ec] = std::from_chars(s.data(), s.data() + s.size(), id);
+    if (ec != std::errc{} || p != s.data() + s.size() || id == 0) {
+        return std::nullopt;
+    }
+    return id;
+}
+
+}  // namespace
 
 GetCommand::GetCommand(ParsedArgs args, std::shared_ptr<model::ISnippetReader> reader,
                        std::shared_ptr<view::ISnippetView> view)
@@ -24,40 +43,27 @@ int GetCommand::execute() {
 
         if (m_args.hasOption("id")) {
             std::string idStr = m_args.getOption("id");
-            try {
-                size_t idx = 0;
-                uint64_t id = std::stoull(idStr, &idx);
-                if (idx != idStr.size()) {
-                    m_view->renderError("Invalid snippet ID format: '" + idStr +
-                                        "'. Expected an integer.");
-                    return 1;
-                }
-                snippet = m_reader->getById(id);
-            } catch (const std::exception&) {
+            auto parsedId = parseStrictId(idStr);
+            if (!parsedId.has_value()) {
                 m_view->renderError("Invalid snippet ID format: '" + idStr +
-                                    "'. Expected an integer.");
+                                    "'. Expected a positive integer.");
                 return 1;
             }
+            snippet = m_reader->getById(*parsedId);
         } else if (m_args.hasOption("title")) {
             snippet = m_reader->getByTitle(m_args.getOption("title"));
         } else if (!m_args.positionals.empty()) {
             std::string query = m_args.positionals[0];
-            try {
-                size_t idx = 0;
-                uint64_t id = std::stoull(query, &idx);
-                if (idx == query.size()) {
-                    snippet = m_reader->getById(id);
-                } else {
-                    snippet = m_reader->getByTitle(query);
-                }
-            } catch (...) {
+            auto parsedId = parseStrictId(query);
+            if (parsedId.has_value()) {
+                snippet = m_reader->getById(*parsedId);
+            } else {
                 snippet = m_reader->getByTitle(query);
             }
         } else {
             m_view->renderError(
                 "Snippet lookup criteria missing. Specify --id <id>, --title <title>, or provide "
-                "an "
-                "identifier as an argument.");
+                "an identifier as an argument.");
             return 1;
         }
 

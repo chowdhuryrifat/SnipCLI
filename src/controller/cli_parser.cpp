@@ -71,6 +71,9 @@ ParsedArgs CliParser::parse(const std::vector<std::string>& tokens) {
                 std::string key = body.substr(0, eqPos);
                 std::string val = body.substr(eqPos + 1);
                 result.options[key] = val;
+            } else if (body == "code-only" || body == "help" || body == "version") {
+                // Known standalone boolean flags never consume the next positional argument
+                result.flags.push_back(arg);
             } else if (i + 1 < tokens.size() &&
                        (tokens[i + 1].empty() || tokens[i + 1][0] != '-')) {
                 // Syntax: --key value

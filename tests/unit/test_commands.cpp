@@ -966,5 +966,92 @@ void runCommandTests() {
         assertTrue(repo->count() == 1, "Repository count must remain 1");
     }
 
-    std::cout << "[PASS] GoF Command Wiring tests passed. (29/29 Scenarios Verified)" << std::endl;
+    // ---------------------------------------------------------
+    // Scenario 30: DeleteCommand - Exactly One Selector Form Enforced & State Protected (Review P1)
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        repo->addDirect({1, "Binary", "cpp", "int a = 1;", {}, "", ""});
+        assertTrue(repo->exists("Binary"), "Snippet 'Binary' exists in repository");
+
+        // 1. snip delete --id 1 Binary: positional with --id rejected
+        auto argsIdPos = snipcli::controller::CliParser::parse({"delete", "--id", "1", "Binary"});
+        snipcli::controller::commands::DeleteCommand cmdIdPos(argsIdPos, repo, view);
+        int codeIdPos = cmdIdPos.execute();
+        assertTrue(codeIdPos != 0, "delete --id 1 Binary must fail");
+        assertTrue(
+            view->errors.back().find("Unexpected positional argument(s)") != std::string::npos,
+            "Error must report unexpected positional argument with --id");
+        assertTrue(repo->exists("Binary"),
+                   "Snippet 'Binary' must remain untouched after --id with positional");
+
+        // 2. snip delete --title Binary Extra: positional with --title rejected
+        auto argsTitlePos =
+            snipcli::controller::CliParser::parse({"delete", "--title", "Binary", "Extra"});
+        snipcli::controller::commands::DeleteCommand cmdTitlePos(argsTitlePos, repo, view);
+        int codeTitlePos = cmdTitlePos.execute();
+        assertTrue(codeTitlePos != 0, "delete --title Binary Extra must fail");
+        assertTrue(
+            view->errors.back().find("Unexpected positional argument(s)") != std::string::npos,
+            "Error must report unexpected positional argument with --title");
+        assertTrue(repo->exists("Binary"),
+                   "Snippet 'Binary' must remain untouched after --title with positional");
+
+        // 3. snip delete --id 1 --title Binary: conflicting selector options rejected
+        auto argsConflict =
+            snipcli::controller::CliParser::parse({"delete", "--id", "1", "--title", "Binary"});
+        snipcli::controller::commands::DeleteCommand cmdConflict(argsConflict, repo, view);
+        int codeConflict = cmdConflict.execute();
+        assertTrue(codeConflict != 0, "delete --id 1 --title Binary must fail");
+        assertTrue(view->errors.back().find("Conflicting selector options") != std::string::npos,
+                   "Error must report conflicting selector options");
+        assertTrue(repo->exists("Binary"),
+                   "Snippet 'Binary' must remain untouched after conflicting selectors");
+
+        assertTrue(repo->count() == 1, "Repository count must strictly remain 1");
+    }
+
+    // ---------------------------------------------------------
+    // Scenario 31: GetCommand - Exactly One Selector Form Enforced
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        repo->addDirect({1, "Binary", "cpp", "int a = 1;", {}, "", ""});
+
+        // 1. snip get --id 1 Binary
+        auto argsIdPos = snipcli::controller::CliParser::parse({"get", "--id", "1", "Binary"});
+        snipcli::controller::commands::GetCommand cmdIdPos(argsIdPos, repo, view);
+        int codeIdPos = cmdIdPos.execute();
+        assertTrue(codeIdPos != 0, "get --id 1 Binary must fail");
+        assertTrue(
+            view->errors.back().find("Unexpected positional argument(s)") != std::string::npos,
+            "Error must report unexpected positional argument with --id");
+
+        // 2. snip get --title Binary Extra
+        auto argsTitlePos =
+            snipcli::controller::CliParser::parse({"get", "--title", "Binary", "Extra"});
+        snipcli::controller::commands::GetCommand cmdTitlePos(argsTitlePos, repo, view);
+        int codeTitlePos = cmdTitlePos.execute();
+        assertTrue(codeTitlePos != 0, "get --title Binary Extra must fail");
+        assertTrue(
+            view->errors.back().find("Unexpected positional argument(s)") != std::string::npos,
+            "Error must report unexpected positional argument with --title");
+
+        // 3. snip get --id 1 --title Binary
+        auto argsConflict =
+            snipcli::controller::CliParser::parse({"get", "--id", "1", "--title", "Binary"});
+        snipcli::controller::commands::GetCommand cmdConflict(argsConflict, repo, view);
+        int codeConflict = cmdConflict.execute();
+        assertTrue(codeConflict != 0, "get --id 1 --title Binary must fail");
+        assertTrue(view->errors.back().find("Conflicting selector options") != std::string::npos,
+                   "Error must report conflicting selector options");
+
+        assertTrue(view->renderedSnippets.empty(), "No snippet must be rendered on selector error");
+    }
+
+    std::cout << "[PASS] GoF Command Wiring tests passed. (31/31 Scenarios Verified)" << std::endl;
 }

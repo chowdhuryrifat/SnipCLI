@@ -75,7 +75,7 @@ cmake --build build --parallel
 
 ### 3. Verify Build & Run Test Suite
 ```bash
-# Run CTest Unit Tests (All 7 Suites - 98+ Scenarios & Invariants)
+# Run CTest Unit Tests (All 7 Suites - 114 Scenarios & Invariants)
 ctest --test-dir build --output-on-failure
 
 # Run Automated End-to-End Smoke & Integration Tests
@@ -225,7 +225,7 @@ Export your snippet library directly to GitHub-Flavored Markdown for homework re
 - `--version, -v`: Display application name and semantic version.
 - `--format <terminal|markdown>`: Globally override presentation engine format.
 
-> **Note on CLI Options & Aliases:** Single-dash value aliases (such as `-t`, `-l`, `-f`) are deliberately deferred to prevent option collisions with boolean flags like `-c` (`--code-only`). Supported short switches are dedicated boolean flags (`-h`, `-v`, `-c`). Full option names (`--title`, `--lang`, `--code`, `--file`, `--id`, `--tags`, `--format`) should be used for value parameters.
+> **Note on CLI Options & Aliases:** Single-dash value aliases (`-t`, `-l`, `-f`, and `-c` in `add`) are supported and strictly mapped to their corresponding long options (`--title`, `--lang`, `--file`, `--code`). In `get`, `-c` functions as the pipe-native `--code-only` boolean flag. Global options (`--format`, `--help`, `--version`) may precede or follow the command verb. Valueless options and unquoted multi-word arguments are defensively rejected with explicit diagnostic errors. Standard end-of-options delimiter (`--`) is fully supported.
 
 ## 🏗️ System Architecture & MVC Blueprint
 
@@ -281,27 +281,28 @@ flowchart TD
 SnipCLI enforces rigorous multi-layered quality gates across every commit and Pull Request:
 
 ### 1. Multi-Suite Unit Testing (CTest)
-A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 99 domain invariants and behavioral scenarios:
+A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 114 domain invariants and behavioral scenarios:
 - **`Snippet` (10 Invariants):** Immutability, line counting, tag normalization, ISO 8601 timestamps.
 - **`SnippetValidator` (12 Invariants):** Defense against empty titles, illegal characters, empty languages, and missing payloads.
-- **`JsonSnippetRepository` (13 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, and atomic file replacement.
+- **`JsonSnippetRepository` (19 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, atomic file replacement, and multi-line CRLF preservation.
 - **`Strategy Pattern` (10 Scenarios):** Case-insensitive title substring, exact tag matching, and language filtering.
-- **`CliParser` & `CommandDispatcher` (12 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, spaced negative values, unknown verbs.
-- **`Command Wiring` (25 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution, including strict ID parsing and storage exception quarantine.
-- **`View Engine & Factory` (17 Scenarios):** Stream-injected verification of `TerminalView`, `MarkdownView`, and `ViewFactory`.
+- **`CliParser` & `CommandDispatcher` (18 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, spaced negative values, valueless option schema validation, global options before verb, and `--` delimiter.
+- **`Command Wiring` (26 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution, including strict ID parsing, multi-word argument defense, and storage exception quarantine.
+- **`View Engine & Factory` (19 Scenarios):** Stream-injected verification of `TerminalView`, `MarkdownView`, `ViewFactory`, byte-exact `renderRaw`, and `NO_COLOR` color suppression.
 
 ### 2. Automated End-to-End Smoke & Integration Suite
 The bash test suite (`tests/smoke/smoke_test.sh`) verifies the final binary end-to-end:
 - Full CLI verb lifecycle (`add`, `list`, `get`, `search`, `stats`, `delete`).
 - Dual presentation engines (ANSI terminal formatting vs GitHub-Flavored Markdown).
 - Pipe-native extraction (`--code-only`) ensuring zero extraneous metadata leaks into shell pipes.
-- Error quarantine: cleanly exits with non-zero exit codes upon duplicate titles, invalid verbs, or missing IDs.
+- Error quarantine: cleanly exits with non-zero exit codes upon duplicate titles, invalid verbs, missing IDs, or unquoted multi-word positionals.
 - Cross-platform path normalization (`cygpath`) for seamless execution across Linux, macOS, and Windows Git Bash.
 
 ### 3. GitHub Actions CI/CD Matrix
 Every pull request targeting `main` or `dev` triggers the automated CI/CD pipeline:
 - **Code Quality & Static Analysis:** Clang-Format 18 check (`git diff --exit-code`) and Cppcheck static analysis (`--enable=warning,performance,portability --error-exitcode=1`).
-- **Build & Test Matrix:** Parallel compilation and CTest execution across `ubuntu-latest` (GCC) and `windows-latest` (MSVC).
+- **Build & Test Matrix:** Parallel compilation, CTest execution, and smoke testing across `ubuntu-latest` (GCC), `ubuntu-latest` (GCC-Sanitizers with ASan + UBSan), and `windows-latest` (MSVC).
+- **Adversarial Audit Reproduction:** Reproduction script (`scripts/snipcli_audit_repro.sh`) validating adversarial edge cases (B1–B8).
 - **Automated Artifact Packaging:** Production binaries are automatically archived and published as CI build artifacts.
 
 ---

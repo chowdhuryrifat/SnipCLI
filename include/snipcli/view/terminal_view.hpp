@@ -47,6 +47,12 @@ public:
     void renderMessage(const std::string& message) override;
 
     /**
+     * @brief Renders raw unformatted content directly to output stream without trailing newline.
+     * @param content Raw string content to output.
+     */
+    void renderRaw(const std::string& content) override;
+
+    /**
      * @brief Renders a positive confirmation message prefixed with a green checkmark indicator.
      * @param message Text content describing the successful operation.
      */

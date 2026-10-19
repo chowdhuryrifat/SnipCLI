@@ -114,6 +114,8 @@ public:
         renderedLists.push_back(snippets);
     }
 
+    void renderRaw(const std::string& content) override { messages.push_back(content); }
+
     void renderMessage(const std::string& message) override { messages.push_back(message); }
 
     void renderSuccess(const std::string& message) override { successes.push_back(message); }
@@ -794,5 +796,68 @@ void runCommandTests() {
         repo->throwOnGetById = false;
     }
 
-    std::cout << "[PASS] GoF Command Wiring tests passed. (25/25 Scenarios Verified)" << std::endl;
+    // ---------------------------------------------------------
+    // Scenario 26: Unquoted Multi-Word CLI Arguments & Positionals (Finding B1)
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        repo->addDirect({1, "Binary", "cpp", "int a = 1;", {}, "", ""});
+        repo->addDirect({2, "Search", "cpp", "int b = 2;", {}, "", ""});
+        repo->addDirect({3, "Binary Search", "cpp", "int c = 3;", {}, "", ""});
+
+        // 1. Delete with multi-word positional: snip delete Binary Search
+        auto argsMultiDelete =
+            snipcli::controller::CliParser::parse({"delete", "Binary", "Search"});
+        snipcli::controller::commands::DeleteCommand cmdMultiDel(argsMultiDelete, repo, view);
+        int codeMultiDel = cmdMultiDel.execute();
+        assertTrue(codeMultiDel != 0, "DeleteCommand with multi-word positionals must fail");
+        assertTrue(repo->count() == 3,
+                   "No snippets must be deleted on multi-word positional delete error");
+        assertTrue(
+            repo->exists("Binary") && repo->exists("Search") && repo->exists("Binary Search"),
+            "All snippets must remain untouched");
+        assertTrue(!view->errors.empty(), "Error message must be rendered");
+        assertTrue(view->errors.back().find("Unexpected extra argument(s)") != std::string::npos,
+                   "Error must advise enclosing multi-word titles in quotes");
+
+        // 2. Delete with multiple numeric positionals: snip delete 1 2
+        auto argsMultiNumDel = snipcli::controller::CliParser::parse({"delete", "1", "2"});
+        snipcli::controller::commands::DeleteCommand cmdMultiNumDel(argsMultiNumDel, repo, view);
+        int codeMultiNumDel = cmdMultiNumDel.execute();
+        assertTrue(codeMultiNumDel != 0,
+                   "DeleteCommand with multiple numeric positionals must fail");
+        assertTrue(repo->count() == 3, "No snippets deleted on multiple numeric positionals");
+
+        // 3. Get with multi-word positional: snip get Binary Search
+        auto argsMultiGet = snipcli::controller::CliParser::parse({"get", "Binary", "Search"});
+        snipcli::controller::commands::GetCommand cmdMultiGet(argsMultiGet, repo, view);
+        int codeMultiGet = cmdMultiGet.execute();
+        assertTrue(codeMultiGet != 0, "GetCommand with multi-word positionals must fail");
+        assertTrue(view->renderedSnippets.empty(),
+                   "No snippet must be rendered on multi-word get error");
+        assertTrue(view->errors.back().find("Unexpected extra argument(s)") != std::string::npos,
+                   "Error must advise enclosing multi-word titles in quotes");
+
+        // 4. Get with multiple numeric positionals: snip get 1 2
+        auto argsMultiNumGet = snipcli::controller::CliParser::parse({"get", "1", "2"});
+        snipcli::controller::commands::GetCommand cmdMultiNumGet(argsMultiNumGet, repo, view);
+        int codeMultiNumGet = cmdMultiNumGet.execute();
+        assertTrue(codeMultiNumGet != 0, "GetCommand with multiple numeric positionals must fail");
+        assertTrue(view->renderedSnippets.empty(), "No snippet must be rendered");
+
+        // 5. Quoted multi-word positional succeeds: snip delete "Binary Search"
+        auto argsQuoted = snipcli::controller::CliParser::parse({"delete", "Binary Search"});
+        snipcli::controller::commands::DeleteCommand cmdQuoted(argsQuoted, repo, view);
+        int codeQuoted = cmdQuoted.execute();
+        assertTrue(codeQuoted == 0,
+                   "DeleteCommand with properly quoted multi-word title must succeed");
+        assertTrue(repo->count() == 2, "Only 'Binary Search' must be deleted");
+        assertTrue(!repo->exists("Binary Search"), "Snippet 'Binary Search' must be removed");
+        assertTrue(repo->exists("Binary") && repo->exists("Search"),
+                   "'Binary' and 'Search' remain");
+    }
+
+    std::cout << "[PASS] GoF Command Wiring tests passed. (26/26 Scenarios Verified)" << std::endl;
 }

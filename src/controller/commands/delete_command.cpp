@@ -56,6 +56,13 @@ std::string DeleteCommand::getDescription() const {
 
 int DeleteCommand::execute() {
     try {
+        if (m_args.positionals.size() > 1) {
+            m_view->renderError(
+                "Unexpected extra argument(s). For multi-word snippet titles, please enclose in "
+                "quotes (e.g., 'Binary Search').");
+            return 1;
+        }
+
         bool deleted = false;
         std::string identifier;
 

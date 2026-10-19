@@ -225,7 +225,7 @@ Export your snippet library directly to GitHub-Flavored Markdown for homework re
 - `--version, -v`: Display application name and semantic version.
 - `--format <terminal|markdown>`: Globally override presentation engine format.
 
-> **Note on CLI Options & Aliases:** Single-dash value aliases (`-t`, `-l`, `-f`, and `-c` in `add`) are supported and strictly mapped to their corresponding long options (`--title`, `--lang`, `--file`, `--code`). In `get`, `-c` functions as the pipe-native `--code-only` boolean flag. Global options (`--format`, `--help`, `--version`) may precede or follow the command verb. Valueless options and unquoted multi-word arguments are defensively rejected with explicit diagnostic errors. Standard end-of-options delimiter (`--`) is fully supported.
+> **Note on CLI Options & Aliases:** Single-dash value aliases (`-t`, `-l`, `-f`, and `-c` in `add`) are supported and strictly mapped to their corresponding long options (`--title`, `--lang`, `--file`, `--code`). In `get`, `-c` functions as the pipe-native `--code-only` boolean flag. Global options (`--format`, `--help`, `--version`) may precede or follow the command verb. Options are strictly validated per command schema to guarantee unknown or unsupported options are rejected prior to execution. Valueless options and unquoted multi-word arguments are defensively rejected with explicit diagnostic errors. Standard end-of-options delimiter (`--`) is fully supported.
 
 ## 🏗️ System Architecture & MVC Blueprint
 
@@ -281,28 +281,28 @@ flowchart TD
 SnipCLI enforces rigorous multi-layered quality gates across every commit and Pull Request:
 
 ### 1. Multi-Suite Unit Testing (CTest)
-A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 119 domain invariants and behavioral scenarios:
+A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 126 domain invariants and behavioral scenarios:
 - **`Snippet` (10 Invariants):** Immutability, line counting, tag normalization, ISO 8601 timestamps.
 - **`SnippetValidator` (12 Invariants):** Defense against empty titles, illegal characters, empty languages, and missing payloads.
 - **`JsonSnippetRepository` (19 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, atomic file replacement, and multi-line CRLF preservation.
 - **`Strategy Pattern` (10 Scenarios):** Case-insensitive title substring, exact tag matching, and language filtering.
-- **`CliParser` & `CommandDispatcher` (21 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, spaced negative values, valueless option schema validation, global options before verb, `--` delimiter, and strict unknown option rejection.
-- **`Command Wiring` (28 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution, including strict ID parsing, multi-word argument defense, add-command positional quarantine, unknown option state protection, and storage exception quarantine.
-- **`View Engine & Factory` (19 Scenarios):** Stream-injected verification of `TerminalView`, `MarkdownView`, `ViewFactory`, byte-exact `renderRaw`, and `NO_COLOR` color suppression.
+- **`CliParser` & `CommandDispatcher` (26 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, spaced negative values, valueless option schema validation, global options before verb, `--` delimiter, strict unknown option rejection, and command-specific option schema enforcement.
+- **`Command Wiring` (29 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution, including strict ID parsing, multi-word argument defense, add-command positional quarantine, unknown option state protection, command-specific option rejection state protection, and storage exception quarantine.
+- **`View Engine & Factory` (20 Scenarios):** Stream-injected verification of `TerminalView`, `MarkdownView`, `ViewFactory`, byte-exact `renderRaw`, cross-platform CRLF/LF stream identity, and `NO_COLOR` color suppression.
 
 ### 2. Automated End-to-End Smoke & Integration Suite
 The bash test suite (`tests/smoke/smoke_test.sh`) verifies the final binary end-to-end:
 - Full CLI verb lifecycle (`add`, `list`, `get`, `search`, `stats`, `delete`).
 - Dual presentation engines (ANSI terminal formatting vs GitHub-Flavored Markdown).
 - Pipe-native extraction (`--code-only`) ensuring zero extraneous metadata leaks into shell pipes.
-- Error quarantine: cleanly exits with non-zero exit codes upon duplicate titles, invalid verbs, missing IDs, or unquoted multi-word positionals.
+- Error quarantine: cleanly exits with non-zero exit codes upon duplicate titles, invalid verbs, missing IDs, unquoted multi-word positionals, or unsupported command options.
 - Cross-platform path normalization (`cygpath`) for seamless execution across Linux, macOS, and Windows Git Bash.
 
 ### 3. GitHub Actions CI/CD Matrix
 Every pull request targeting `main` or `dev` triggers the automated CI/CD pipeline:
 - **Code Quality & Static Analysis:** Clang-Format 18 check (`git diff --exit-code`) and Cppcheck static analysis (`--enable=warning,performance,portability --error-exitcode=1`).
-- **Build & Test Matrix:** Parallel compilation, CTest execution, and smoke testing across `ubuntu-latest` (GCC), `ubuntu-latest` (GCC-Sanitizers with ASan + UBSan), and `windows-latest` (MSVC).
-- **Adversarial Audit Reproduction:** Reproduction script (`scripts/snipcli_audit_repro.sh`) validating adversarial edge cases (B1–B8).
+- **Build & Test Matrix:** Parallel compilation, CTest execution, and automated smoke & adversarial test suites across `ubuntu-latest` (GCC), `ubuntu-latest` (GCC-Sanitizers with ASan + UBSan), and `windows-latest` (MSVC).
+- **Adversarial Audit Reproduction:** Reproduction script (`scripts/snipcli_audit_repro.sh`) validating adversarial edge cases (B1–B8) and cross-platform CRLF/LF byte-exact roundtrips across all operating systems.
 - **Automated Artifact Packaging:** Production binaries are automatically archived and published as CI build artifacts.
 
 ---

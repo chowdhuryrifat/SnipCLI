@@ -427,7 +427,29 @@ void runViewTests() {
 #endif
     }
 
-    std::cout << "[PASS] Multi-Format Presentation & Factory tests passed. (19/19 Scenarios "
+    // ---------------------------------------------------------
+    // Test 20: Cross-Platform CRLF and LF Stream Byte Identity (Finding B7)
+    // ---------------------------------------------------------
+    {
+        std::string crlfData = "line1\r\nline2\r\n";
+        std::string lfData = "line1\nline2\n";
+
+        std::ostringstream outCrlf;
+        std::ostringstream errCrlf;
+        snipcli::view::TerminalView viewCrlf(outCrlf, errCrlf, false);
+        viewCrlf.renderRaw(crlfData);
+        assertTrue(outCrlf.str() == crlfData,
+                   "renderRaw must preserve exact CRLF bytes without alteration");
+
+        std::ostringstream outLf;
+        std::ostringstream errLf;
+        snipcli::view::TerminalView viewLf(outLf, errLf, false);
+        viewLf.renderRaw(lfData);
+        assertTrue(outLf.str() == lfData,
+                   "renderRaw must preserve exact LF bytes without alteration");
+    }
+
+    std::cout << "[PASS] Multi-Format Presentation & Factory tests passed. (20/20 Scenarios "
                  "Verified)"
               << std::endl;
 }

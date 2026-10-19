@@ -919,5 +919,52 @@ void runCommandTests() {
         assertTrue(repo->count() == 1, "Repository count must remain 1");
     }
 
-    std::cout << "[PASS] GoF Command Wiring tests passed. (28/28 Scenarios Verified)" << std::endl;
+    // ---------------------------------------------------------
+    // Scenario 29: End-to-End Regression - Command-Specific Option Rejection Protects State (Review
+    // P1)
+    // ---------------------------------------------------------
+    {
+        auto repo = std::make_shared<MockRepository>();
+        auto view = std::make_shared<MockView>();
+
+        repo->addDirect({1, "Binary", "cpp", "int a = 1;", {}, "", ""});
+        assertTrue(repo->exists("Binary"), "Snippet 'Binary' exists in repository");
+
+        // snip delete --code unused Binary: option '--code' is valid for 'add' but invalid for
+        // 'delete'
+        bool threwException = false;
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"delete", "--code", "unused", "Binary"}));
+        } catch (const snipcli::common::CommandException& ex) {
+            threwException = true;
+            std::string msg = ex.what();
+            assertTrue(msg.find("Option '--code' is not supported by command 'delete'") !=
+                           std::string::npos,
+                       "Error message must specify option is not supported by command");
+        }
+        assertTrue(threwException,
+                   "Parser must throw CommandException on command-unsupported option");
+
+        // Also test short switch variant: snip delete -c unused Binary
+        threwException = false;
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"delete", "-c", "unused", "Binary"}));
+        } catch (const snipcli::common::CommandException& ex) {
+            threwException = true;
+            std::string msg = ex.what();
+            assertTrue(
+                msg.find("Option '-c' is not supported by command 'delete'") != std::string::npos,
+                "Error message must specify short switch is not supported by command");
+        }
+        assertTrue(threwException,
+                   "Parser must throw CommandException on command-unsupported short switch");
+
+        // Verify snippet 'Binary' was NOT deleted and remains completely untouched
+        assertTrue(repo->exists("Binary"), "Snippet 'Binary' must remain untouched in repository");
+        assertTrue(repo->count() == 1, "Repository count must remain 1");
+    }
+
+    std::cout << "[PASS] GoF Command Wiring tests passed. (29/29 Scenarios Verified)" << std::endl;
 }

@@ -348,6 +348,20 @@ pass "Byte-exact file roundtrip verified across both CRLF and LF formats"
 $BIN delete --title "CrlfSnippet" > /dev/null
 $BIN delete --title "LfSnippet" > /dev/null
 
+# 10k: Command-specific option rejection protects state: snip delete --code unused Binary Search
+if $BIN delete --code unused "Binary Search" > /dev/null 2>&1; then
+    fail "Command-unsupported option '--code' in delete was accepted unexpectedly"
+fi
+$BIN get --title "Binary Search" > /dev/null || fail "Snippet 'Binary Search' was deleted by 'delete --code'!"
+pass "Command-specific option rejection: delete --code cleanly rejected, state protected"
+
+# 10l: Unsupported short switch rejection protects state: snip delete -c unused Binary Search
+if $BIN delete -c unused "Binary Search" > /dev/null 2>&1; then
+    fail "Command-unsupported short switch '-c' in delete was accepted unexpectedly"
+fi
+$BIN get --title "Binary Search" > /dev/null || fail "Snippet 'Binary Search' was deleted by 'delete -c'!"
+pass "Command-specific short switch rejection: delete -c cleanly rejected, state protected"
+
 # Clean up temporary test snippets
 $BIN delete --title "Binary Search" > /dev/null || fail "Failed to delete 'Binary Search'"
 $BIN delete --title "DashCode" > /dev/null || fail "Failed to delete 'DashCode'"

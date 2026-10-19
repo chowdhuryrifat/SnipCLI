@@ -393,6 +393,86 @@ void runParserTests() {
         }
     }
 
-    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (21/21 Invariants Verified)"
+    // Test 22: Command-specific long option rejection (Review P1)
+    {
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"delete", "--code", "unused", "Binary"}));
+            std::cerr << "[FAIL] delete with unsupported --code did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--code' is not supported by command 'delete'") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 23: Unsupported option for add command (Review P1)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"add", "--id", "5"}));
+            std::cerr << "[FAIL] add with unsupported --id did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--id' is not supported by command 'add'") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 24: Unsupported option for stats command (Review P1)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"stats", "--title", "Foo"}));
+            std::cerr << "[FAIL] stats with unsupported --title did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--title' is not supported by command 'stats'") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 25: Unsupported short option by command (Review P1)
+    {
+        try {
+            static_cast<void>(
+                snipcli::controller::CliParser::parse({"delete", "-c", "unused", "Binary"}));
+            std::cerr << "[FAIL] delete with unsupported -c did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '-c' is not supported by command 'delete'") == std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 26: Unsupported option without a command (Review P1)
+    {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"--code", "foo"}));
+            std::cerr << "[FAIL] --code without command did not throw!" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            std::string msg = ex.what();
+            if (msg.find("Option '--code' is not supported without a command") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected error message: " << msg << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (26/26 Invariants Verified)"
               << std::endl;
 }

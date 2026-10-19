@@ -62,6 +62,16 @@ bool isOptionSupportedByCommand(std::string_view optName, std::string_view verb)
     return false;
 }
 
+bool isBooleanFlag(std::string_view name, std::string_view verb) {
+    if (name == "help" || name == "h" || name == "version" || name == "v" || name == "code-only") {
+        return true;
+    }
+    if (name == "c" && verb == "get") {
+        return true;
+    }
+    return false;
+}
+
 bool isValueOption(std::string_view opt, std::string_view verb) {
     if (opt == "id" || opt == "title" || opt == "format" || opt == "code" || opt == "file" ||
         opt == "lang" || opt == "language" || opt == "tag" || opt == "tags" || opt == "t" ||
@@ -229,6 +239,10 @@ ParsedArgs CliParser::parse(const std::vector<std::string>& tokens) {
                 if (!isKnownLongOptionOrFlag(key)) {
                     throw common::CommandException("Unknown option '--" + key + "'.");
                 }
+                if (isBooleanFlag(key, verb)) {
+                    throw common::CommandException(
+                        "Option '--" + key + "' is a boolean flag and does not accept a value.");
+                }
                 if (!isOptionSupportedByCommand(key, verb)) {
                     if (verb.empty()) {
                         throw common::CommandException("Option '--" + key +
@@ -281,6 +295,10 @@ ParsedArgs CliParser::parse(const std::vector<std::string>& tokens) {
                 std::string val = arg.substr(eqPos + 1);
                 if (!isKnownShortSwitch(key)) {
                     throw common::CommandException("Unknown option '-" + key + "'.");
+                }
+                if (isBooleanFlag(key, verb)) {
+                    throw common::CommandException(
+                        "Option '-" + key + "' is a boolean flag and does not accept a value.");
                 }
                 if (!isOptionSupportedByCommand(key, verb)) {
                     if (verb.empty()) {

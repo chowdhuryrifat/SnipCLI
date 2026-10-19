@@ -250,7 +250,27 @@ fi
 if $BIN get --id 1 --title "Binary" > /dev/null 2>&1; then
     fail "Peer Review Regression: 'snip get --id 1 --title Binary' should have failed but succeeded!"
 fi
-pass "Peer Review Regressions: Unknown options, command schema, selector exclusivity, and missing command verified"
+
+# 10. Reject boolean flags with equals syntax
+if $BIN get --code-only=true 1 > /dev/null 2>&1; then
+    fail "Peer Review Regression: 'snip get --code-only=true 1' should have failed but succeeded!"
+fi
+if $BIN list --help=false > /dev/null 2>&1; then
+    fail "Peer Review Regression: 'snip list --help=false' should have failed but succeeded!"
+fi
+if $BIN list --version=false > /dev/null 2>&1; then
+    fail "Peer Review Regression: 'snip list --version=false' should have failed but succeeded!"
+fi
+if $BIN list -h=true > /dev/null 2>&1; then
+    fail "Peer Review Regression: 'snip list -h=true' should have failed but succeeded!"
+fi
+if $BIN list -v=true > /dev/null 2>&1; then
+    fail "Peer Review Regression: 'snip list -v=true' should have failed but succeeded!"
+fi
+if $BIN get -c=true 1 > /dev/null 2>&1; then
+    fail "Peer Review Regression: 'snip get -c=true 1' should have failed but succeeded!"
+fi
+pass "Peer Review Regressions: Unknown options, command schema, selector exclusivity, boolean equals rejection, and missing command verified"
 
 # ------------------------------------------------------------------------------
 # Summary

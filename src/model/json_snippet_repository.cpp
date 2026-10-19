@@ -1,7 +1,9 @@
 #include "snipcli/model/json_snippet_repository.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
+#include <charconv>
 #include <chrono>
 #include <cstdlib>
 #include <ctime>
@@ -9,6 +11,16 @@
 #include <iomanip>
 #include <sstream>
 #include <unordered_map>
+
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 #include "snipcli/common/exceptions.hpp"
 
@@ -77,6 +89,39 @@ bool isEscaped(const std::string& str, size_t pos) {
     return (backslashes % 2) != 0;
 }
 
+bool hex4(const std::string& s, size_t at, unsigned& out) {
+    if (at + 4 > s.size()) {
+        return false;
+    }
+    out = 0;
+    for (size_t k = 0; k < 4; ++k) {
+        unsigned char h = static_cast<unsigned char>(s[at + k]);
+        if (!std::isxdigit(h)) {
+            return false;
+        }
+        out = out * 16 + (h <= '9' ? h - '0' : (std::tolower(h) - 'a' + 10));
+    }
+    return true;
+}
+
+void appendUtf8(std::string& out, unsigned cp) {
+    if (cp < 0x80) {
+        out += static_cast<char>(cp);
+    } else if (cp < 0x800) {
+        out += static_cast<char>(0xC0 | (cp >> 6));
+        out += static_cast<char>(0x80 | (cp & 0x3F));
+    } else if (cp < 0x10000) {
+        out += static_cast<char>(0xE0 | (cp >> 12));
+        out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        out += static_cast<char>(0x80 | (cp & 0x3F));
+    } else {
+        out += static_cast<char>(0xF0 | (cp >> 18));
+        out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+        out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        out += static_cast<char>(0x80 | (cp & 0x3F));
+    }
+}
+
 std::string unescapeJson(const std::string& input) {
     std::string out;
     out.reserve(input.size());
@@ -108,24 +153,40 @@ std::string unescapeJson(const std::string& input) {
                 case 't':
                     out += '\t';
                     break;
-                case 'u':
-                    if (i + 4 < input.size()) {
-                        std::string hexStr = input.substr(i + 1, 4);
-                        try {
-                            unsigned long codePoint = std::stoul(hexStr, nullptr, 16);
-                            if (codePoint < 128) {
-                                out += static_cast<char>(codePoint);
-                                i += 4;
-                                break;
-                            }
-                        } catch (...) {
-                        }
+                case 'u': {
+                    unsigned cp = 0;
+                    if (!hex4(input, i + 1, cp)) {
+                        throw common::StorageException(
+                            "Invalid hexadecimal sequence in \\u escape.");
                     }
-                    out += next;
+                    i += 4;
+                    if (cp >= 0xD800 && cp <= 0xDBFF) {
+                        if (i + 6 < input.size() && input[i + 1] == '\\' && input[i + 2] == 'u') {
+                            unsigned lo = 0;
+                            if (hex4(input, i + 3, lo) && lo >= 0xDC00 && lo <= 0xDFFF) {
+                                cp = 0x10000 + ((cp - 0xD800) << 10) + (lo - 0xDC00);
+                                i += 6;
+                            } else {
+                                throw common::StorageException(
+                                    "High surrogate \\u without matching low surrogate.");
+                            }
+                        } else {
+                            throw common::StorageException(
+                                "Isolated high surrogate in Unicode escape.");
+                        }
+                    } else if (cp >= 0xDC00 && cp <= 0xDFFF) {
+                        throw common::StorageException("Isolated low surrogate in Unicode escape.");
+                    }
+                    if (cp > 0x10FFFF) {
+                        throw common::StorageException(
+                            "Unicode code point exceeds 0x10FFFF maximum.");
+                    }
+                    appendUtf8(out, cp);
                     break;
+                }
                 default:
-                    out += next;
-                    break;
+                    throw common::StorageException(std::string("Invalid escape sequence '\\") +
+                                                   next + "' in JSON string.");
             }
         } else {
             out += input[i];
@@ -192,18 +253,41 @@ std::unordered_map<std::string, std::string> parseJsonObject(const std::string& 
         } else if (objStr[idx] == '[') {
             size_t arrStart = idx;
             size_t arrEnd = idx + 1;
+            int bracketDepth = 1;
             bool inStr = false;
-            while (arrEnd < objStr.size()) {
+            while (arrEnd < objStr.size() && bracketDepth > 0) {
                 if (objStr[arrEnd] == '"' && !isEscaped(objStr, arrEnd)) {
                     inStr = !inStr;
-                } else if (!inStr && objStr[arrEnd] == ']') {
-                    arrEnd++;
-                    break;
+                } else if (!inStr) {
+                    if (objStr[arrEnd] == '[') {
+                        bracketDepth++;
+                    } else if (objStr[arrEnd] == ']') {
+                        bracketDepth--;
+                    }
                 }
                 arrEnd++;
             }
             value = objStr.substr(arrStart, arrEnd - arrStart);
             idx = arrEnd;
+        } else if (objStr[idx] == '{') {
+            size_t subStart = idx;
+            size_t subEnd = idx + 1;
+            int braceDepth = 1;
+            bool inStr = false;
+            while (subEnd < objStr.size() && braceDepth > 0) {
+                if (objStr[subEnd] == '"' && !isEscaped(objStr, subEnd)) {
+                    inStr = !inStr;
+                } else if (!inStr) {
+                    if (objStr[subEnd] == '{') {
+                        braceDepth++;
+                    } else if (objStr[subEnd] == '}') {
+                        braceDepth--;
+                    }
+                }
+                subEnd++;
+            }
+            value = objStr.substr(subStart, subEnd - subStart);
+            idx = subEnd;
         } else {
             size_t valStart = idx;
             while (idx < objStr.size() && objStr[idx] != ',' && objStr[idx] != '}' &&
@@ -305,8 +389,22 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
     std::stringstream buffer;
     buffer << file.rdbuf();
     std::string content = buffer.str();
-    if (content.empty()) {
+
+    bool emptyOrWhitespace = true;
+    for (char c : content) {
+        if (!std::isspace(static_cast<unsigned char>(c))) {
+            emptyOrWhitespace = false;
+            break;
+        }
+    }
+    if (emptyOrWhitespace) {
         return {};
+    }
+
+    size_t firstNonWs = content.find_first_not_of(" \t\n\r");
+    if (firstNonWs == std::string::npos || content[firstNonWs] != '[') {
+        throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                       ": expected JSON array starting with '['.");
     }
 
     std::vector<Snippet> snippets;
@@ -326,36 +424,47 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
             }
             end++;
         }
-        if (depth == 0) {
-            std::string objStr = content.substr(pos, end - pos);
-            auto fields = parseJsonObject(objStr);
-
-            std::string idStr = fields["id"];
-            std::string title = fields["title"];
-            std::string language = fields["language"];
-            std::string code = fields["code"];
-            std::string tagsStr = fields["tags"];
-            std::string createdAt = fields["createdAt"];
-            std::string updatedAt = fields["updatedAt"];
-
-            uint64_t id = 0;
-            if (!idStr.empty()) {
-                try {
-                    id = std::stoull(idStr);
-                } catch (...) {
-                    id = 0;
-                }
-            }
-
-            std::vector<std::string> tags = parseJsonArray(tagsStr);
-            if (!title.empty() || id > 0) {
-                snippets.emplace_back(id, std::move(title), std::move(language), std::move(code),
-                                      std::move(tags), std::move(createdAt), std::move(updatedAt));
-            }
-            pos = end;
-        } else {
-            break;
+        if (depth != 0) {
+            throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                           ": truncated or unclosed JSON object.");
         }
+
+        std::string objStr = content.substr(pos, end - pos);
+        auto fields = parseJsonObject(objStr);
+
+        std::string idStr = fields["id"];
+        std::string title = fields["title"];
+        std::string language = fields["language"];
+        std::string code = fields["code"];
+        std::string tagsStr = fields["tags"];
+        std::string createdAt = fields["createdAt"];
+        std::string updatedAt = fields["updatedAt"];
+
+        if (title.empty() || code.empty()) {
+            throw common::StorageException(
+                "Corrupt storage file at " + m_storagePath.string() +
+                ": snippet object missing mandatory 'title' or 'code' field.");
+        }
+
+        uint64_t id = 0;
+        if (!idStr.empty()) {
+            auto [p, ec] = std::from_chars(idStr.data(), idStr.data() + idStr.size(), id);
+            if (ec != std::errc{} || p != idStr.data() + idStr.size()) {
+                throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                               ": invalid numeric ID '" + idStr + "'.");
+            }
+        }
+
+        std::vector<std::string> tags = parseJsonArray(tagsStr);
+        snippets.emplace_back(id, std::move(title), std::move(language), std::move(code),
+                              std::move(tags), std::move(createdAt), std::move(updatedAt));
+        pos = end;
+    }
+
+    size_t lastNonWs = content.find_last_not_of(" \t\n\r");
+    if (lastNonWs == std::string::npos || content[lastNonWs] != ']') {
+        throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                       ": expected JSON array ending with ']'.");
     }
 
     return snippets;
@@ -363,10 +472,20 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
 
 void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) const {
     ensureStorageDirectoryExists();
-    std::ofstream file(m_storagePath, std::ios::trunc);
+
+    static std::atomic<uint64_t> s_fileSeq{0};
+    auto nowTicks = std::chrono::steady_clock::now().time_since_epoch().count();
+    std::filesystem::path parentDir = m_storagePath.has_parent_path()
+                                          ? m_storagePath.parent_path()
+                                          : std::filesystem::current_path();
+    std::filesystem::path tmpPath =
+        parentDir / ("." + m_storagePath.filename().string() + ".tmp." + std::to_string(nowTicks) +
+                     "_" + std::to_string(++s_fileSeq));
+
+    std::ofstream file(tmpPath, std::ios::trunc);
     if (!file.is_open()) {
-        throw common::StorageException("Failed to write to storage file: " +
-                                       m_storagePath.string());
+        throw common::StorageException("Failed to write to temporary storage file: " +
+                                       tmpPath.string());
     }
 
     file << "[\n";
@@ -390,6 +509,38 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
         file << "  }" << (i + 1 < snippets.size() ? "," : "") << "\n";
     }
     file << "]\n";
+
+    file.flush();
+    if (!file.good()) {
+        std::error_code ec;
+        std::filesystem::remove(tmpPath, ec);
+        throw common::StorageException("Stream error during write to temporary file: " +
+                                       tmpPath.string());
+    }
+    file.close();
+
+#if defined(_WIN32)
+    std::wstring wTmp = tmpPath.wstring();
+    std::wstring wDest = m_storagePath.wstring();
+    if (!MoveFileExW(wTmp.c_str(), wDest.c_str(),
+                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DWORD err = GetLastError();
+        std::error_code rmEc;
+        std::filesystem::remove(tmpPath, rmEc);
+        throw common::StorageException(
+            "Failed to atomically replace storage file on Windows (Error " + std::to_string(err) +
+            ")");
+    }
+#else
+    std::error_code ec;
+    std::filesystem::rename(tmpPath, m_storagePath, ec);
+    if (ec) {
+        std::error_code rmEc;
+        std::filesystem::remove(tmpPath, rmEc);
+        throw common::StorageException("Failed to atomically replace storage file: " +
+                                       ec.message());
+    }
+#endif
 }
 
 std::vector<Snippet> JsonSnippetRepository::getAll() const {
@@ -408,8 +559,7 @@ std::optional<Snippet> JsonSnippetRepository::getById(uint64_t id) const {
     return std::nullopt;
 }
 
-std::optional<Snippet> JsonSnippetRepository::getByTitle(const std::string& title) const {
-    std::lock_guard<std::mutex> lock(m_mutex);
+std::optional<Snippet> JsonSnippetRepository::getByTitleUnlocked(const std::string& title) const {
     auto snippets = loadFromFile();
     for (const auto& s : snippets) {
         if (s.getTitle() == title) {
@@ -419,8 +569,14 @@ std::optional<Snippet> JsonSnippetRepository::getByTitle(const std::string& titl
     return std::nullopt;
 }
 
+std::optional<Snippet> JsonSnippetRepository::getByTitle(const std::string& title) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return getByTitleUnlocked(title);
+}
+
 bool JsonSnippetRepository::exists(const std::string& title) const {
-    return getByTitle(title).has_value();
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return getByTitleUnlocked(title).has_value();
 }
 
 size_t JsonSnippetRepository::count() const {
@@ -433,41 +589,53 @@ uint64_t JsonSnippetRepository::save(Snippet& snippet) {
     auto snippets = loadFromFile();
     std::string now = getIsoTimestamp();
 
-    if (snippet.getId() == 0) {
+    Snippet working = snippet;
+
+    // Enforce atomic title uniqueness under m_mutex
+    for (const auto& s : snippets) {
+        if (s.getTitle() == working.getTitle() && s.getId() != working.getId()) {
+            throw common::ValidationException("A snippet with title '" + working.getTitle() +
+                                              "' already exists.");
+        }
+    }
+
+    if (working.getId() == 0) {
         uint64_t maxId = 0;
         for (const auto& s : snippets) {
             if (s.getId() > maxId)
                 maxId = s.getId();
         }
-        snippet.setId(maxId + 1);
-        if (snippet.getCreatedAt().empty()) {
-            snippet.setCreatedAt(now);
+        working.setId(maxId + 1);
+        if (working.getCreatedAt().empty()) {
+            working.setCreatedAt(now);
         }
-        snippet.setUpdatedAt(now);
-        snippets.push_back(snippet);
+        working.setUpdatedAt(now);
+        snippets.push_back(working);
     } else {
         bool found = false;
         for (auto& s : snippets) {
-            if (s.getId() == snippet.getId()) {
-                if (snippet.getCreatedAt().empty()) {
-                    snippet.setCreatedAt(s.getCreatedAt());
+            if (s.getId() == working.getId()) {
+                if (working.getCreatedAt().empty()) {
+                    working.setCreatedAt(s.getCreatedAt());
                 }
-                snippet.setUpdatedAt(now);
-                s = snippet;
+                working.setUpdatedAt(now);
+                s = working;
                 found = true;
                 break;
             }
         }
         if (!found) {
-            if (snippet.getCreatedAt().empty()) {
-                snippet.setCreatedAt(now);
+            if (working.getCreatedAt().empty()) {
+                working.setCreatedAt(now);
             }
-            snippet.setUpdatedAt(now);
-            snippets.push_back(snippet);
+            working.setUpdatedAt(now);
+            snippets.push_back(working);
         }
     }
 
     saveToFile(snippets);
+    // Copy-modify-commit: commit state to caller only after persistence succeeds
+    snippet = std::move(working);
     return snippet.getId();
 }
 

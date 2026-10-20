@@ -22,6 +22,21 @@ std::string SearchCommand::getDescription() const {
 
 int SearchCommand::execute() {
     try {
+        if ((m_args.hasOption("tag") || m_args.hasOption("tags") || m_args.hasOption("lang") ||
+             m_args.hasOption("language") || m_args.hasOption("title")) &&
+            !m_args.positionals.empty()) {
+            m_view->renderError(
+                "Unexpected positional argument(s) when search filter options are provided.");
+            return 1;
+        }
+
+        if (m_args.positionals.size() > 1) {
+            m_view->renderError(
+                "Unexpected extra argument(s). For multi-word queries, please enclose in "
+                "quotes (e.g., 'Binary Search').");
+            return 1;
+        }
+
         std::unique_ptr<model::strategy::ISearchStrategy> strategy;
         std::string criteria;
 

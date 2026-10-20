@@ -22,6 +22,13 @@ std::string ListCommand::getDescription() const {
 
 int ListCommand::execute() {
     try {
+        if (!m_args.getPositionals().empty()) {
+            m_view->renderError(
+                "Unexpected extra argument(s). Command 'list' does not accept positional "
+                "arguments.");
+            return 1;
+        }
+
         auto snippets = m_reader->getAll();
 
         if (m_args.hasOption("tag") || m_args.hasOption("tags")) {

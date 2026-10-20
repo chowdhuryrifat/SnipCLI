@@ -5,9 +5,16 @@
 #include <sstream>
 
 #if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <fcntl.h>
 #include <io.h>
 #include <stdio.h>
+#include <windows.h>
 #else
 #include <unistd.h>
 #endif
@@ -25,20 +32,50 @@ constexpr const char* kAnsiCyan = "\033[36m";
 constexpr const char* kAnsiDim = "\033[2m";
 constexpr const char* kEmpty = "";
 
-bool detectColorSupport(std::ostream& outStream, bool useColors) {
+void setupWindowsConsoleVT() {
+#if defined(_WIN32)
+    SetConsoleOutputCP(CP_UTF8);
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        DWORD mode = 0;
+        if (GetConsoleMode(hOut, &mode)) {
+            SetConsoleMode(hOut, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        }
+    }
+    HANDLE hErr = GetStdHandle(STD_ERROR_HANDLE);
+    if (hErr != INVALID_HANDLE_VALUE) {
+        DWORD mode = 0;
+        if (GetConsoleMode(hErr, &mode)) {
+            SetConsoleMode(hErr, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        }
+    }
+#endif
+}
+
+bool detectStreamColorSupport(std::ostream& stream, bool useColors) {
     if (!useColors) {
         return false;
     }
     if (const char* noColor = std::getenv("NO_COLOR"); noColor != nullptr && noColor[0] != '\0') {
         return false;
     }
-    if (&outStream == &std::cout) {
+    if (&stream == &std::cout) {
 #if defined(_WIN32)
         if (!_isatty(_fileno(stdout))) {
             return false;
         }
 #else
         if (!isatty(fileno(stdout))) {
+            return false;
+        }
+#endif
+    } else if (&stream == &std::cerr) {
+#if defined(_WIN32)
+        if (!_isatty(_fileno(stderr))) {
+            return false;
+        }
+#else
+        if (!isatty(fileno(stderr))) {
             return false;
         }
 #endif
@@ -49,46 +86,66 @@ bool detectColorSupport(std::ostream& outStream, bool useColors) {
 }  // namespace
 
 TerminalView::TerminalView(std::ostream& outStream, std::ostream& errStream, bool useColors)
-    : m_out(outStream), m_err(errStream), m_useColors(detectColorSupport(outStream, useColors)) {}
+    : m_out(outStream),
+      m_err(errStream),
+      m_useOutColors(detectStreamColorSupport(outStream, useColors)),
+      m_useErrColors(detectStreamColorSupport(errStream, useColors)) {
+    if (m_useOutColors || m_useErrColors) {
+        setupWindowsConsoleVT();
+    }
+}
 
 void TerminalView::setColorEnabled(bool enabled) noexcept {
-    m_useColors = enabled;
+    m_useOutColors = enabled;
+    m_useErrColors = enabled;
 }
 
 bool TerminalView::isColorEnabled() const noexcept {
-    return m_useColors;
+    return m_useOutColors;
 }
 
 const char* TerminalView::colorReset() const noexcept {
-    return m_useColors ? kAnsiReset : kEmpty;
+    return m_useOutColors ? kAnsiReset : kEmpty;
 }
 
 const char* TerminalView::colorBold() const noexcept {
-    return m_useColors ? kAnsiBold : kEmpty;
+    return m_useOutColors ? kAnsiBold : kEmpty;
 }
 
 const char* TerminalView::colorRed() const noexcept {
-    return m_useColors ? kAnsiRed : kEmpty;
+    return m_useOutColors ? kAnsiRed : kEmpty;
 }
 
 const char* TerminalView::colorGreen() const noexcept {
-    return m_useColors ? kAnsiGreen : kEmpty;
+    return m_useOutColors ? kAnsiGreen : kEmpty;
 }
 
 const char* TerminalView::colorYellow() const noexcept {
-    return m_useColors ? kAnsiYellow : kEmpty;
+    return m_useOutColors ? kAnsiYellow : kEmpty;
 }
 
 const char* TerminalView::colorBlue() const noexcept {
-    return m_useColors ? kAnsiBlue : kEmpty;
+    return m_useOutColors ? kAnsiBlue : kEmpty;
 }
 
 const char* TerminalView::colorCyan() const noexcept {
-    return m_useColors ? kAnsiCyan : kEmpty;
+    return m_useOutColors ? kAnsiCyan : kEmpty;
 }
 
 const char* TerminalView::colorDim() const noexcept {
-    return m_useColors ? kAnsiDim : kEmpty;
+    return m_useOutColors ? kAnsiDim : kEmpty;
+}
+
+const char* TerminalView::errColorReset() const noexcept {
+    return m_useErrColors ? kAnsiReset : kEmpty;
+}
+
+const char* TerminalView::errColorBold() const noexcept {
+    return m_useErrColors ? kAnsiBold : kEmpty;
+}
+
+const char* TerminalView::errColorRed() const noexcept {
+    return m_useErrColors ? kAnsiRed : kEmpty;
 }
 
 void TerminalView::renderSnippet(const model::Snippet& snippet) {
@@ -179,7 +236,7 @@ void TerminalView::renderSuccess(const std::string& message) {
 }
 
 void TerminalView::renderError(const std::string& message) {
-    m_err << colorBold() << colorRed() << "[✗] Error: " << colorReset() << message << "\n";
+    m_err << errColorBold() << errColorRed() << "[✗] Error: " << errColorReset() << message << "\n";
 }
 
 void TerminalView::renderStats(

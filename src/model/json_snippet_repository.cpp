@@ -939,8 +939,8 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
             guard.path = tmpPath;
         }
         std::wstring wTmp = tmpPath.wstring();
-        hFile = CreateFileW(wTmp.c_str(), GENERIC_WRITE, 0, nullptr,
-                            CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        hFile = CreateFileW(wTmp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                            FILE_ATTRIBUTE_NORMAL, nullptr);
         if (hFile != INVALID_HANDLE_VALUE) {
             break;
         }
@@ -952,8 +952,8 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
     if (hFile == INVALID_HANDLE_VALUE) {
         DWORD err = GetLastError();
         throw common::StorageException(
-            "Failed to exclusively create temporary storage file on Windows: " +
-            tmpPath.string() + " (Error " + std::to_string(err) + ")");
+            "Failed to exclusively create temporary storage file on Windows: " + tmpPath.string() +
+            " (Error " + std::to_string(err) + ")");
     }
     const char* ptr = payload.data();
     size_t remaining = payload.size();
@@ -964,8 +964,8 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
             DWORD err = GetLastError();
             CloseHandle(hFile);
             throw common::StorageException(
-                "Failed to write to temporary storage file on Windows: " +
-                tmpPath.string() + " (Error " + std::to_string(err) + ")");
+                "Failed to write to temporary storage file on Windows: " + tmpPath.string() +
+                " (Error " + std::to_string(err) + ")");
         }
         ptr += written;
         remaining -= written;

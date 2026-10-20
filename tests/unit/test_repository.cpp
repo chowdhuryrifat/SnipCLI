@@ -856,7 +856,8 @@ void runRepositoryTests() {
                    "Duplicate titles (case-insensitive) in hand-edited file must throw "
                    "StorageException");
 
-        // 20d: Storage path alias locking with symlinked parent directory (Review finding on PR #21)
+        // 20d: Storage path alias locking with symlinked parent directory (Review finding on PR
+        // #21)
         std::filesystem::path realParent = testDir / "real_alias_store";
         std::filesystem::path linkParent = testDir / "link_alias_store";
         std::filesystem::create_directories(realParent, ec);

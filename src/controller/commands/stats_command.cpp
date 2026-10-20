@@ -24,6 +24,13 @@ std::string StatsCommand::getDescription() const {
 
 int StatsCommand::execute() {
     try {
+        if (!m_args.getPositionals().empty()) {
+            m_view->renderError(
+                "Unexpected extra argument(s). Command 'stats' does not accept positional "
+                "arguments.");
+            return 1;
+        }
+
         auto snippets = m_reader->getAll();
         size_t totalSnippets = snippets.size();
         size_t totalLines = 0;

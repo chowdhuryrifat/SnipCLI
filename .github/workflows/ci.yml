@@ -17,12 +17,12 @@ jobs:
       - name: Install Clang-Format and Cppcheck
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-format cppcheck
+          sudo apt-get install -y clang-format-18 cppcheck
 
       - name: Run Clang-Format Style Check
         run: |
           echo "Verifying code formatting with clang-format..."
-          find include src tests \( -name '*.hpp' -o -name '*.cpp' \) -exec clang-format -i {} +
+          find include src tests \( -name '*.hpp' -o -name '*.cpp' \) -exec clang-format-18 -i {} +
           git diff --exit-code || (echo "Code formatting violations detected. Please apply clang-format." && exit 1)
 
       - name: Run Cppcheck Static Analysis
@@ -54,6 +54,11 @@ jobs:
             artifact_name: snipcli-linux-sanitizers
             binary_path: build/snip
             cmake_flags: -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
+          - os: ubuntu-latest
+            compiler: GCC-TSan
+            artifact_name: snipcli-linux-tsan
+            binary_path: build/snip
+            cmake_flags: -DCMAKE_CXX_FLAGS="-fsanitize=thread -g"
           - os: windows-latest
             compiler: MSVC
             artifact_name: snipcli-windows-x86_64
@@ -71,6 +76,10 @@ jobs:
       - name: Build Library, CLI, and Test Suite
         run: |
           cmake --build build --config Release --parallel
+
+      - name: Disable TSan ASLR clash on Linux
+        if: runner.os == 'Linux' && contains(matrix.cmake_flags, 'sanitize=thread')
+        run: sudo sysctl vm.mmap_rnd_bits=28 || true
 
       - name: Run CTest Unit Tests
         run: |

@@ -88,7 +88,8 @@ public:
 private:
     std::ostream& m_out;
     std::ostream& m_err;
-    bool m_useColors{true};
+    bool m_useOutColors{true};
+    bool m_useErrColors{true};
 
     // Helper functions returning ANSI sequences if colors enabled, or empty string if disabled
     [[nodiscard]] const char* colorReset() const noexcept;
@@ -99,6 +100,10 @@ private:
     [[nodiscard]] const char* colorBlue() const noexcept;
     [[nodiscard]] const char* colorCyan() const noexcept;
     [[nodiscard]] const char* colorDim() const noexcept;
+
+    [[nodiscard]] const char* errColorReset() const noexcept;
+    [[nodiscard]] const char* errColorBold() const noexcept;
+    [[nodiscard]] const char* errColorRed() const noexcept;
 };
 
 }  // namespace snipcli::view

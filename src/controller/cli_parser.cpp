@@ -10,77 +10,100 @@ namespace snipcli::controller {
 
 namespace {
 
+struct OptionSchema {
+    std::string_view name;
+    bool isShort;
+    bool takesValue;
+    std::string_view allowedVerbs[6];
+};
+
+constexpr OptionSchema kOptionSchemas[] = {
+    // Global options
+    {"help", false, false, {}},
+    {"h", true, false, {}},
+    {"version", false, false, {}},
+    {"v", true, false, {}},
+    {"format", false, true, {}},
+
+    // Add command options
+    {"title", false, true, {"add", "get", "delete", "search"}},
+    {"t", true, true, {"add", "get", "delete", "search"}},
+    {"code", false, true, {"add"}},
+    {"file", false, true, {"add"}},
+    {"f", true, true, {"add"}},
+    {"lang", false, true, {"add", "list", "search"}},
+    {"language", false, true, {"add", "list", "search"}},
+    {"l", true, true, {"add", "list", "search"}},
+    {"tag", false, true, {"add", "list", "search"}},
+    {"tags", false, true, {"add", "list", "search"}},
+
+    // Get & Delete options
+    {"id", false, true, {"get", "delete"}},
+    {"code-only", false, false, {"get"}},
+
+    // Dual-personality switch -c
+    {"c", true, true, {"add"}},  // -c in add is --code (takes value)
+    {"c", true, false, {"get"}}  // -c in get is --code-only (boolean flag)
+};
+
 bool isKnownLongOptionOrFlag(std::string_view name) {
-    return name == "help" || name == "version" || name == "code-only" || name == "id" ||
-           name == "title" || name == "format" || name == "code" || name == "file" ||
-           name == "lang" || name == "language" || name == "tag" || name == "tags";
+    for (const auto& opt : kOptionSchemas) {
+        if (!opt.isShort && opt.name == name) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool isKnownShortSwitch(std::string_view s) {
-    return s == "h" || s == "v" || s == "c" || s == "t" || s == "l" || s == "f";
+    for (const auto& opt : kOptionSchemas) {
+        if (opt.isShort && opt.name == s) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool isOptionSupportedByCommand(std::string_view optName, std::string_view verb) {
-    if (optName == "help" || optName == "h" || optName == "version" || optName == "v" ||
-        optName == "format") {
-        return true;
+    for (const auto& opt : kOptionSchemas) {
+        if (opt.name == optName) {
+            bool hasAllowed = false;
+            for (auto allowed : opt.allowedVerbs) {
+                if (!allowed.empty()) {
+                    hasAllowed = true;
+                    if (allowed == verb) {
+                        return true;
+                    }
+                }
+            }
+            if (!hasAllowed) {
+                return true;
+            }
+        }
     }
-
-    if (verb.empty()) {
-        return false;
-    }
-
-    if (verb == "add") {
-        return optName == "title" || optName == "t" || optName == "lang" || optName == "language" ||
-               optName == "l" || optName == "code" || optName == "c" || optName == "file" ||
-               optName == "f" || optName == "tag" || optName == "tags";
-    }
-
-    if (verb == "list") {
-        return optName == "tag" || optName == "tags" || optName == "lang" ||
-               optName == "language" || optName == "l";
-    }
-
-    if (verb == "get") {
-        return optName == "id" || optName == "title" || optName == "t" || optName == "code-only" ||
-               optName == "c";
-    }
-
-    if (verb == "delete") {
-        return optName == "id" || optName == "title" || optName == "t";
-    }
-
-    if (verb == "search") {
-        return optName == "title" || optName == "t" || optName == "tag" || optName == "tags" ||
-               optName == "lang" || optName == "language" || optName == "l";
-    }
-
-    if (verb == "stats" || verb == "help") {
-        return false;
-    }
-
     return false;
 }
 
 bool isBooleanFlag(std::string_view name, std::string_view verb) {
-    if (name == "help" || name == "h" || name == "version" || name == "v" || name == "code-only") {
-        return true;
+    if (name == "c") {
+        return verb == "get";
     }
-    if (name == "c" && verb == "get") {
-        return true;
+    for (const auto& opt : kOptionSchemas) {
+        if (opt.name == name) {
+            return !opt.takesValue;
+        }
     }
     return false;
 }
 
 bool isValueOption(std::string_view opt, std::string_view verb) {
-    if (opt == "id" || opt == "title" || opt == "format" || opt == "code" || opt == "file" ||
-        opt == "lang" || opt == "language" || opt == "tag" || opt == "tags" || opt == "t" ||
-        opt == "l" || opt == "f") {
-        return true;
-    }
     if (opt == "c") {
-        // -c takes a value (--code) unless verb is "get", where it is a flag (--code-only)
         return verb != "get";
+    }
+    for (const auto& o : kOptionSchemas) {
+        if (o.name == opt) {
+            return o.takesValue;
+        }
     }
     return false;
 }
@@ -121,27 +144,24 @@ std::string findVerb(const std::vector<std::string>& tokens) {
             std::string body = tok.substr(2);
             size_t eqPos = body.find('=');
             if (eqPos == std::string::npos) {
-                if (tok == "--id" || tok == "--title" || tok == "--format" || tok == "--code" ||
-                    tok == "--file" || tok == "--lang" || tok == "--language" || tok == "--tag" ||
-                    tok == "--tags") {
+                if (isValueOption(body, "")) {
                     if (i + 1 < tokens.size()) {
                         ++i;
                     }
                 }
             }
-        } else if (tok == "-t" || tok == "-l" || tok == "-f") {
-            if (i + 1 < tokens.size()) {
-                ++i;
-            }
         } else if (tok == "-c") {
             if (i + 1 < tokens.size() && !isKnownVerb(tokens[i + 1])) {
                 ++i;
             }
-        } else if (tok == "-h" || tok == "-v") {
-            // boolean flag, do not skip
         } else if (tok.rfind("-", 0) == 0 && tok.size() > 1 &&
                    !std::isdigit(static_cast<unsigned char>(tok[1]))) {
-            // Other switch
+            std::string key = tok.substr(1);
+            if (isValueOption(key, "")) {
+                if (i + 1 < tokens.size()) {
+                    ++i;
+                }
+            }
         } else {
             // First non-option positional token is the verb
             return tok;

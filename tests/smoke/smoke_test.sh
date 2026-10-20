@@ -447,6 +447,24 @@ if [ -z "${WINDIR:-}" ] && [ -z "${COMSPEC:-}" ]; then
     COUNT_RACE=$("$BIN" list --format markdown | grep -c '^| [0-9]' || true)
     [ "$COUNT_RACE" -eq 1 ] || fail "Concurrent same-title race failed: expected exactly 1 snippet, found $COUNT_RACE"
     pass "Concurrent same-title race safety verified: exactly 1 snippet persisted"
+
+    # 11c: Storage path alias locking across symlinked parent directory
+    ALIAS_REAL_DIR="$TEMP_DIR/alias_real_dir"
+    ALIAS_LINK_DIR="$TEMP_DIR/alias_link_dir"
+    mkdir -p "$ALIAS_REAL_DIR"
+    ln -s "$ALIAS_REAL_DIR" "$ALIAS_LINK_DIR"
+    for i in $(seq 1 20); do
+        if [ $((i % 2)) -eq 0 ]; then
+            ( SNIPCLI_STORAGE_PATH="$ALIAS_REAL_DIR/db.json" "$BIN" add --title "Alias$i" --code "int a$i;" > /dev/null 2>&1 ) &
+        else
+            ( SNIPCLI_STORAGE_PATH="$ALIAS_LINK_DIR/db.json" "$BIN" add --title "Alias$i" --code "int a$i;" > /dev/null 2>&1 ) &
+        fi
+    done
+    wait
+
+    COUNT_ALIAS=$(SNIPCLI_STORAGE_PATH="$ALIAS_REAL_DIR/db.json" "$BIN" list --format markdown | grep -c '^| [0-9]' || true)
+    [ "$COUNT_ALIAS" -eq 20 ] || fail "Storage path alias adds lost updates: expected 20 snippets, found $COUNT_ALIAS"
+    pass "Storage path alias locking: 20/20 writes preserved across symlinked parent directories"
     export SNIPCLI_STORAGE_PATH="$TEST_STORAGE"
 fi
 

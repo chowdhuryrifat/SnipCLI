@@ -855,6 +855,47 @@ void runRepositoryTests() {
         assertTrue(dupTitleCaught,
                    "Duplicate titles (case-insensitive) in hand-edited file must throw "
                    "StorageException");
+
+        // 20d: Storage path alias locking with symlinked parent directory (Review finding on PR #21)
+        std::filesystem::path realParent = testDir / "real_alias_store";
+        std::filesystem::path linkParent = testDir / "link_alias_store";
+        std::filesystem::create_directories(realParent, ec);
+        std::filesystem::create_directory_symlink(realParent, linkParent, ec);
+        if (!ec) {
+            std::filesystem::path fileViaReal = realParent / "alias_store.json";
+            std::filesystem::path fileViaLink = linkParent / "alias_store.json";
+
+            snipcli::model::JsonSnippetRepository repoViaReal(fileViaReal);
+            snipcli::model::JsonSnippetRepository repoViaLink(fileViaLink);
+
+            std::vector<std::thread> aliasWorkers;
+            for (int t = 0; t < 8; ++t) {
+                aliasWorkers.emplace_back([&, t] {
+                    auto& repo = (t % 2) ? repoViaReal : repoViaLink;
+                    for (int i = 0; i < 5; ++i) {
+                        snipcli::model::Snippet s(
+                            0, "Alias_" + std::to_string(t) + "_" + std::to_string(i), "cpp",
+                            "int a = 1;", {}, "", "");
+                        (void)repo.save(s);
+                    }
+                });
+            }
+            for (auto& w : aliasWorkers) {
+                w.join();
+            }
+
+            assertTrue(repoViaReal.count() == 40,
+                       "All 40 writes across real and symlinked parent aliases must persist");
+            assertTrue(repoViaLink.count() == 40,
+                       "Repository via symlinked path sees all 40 writes");
+            auto aliasSnippets = repoViaReal.getAll();
+            std::unordered_set<uint64_t> aliasDistinctIds;
+            for (const auto& s : aliasSnippets) {
+                aliasDistinctIds.insert(s.getId());
+            }
+            assertTrue(aliasDistinctIds.size() == 40,
+                       "All 40 IDs across symlink alias instances must be distinct");
+        }
     }
 
     // Cleanup test directory

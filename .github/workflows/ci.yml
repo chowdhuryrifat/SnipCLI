@@ -2,9 +2,9 @@ name: SnipCLI CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "dev" ]
+    branches: [ "main", "dev", "release/**", "docs/**", "ci-verify" ]
   pull_request:
-    branches: [ "main", "dev" ]
+    branches: [ "main", "dev", "release/**", "docs/**" ]
 
 permissions:
   contents: read

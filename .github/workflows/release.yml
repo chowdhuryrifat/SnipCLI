@@ -217,6 +217,9 @@ jobs:
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${CMAKE_VER}" >> "$GITHUB_OUTPUT"
 
+      - name: Set up MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Configure CMake (MSVC)
         run: |
           cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DSNIPCLI_BUILD_TESTS=OFF
@@ -224,6 +227,19 @@ jobs:
       - name: Compile
         run: |
           cmake --build build --config Release
+
+      - name: Verify Static CRT (Zero Dynamic MSVC CRT Dependencies)
+        shell: bash
+        run: |
+          mkdir -p dist
+          dumpbin //dependents build/Release/snip.exe > dist/windows_dependents.txt 2>&1 || dumpbin /dependents build/Release/snip.exe > dist/windows_dependents.txt 2>&1
+          echo "=== DLL Dependencies of snip.exe ==="
+          cat dist/windows_dependents.txt
+          if grep -iE '(vcruntime|msvcp|api-ms-win-crt)' dist/windows_dependents.txt; then
+            echo "ERROR: Dynamic MSVC CRT runtime dependencies detected in snip.exe" >&2
+            exit 1
+          fi
+          echo "Windows static CRT verification: PASS (Zero dynamic MSVC CRT runtime dependencies)"
 
       - name: Stage Artifacts and Package
         shell: bash

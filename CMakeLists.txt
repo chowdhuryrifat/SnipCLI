@@ -1,9 +1,20 @@
 cmake_minimum_required(VERSION 3.16)
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
+
 project(SnipCLI 
     VERSION 1.0.0 
     LANGUAGES CXX 
     DESCRIPTION "A fast, modern C++ CLI snippet manager for competitive programmers"
 )
+
+# MSVC Static Runtime: Link C/C++ runtime statically (/MT in Release, /MTd in Debug)
+# Ensures standalone Windows binaries with zero external MSVC runtime DLL dependencies
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 
 # Standard C++17 Enforcement
 set(CMAKE_CXX_STANDARD 17)

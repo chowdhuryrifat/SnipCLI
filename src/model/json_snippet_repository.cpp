@@ -121,8 +121,26 @@ public:
             JsonSnippetRepository::parseLockTimeoutMs(std::getenv("SNIPCLI_LOCK_TIMEOUT_MS"));
 
 #if defined(_WIN32)
-        // Windows file locking via CreateFileW/LockFileEx operates directly on filesystem handles;
-        // symlink resolution is governed by OS privilege and security policies.
+        // Windows file locking via CreateFileW/LockFileEx operates directly on filesystem handles.
+        // On Windows with Developer Mode, symlinks can be created; ensure we reject them
+        // (O_NOFOLLOW equivalent).
+        std::error_code symlinkEc;
+        auto st = std::filesystem::symlink_status(lockPath, symlinkEc);
+        if (!symlinkEc && std::filesystem::is_symlink(st)) {
+            throw common::StorageException("Lock path is a symbolic link; refusing to follow: " +
+                                           lockPath.string());
+        }
+        WIN32_FIND_DATAW findData;
+        HANDLE hFind = FindFirstFileW(lockPath.wstring().c_str(), &findData);
+        if (hFind != INVALID_HANDLE_VALUE) {
+            bool isReparse = (findData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+            FindClose(hFind);
+            if (isReparse) {
+                throw common::StorageException(
+                    "Lock path is a symbolic link; refusing to follow: " + lockPath.string());
+            }
+        }
+
         std::wstring wPath = lockPath.wstring();
         m_handle = CreateFileW(wPath.c_str(), GENERIC_READ | GENERIC_WRITE,
                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,

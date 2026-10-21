@@ -33,4 +33,9 @@
   - Optional fields: `createdAt` (string ISO-8601), `updatedAt` (string ISO-8601).
   - Validation: Unknown fields are validated as strictly well-formed JSON (strings, booleans, null, numbers matching `-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?`, or nested arrays/objects up to a depth cap of 64).
   - Drop on Write: In SnipCLI v1.0, the schema is closed. Unknown fields are tolerated on read and dropped upon saving. Preserving arbitrary unknown attributes is scheduled for v1.1.
+- **ID Allocation & Reuse Policy (v1.0):**
+  - Snippet IDs are assigned sequentially as `max(id) + 1` across existing items in storage.
+  - If the newest snippet (the one with the highest ID) is deleted, its numeric ID is reused by the next newly created snippet.
+  - Deleting interior IDs does not cause reuse because higher IDs remain.
+  - Clients requiring immutable, long-term identifiers across deletions must reference snippets by title rather than numeric ID. Persistent monotonic ID counters are slated for v1.1.
 

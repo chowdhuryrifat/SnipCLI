@@ -899,9 +899,88 @@ void runRepositoryTests() {
         }
     }
 
+    // ---------------------------------------------------------
+    // 21: Symlink loop and recursion depth defense (F1)
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path symloopDir = testDir / "symloop_test";
+        std::filesystem::create_directories(symloopDir, ec);
+
+        // (a) 2-link loop: a -> b, b -> a
+        std::filesystem::path linkA = symloopDir / "link_a.json";
+        std::filesystem::path linkB = symloopDir / "link_b.json";
+        std::filesystem::create_symlink(linkB, linkA, ec);
+        if (!ec) {
+            std::filesystem::create_symlink(linkA, linkB, ec);
+            if (!ec) {
+                bool caught2Hop = false;
+                try {
+                    snipcli::model::JsonSnippetRepository loopRepo(linkA);
+                    (void)loopRepo.getAll();
+                } catch (const snipcli::common::StorageException& ex) {
+                    caught2Hop = true;
+                    assertTrue(std::string(ex.what()).find("Too many levels of symbolic links") !=
+                                   std::string::npos,
+                               "StorageException message mentions symlink loop");
+                }
+                assertTrue(caught2Hop, "2-link symlink loop throws StorageException");
+            }
+        }
+
+        // (b) Self-link: loop_self -> loop_self
+        ec.clear();
+        std::filesystem::path selfLink = symloopDir / "self_link.json";
+        std::filesystem::create_symlink(selfLink, selfLink, ec);
+        if (!ec) {
+            bool caughtSelf = false;
+            try {
+                snipcli::model::JsonSnippetRepository selfRepo(selfLink);
+                (void)selfRepo.getAll();
+            } catch (const snipcli::common::StorageException& ex) {
+                caughtSelf = true;
+                assertTrue(std::string(ex.what()).find("Too many levels of symbolic links") !=
+                               std::string::npos,
+                           "Self-link throws StorageException with symlink loop message");
+            }
+            assertTrue(caughtSelf, "Self-symlink loop throws StorageException");
+        }
+
+        // (c) 41-hop symlink chain (exceeds kMaxSymlinkHops = 40)
+        ec.clear();
+        std::filesystem::path targetFile = symloopDir / "real_target.json";
+        {
+            std::ofstream out(targetFile);
+            out << "[]";
+        }
+        std::filesystem::path prev = targetFile;
+        bool chainCreated = true;
+        for (int i = 41; i >= 1; --i) {
+            std::filesystem::path currentLink = symloopDir / ("hop_" + std::to_string(i) + ".json");
+            std::filesystem::create_symlink(prev, currentLink, ec);
+            if (ec) {
+                chainCreated = false;
+                break;
+            }
+            prev = currentLink;
+        }
+        if (chainCreated) {
+            bool caught41Hop = false;
+            try {
+                snipcli::model::JsonSnippetRepository hopRepo(prev);
+                (void)hopRepo.getAll();
+            } catch (const snipcli::common::StorageException& ex) {
+                caught41Hop = true;
+                assertTrue(std::string(ex.what()).find("Too many levels of symbolic links") !=
+                               std::string::npos,
+                           "41-hop symlink chain throws StorageException with depth message");
+            }
+            assertTrue(caught41Hop, "41-hop symlink chain throws StorageException");
+        }
+    }
+
     // Cleanup test directory
     std::filesystem::remove_all(testDir, ec);
 
-    std::cout << "[PASS] Repository tests passed. (20/20 Invariants & Scenarios Verified)"
+    std::cout << "[PASS] Repository tests passed. (21/21 Invariants & Scenarios Verified)"
               << std::endl;
 }

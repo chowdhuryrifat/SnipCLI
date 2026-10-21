@@ -45,22 +45,31 @@ namespace snipcli::model {
 namespace {
 
 std::filesystem::path canonicalizeStorageTarget(const std::filesystem::path& p) {
+    constexpr int kMaxSymlinkHops = 40;
+    std::filesystem::path current = p;
+    int hops = 0;
     std::error_code ec;
-    if (std::filesystem::is_symlink(p, ec)) {
-        auto linkDest = std::filesystem::read_symlink(p, ec);
-        if (!ec) {
-            std::filesystem::path parent =
-                p.has_parent_path() ? p.parent_path() : std::filesystem::current_path();
-            if (linkDest.is_relative()) {
-                linkDest = parent / linkDest;
-            }
-            return canonicalizeStorageTarget(linkDest);
+
+    while (std::filesystem::is_symlink(current, ec)) {
+        if (++hops > kMaxSymlinkHops) {
+            throw common::StorageException(
+                "Too many levels of symbolic links while resolving storage path: " + p.string());
         }
+        auto linkDest = std::filesystem::read_symlink(current, ec);
+        if (ec) {
+            break;
+        }
+        std::filesystem::path parent =
+            current.has_parent_path() ? current.parent_path() : std::filesystem::current_path();
+        if (linkDest.is_relative()) {
+            linkDest = parent / linkDest;
+        }
+        current = linkDest;
     }
     ec.clear();
 
-    if (std::filesystem::exists(p, ec)) {
-        auto canon = std::filesystem::canonical(p, ec);
+    if (std::filesystem::exists(current, ec)) {
+        auto canon = std::filesystem::canonical(current, ec);
         if (!ec) {
             return canon;
         }
@@ -68,13 +77,13 @@ std::filesystem::path canonicalizeStorageTarget(const std::filesystem::path& p) 
     ec.clear();
 
     std::filesystem::path parent =
-        p.has_parent_path() ? p.parent_path() : std::filesystem::current_path();
+        current.has_parent_path() ? current.parent_path() : std::filesystem::current_path();
     std::filesystem::create_directories(parent, ec);
     ec.clear();
 
     auto canonParent = std::filesystem::canonical(parent, ec);
     if (!ec) {
-        std::filesystem::path resolved = canonParent / p.filename();
+        std::filesystem::path resolved = canonParent / current.filename();
         if (std::filesystem::exists(resolved, ec)) {
             auto canonResolved = std::filesystem::canonical(resolved, ec);
             if (!ec) {
@@ -85,12 +94,12 @@ std::filesystem::path canonicalizeStorageTarget(const std::filesystem::path& p) 
     }
 
     ec.clear();
-    auto weakly = std::filesystem::weakly_canonical(p, ec);
+    auto weakly = std::filesystem::weakly_canonical(current, ec);
     if (!ec) {
         return weakly;
     }
 
-    return p;
+    return current;
 }
 
 class FileLock {

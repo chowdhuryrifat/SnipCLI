@@ -38,4 +38,8 @@
   - If the newest snippet (the one with the highest ID) is deleted, its numeric ID is reused by the next newly created snippet.
   - Deleting interior IDs does not cause reuse because higher IDs remain.
   - Clients requiring immutable, long-term identifiers across deletions must reference snippets by title rather than numeric ID. Persistent monotonic ID counters are slated for v1.1.
+- **Lock Timeout Parsing & Durability Hardening (v1.0):**
+  - `SNIPCLI_LOCK_TIMEOUT_MS` environment variable is parsed using `std::from_chars`. Valid range is `[1, 600000]` ms (1 ms to 10 minutes). Values above 600,000 clamp to 600,000; non-numeric, empty, negative, zero, or overflowing values safely fall back to the 10,000 ms default.
+  - Advisory lock files are opened with `O_NOFOLLOW` on POSIX to prevent symlink traversal.
+  - Atomic saves issue `fcntl(fd, F_FULLFSYNC)` on macOS with fallback to `fsync`, and perform a best-effort `fsync` on the parent directory following atomic rename on POSIX. Temporary file permissions default safely to 0600.
 

@@ -117,13 +117,8 @@ public:
         std::filesystem::path lockPath = target;
         lockPath += ".lock";
 
-        int timeoutMs = 10000;
-        if (const char* timeoutEnv = std::getenv("SNIPCLI_LOCK_TIMEOUT_MS")) {
-            int val = std::atoi(timeoutEnv);
-            if (val > 0) {
-                timeoutMs = val;
-            }
-        }
+        int timeoutMs =
+            JsonSnippetRepository::parseLockTimeoutMs(std::getenv("SNIPCLI_LOCK_TIMEOUT_MS"));
 
 #if defined(_WIN32)
         // Windows file locking via CreateFileW/LockFileEx operates directly on filesystem handles;
@@ -902,6 +897,35 @@ std::filesystem::path JsonSnippetRepository::getDefaultStoragePath() {
         "Cannot determine storage location. Please set SNIPCLI_STORAGE_PATH.");
 }
 
+int JsonSnippetRepository::parseLockTimeoutMs(const char* envVal) noexcept {
+    constexpr int kDefaultTimeoutMs = 10000;
+    constexpr int kMinTimeoutMs = 1;
+    constexpr int kMaxTimeoutMs = 600000;
+
+    if (!envVal || *envVal == '\0') {
+        return kDefaultTimeoutMs;
+    }
+    std::string_view sv(envVal);
+    if (sv.empty() || sv[0] == '-' || sv[0] == '+') {
+        return kDefaultTimeoutMs;
+    }
+    int64_t val = 0;
+    auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
+    if (ec != std::errc{} || ptr != sv.data() + sv.size()) {
+        return kDefaultTimeoutMs;
+    }
+    if (val <= 0) {
+        return kDefaultTimeoutMs;
+    }
+    if (val < kMinTimeoutMs) {
+        return kMinTimeoutMs;
+    }
+    if (val > kMaxTimeoutMs) {
+        return kMaxTimeoutMs;
+    }
+    return static_cast<int>(val);
+}
+
 JsonSnippetRepository::JsonSnippetRepository() : JsonSnippetRepository(getDefaultStoragePath()) {}
 
 JsonSnippetRepository::JsonSnippetRepository(std::filesystem::path storagePath)
@@ -1275,12 +1299,19 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
         ptr += written;
         remaining -= static_cast<size_t>(written);
     }
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__APPLE__) && defined(F_FULLFSYNC)
+    if (::fcntl(fd, F_FULLFSYNC) < 0) {
+        ::fsync(fd);
+    }
+#elif defined(__linux__) || defined(__APPLE__) || defined(__unix__) || defined(_POSIX_VERSION)
     ::fsync(fd);
 #endif
     ::close(fd);
 #endif
 
+    // Best-effort permission restoration; if setting permissions fails (e.g. on exotic or
+    // restricted filesystems), the 0600 mode set during open() provides a safe, conservative
+    // fallback.
     std::filesystem::permissions(tmpPath, targetPerms, std::filesystem::perm_options::replace, ec);
 
 #if defined(_WIN32)
@@ -1311,6 +1342,14 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
     if (ec) {
         throw common::StorageException("Failed to atomically replace storage file: " +
                                        ec.message());
+    }
+    // Best-effort directory fsync to ensure directory entry durability on POSIX
+    if (parentDir.is_absolute() || !parentDir.empty()) {
+        int dirFd = ::open(parentDir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        if (dirFd >= 0) {
+            ::fsync(dirFd);
+            ::close(dirFd);
+        }
     }
 #endif
 

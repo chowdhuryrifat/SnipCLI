@@ -13,6 +13,14 @@
 #include "snipcli/common/exceptions.hpp"
 #include "snipcli/model/json_snippet_repository.hpp"
 
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+#endif
+
 namespace {
 
 void assertTrue(bool condition, const std::string& message) {
@@ -1173,9 +1181,110 @@ void runRepositoryTests() {
         assertTrue(savedC == 1, "Normal pre-existing regular lock file allows successful save");
     }
 
+    // ---------------------------------------------------------
+    // 25: Lock timeout parsing, bounds clamping, and held lock timeout (F6)
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path f6Dir = testDir / "f6_timeout";
+        std::filesystem::create_directories(f6Dir, ec);
+        std::filesystem::path storeFile = f6Dir / "store.json";
+        std::filesystem::path lockFile = f6Dir / "store.json.lock";
+
+        // (a) Timeout parsing unit tests
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs(nullptr) == 10000,
+                   "nullptr falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("") == 10000,
+                   "empty string falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("abc") == 10000,
+                   "non-numeric falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("100ms") == 10000,
+                   "trailing garbage falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("-500") == 10000,
+                   "negative falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("0") == 10000,
+                   "zero falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs(
+                       "99999999999999999999999999999999") == 10000,
+                   "overflow falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("1") == 1,
+                   "lower bound 1ms accepted");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("500") == 500,
+                   "in-range 500ms accepted");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("600000") == 600000,
+                   "upper bound 600000ms accepted");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("700000") == 600000,
+                   "out-of-range clamps to 600000ms");
+
+        // (b) Live held lock timeout measurement with SNIPCLI_LOCK_TIMEOUT_MS=1000
+        struct ScopedExternalLock {
+            std::filesystem::path p;
+#if defined(_WIN32)
+            HANDLE h{INVALID_HANDLE_VALUE};
+            OVERLAPPED ov{};
+            explicit ScopedExternalLock(const std::filesystem::path& path) : p(path) {
+                h = CreateFileW(p.wstring().c_str(), GENERIC_READ | GENERIC_WRITE,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                                FILE_ATTRIBUTE_NORMAL, nullptr);
+                if (h != INVALID_HANDLE_VALUE) {
+                    LockFileEx(h, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, MAXDWORD,
+                               MAXDWORD, &ov);
+                }
+            }
+            ~ScopedExternalLock() {
+                if (h != INVALID_HANDLE_VALUE) {
+                    UnlockFileEx(h, 0, MAXDWORD, MAXDWORD, &ov);
+                    CloseHandle(h);
+                }
+            }
+#else
+            int fd{-1};
+            explicit ScopedExternalLock(const std::filesystem::path& path) : p(path) {
+                fd = ::open(p.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+                if (fd >= 0) {
+                    ::flock(fd, LOCK_EX | LOCK_NB);
+                }
+            }
+            ~ScopedExternalLock() {
+                if (fd >= 0) {
+                    ::flock(fd, LOCK_UN);
+                    ::close(fd);
+                }
+            }
+#endif
+        };
+
+        snipcli::model::JsonSnippetRepository repo(storeFile);
+        snipcli::model::Snippet s(0, "T", "cpp", "int a;", {}, "", "");
+        {
+            ScopedExternalLock externalLock(lockFile);
+            snipcli::test::ScopedEnv timeoutEnv("SNIPCLI_LOCK_TIMEOUT_MS", "1000");
+
+            auto start = std::chrono::steady_clock::now();
+            bool caught = false;
+            try {
+                (void)repo.save(s);
+            } catch (const snipcli::common::StorageException& ex) {
+                caught = true;
+                assertTrue(std::string(ex.what()).find(
+                               "Storage is locked by another snip process") != std::string::npos,
+                           "Lock timeout exception message matches");
+            }
+            auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now() - start)
+                                 .count();
+            assertTrue(caught, "Held lock causes StorageException on timeout");
+            assertTrue(
+                elapsedMs >= 900 && elapsedMs <= 3500,
+                "Timeout elapsed roughly 1000ms (measured " + std::to_string(elapsedMs) + "ms)");
+        }
+        // Lock released: saving succeeds
+        auto saved = repo.save(s);
+        assertTrue(saved == 1, "Save succeeds after lock is released");
+    }
+
     // Cleanup test directory
     std::filesystem::remove_all(testDir, ec);
 
-    std::cout << "[PASS] Repository tests passed. (24/24 Invariants & Scenarios Verified)"
+    std::cout << "[PASS] Repository tests passed. (25/25 Invariants & Scenarios Verified)"
               << std::endl;
 }

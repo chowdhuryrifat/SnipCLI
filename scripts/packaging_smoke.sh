@@ -64,33 +64,58 @@ for entry in "${REQUIRED_TGZ_ENTRIES[@]}"; do
 done
 echo "Tarball FHS layout: OK"
 
-echo "=== [3/5] Validating Homebrew Formula Syntax ==="
+echo "=== [3/5] Checking Homebrew Formula File Presence ==="
 FORMULA="${REPO_DIR}/packaging/homebrew/snipcli.rb"
+if [ ! -f "${FORMULA}" ]; then
+    echo "ERROR: Homebrew formula file missing: ${FORMULA}" >&2
+    exit 1
+fi
+echo "Homebrew formula file presence check: OK"
 if command -v brew >/dev/null 2>&1; then
-    brew audit --strict "${FORMULA}" || true
+    echo "Running brew audit --strict..."
+    brew audit --strict "${FORMULA}"
 elif command -v ruby >/dev/null 2>&1; then
+    echo "Running ruby syntax check..."
     ruby -c "${FORMULA}"
     echo "Homebrew ruby syntax check: OK"
 else
-    echo "Neither brew nor ruby found; checking file presence: OK"
+    echo "NOTE: Neither brew nor ruby found; full syntax/audit check skipped (presence check only)"
 fi
 
-echo "=== [4/5] Validating WinGet Manifests ==="
+echo "=== [4/5] Checking WinGet Manifests (Presence & PackageIdentifier) ==="
 python3 -c "
 import yaml, glob, sys
-for path in sorted(glob.glob('${REPO_DIR}/packaging/winget/*.yaml')):
+files = sorted(glob.glob('${REPO_DIR}/packaging/winget/*.yaml'))
+if len(files) < 3:
+    print(f'ERROR: Expected at least 3 WinGet manifest files, found {len(files)}', file=sys.stderr)
+    sys.exit(1)
+for path in files:
     with open(path, 'r', encoding='utf-8') as f:
         data = yaml.safe_load(f)
-    print(f'Validated WinGet YAML: {path} (PackageIdentifier: {data.get(\"PackageIdentifier\")})')
+    pkg_id = data.get('PackageIdentifier')
+    if not pkg_id:
+        print(f'ERROR: PackageIdentifier missing in {path}', file=sys.stderr)
+        sys.exit(1)
+    print(f'WinGet manifest presence check: {path} (PackageIdentifier: {pkg_id})')
 "
-echo "WinGet manifests: OK"
+echo "WinGet manifests presence check: OK (NOTE: winget validate NOT RUN, requires Windows environment)"
 
-echo "=== [5/5] Validating Arch Linux PKGBUILD & .SRCINFO ==="
+echo "=== [5/5] Checking Arch Linux PKGBUILD & .SRCINFO ==="
 PKGBUILD="${REPO_DIR}/packaging/aur/PKGBUILD"
-bash -n "${PKGBUILD}"
-if command -v namcap >/dev/null 2>&1; then
-    namcap "${PKGBUILD}" || true
+SRCINFO="${REPO_DIR}/packaging/aur/.SRCINFO"
+if [ ! -f "${PKGBUILD}" ] || [ ! -f "${SRCINFO}" ]; then
+    echo "ERROR: Missing Arch Linux PKGBUILD or .SRCINFO in ${REPO_DIR}/packaging/aur" >&2
+    exit 1
 fi
-echo "AUR PKGBUILD syntax: OK"
+bash -n "${PKGBUILD}"
+echo "AUR PKGBUILD bash syntax: OK"
+if command -v namcap >/dev/null 2>&1; then
+    echo "Running namcap on PKGBUILD..."
+    namcap "${PKGBUILD}"
+    echo "namcap check: OK"
+else
+    echo "NOTE: namcap not found; skipping namcap audit (presence check only)"
+fi
+echo "Arch Linux PKGBUILD & .SRCINFO presence check: OK"
 
 echo "=== ALL PACKAGING SMOKE CHECKS PASSED ==="

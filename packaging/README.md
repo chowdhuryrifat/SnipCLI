@@ -4,6 +4,23 @@ This directory contains packaging definitions, manifest templates, and build con
 
 ---
 
+## Registry Name Collision Analysis & Naming Policy
+
+Prior to v1.0.0 release packaging, name availability for `snip` and `snipcli` was audited across upstream package registries:
+
+| Registry | Status for `snip` | Status for `snipcli` | Decision / Policy |
+|---|---|---|---|
+| **WinGet (`microsoft/winget-pkgs`)** | Unclaimed | Unclaimed | Package Identifier: **`ChowdhuryRifat.SnipCLI`** (command: `snip`). |
+| **Homebrew (`homebrew/core` & taps)** | Legacy tap existed (`sniptt-official/snip`, discontinued) | Available | Formula: **`snipcli`** in tap `chowdhuryrifat/homebrew-snipcli` (binary: `snip`). |
+| **Debian / Ubuntu (`apt`)** | Unclaimed (only `sniproxy` / `vim-snippets`) | Available | Package name: **`snipcli`** (binary installed to `/usr/bin/snip`). |
+| **Arch Linux (`AUR`)** | **Claimed** (legacy Ultisnips tool) | Available | Package name: **`snipcli`** (binary installed to `/usr/bin/snip`). |
+
+### Universal Rule:
+- **Binary Name:** Everywhere installed, the executable binary is named **`snip`**.
+- **Package Name:** In all package registries, the package identifier is **`snipcli`** (or `ChowdhuryRifat.SnipCLI` on WinGet).
+
+---
+
 ## Supported Distribution Targets
 
 | Channel | Platform | Directory | Artifact / Format | Publishing Method |
@@ -21,6 +38,19 @@ This directory contains packaging definitions, manifest templates, and build con
 - **`homebrew/`**: Homebrew ruby formula `snipcli.rb` compiling from source and installing completions and man pages.
 - **`debian/`**: Debian package configuration and CPack settings for building `.deb` packages with correct control metadata, architectures, and dependencies.
 - **`aur/`**: Arch Linux `PKGBUILD` and `.SRCINFO` configuring standard CMake compilation and FHS installation for pacman.
+
+---
+
+## Setting Up the Homebrew Tap
+
+To maintain a dedicated Homebrew tap:
+1. Create a public repository named `homebrew-snipcli` on GitHub under the `chowdhuryrifat` account.
+2. Place `packaging/homebrew/snipcli.rb` in `Formula/snipcli.rb` in that repo.
+3. Users install via:
+   ```bash
+   brew tap chowdhuryrifat/snipcli
+   brew install snipcli
+   ```
 
 ---
 

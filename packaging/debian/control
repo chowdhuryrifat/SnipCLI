@@ -1,0 +1,11 @@
+Package: snipcli
+Version: 1.0.0-1
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: Chowdhury Rifat Ahmed <67093774+chowdhuryrifat@users.noreply.github.com>
+Depends: libc6 (>= 2.31), libstdc++6 (>= 10)
+Description: High-performance algorithmic snippet manager CLI
+ SnipCLI is a lightweight, zero-dependency command-line code snippet manager
+ built in modern C++17. It organizes code snippets with metadata, tags, and
+ languages, persisting them to an atomic, file-locked JSON repository.

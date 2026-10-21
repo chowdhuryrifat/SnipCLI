@@ -126,3 +126,31 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_DOCDIR}
 )
 
+# CPack Packaging Configuration
+set(CPACK_PACKAGE_NAME "snipcli")
+set(CPACK_PACKAGE_VENDOR "Chowdhury Rifat Ahmed & Lameya Tabasum")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Fast, modern C++17 CLI snippet manager for competitive programmers")
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_CONTACT "Chowdhury Rifat Ahmed <67093774+chowdhuryrifat@users.noreply.github.com>")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+
+# Debian (.deb) Specifics
+set(CPACK_DEBIAN_PACKAGE_NAME "snipcli")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Chowdhury Rifat Ahmed <67093774+chowdhuryrifat@users.noreply.github.com>")
+set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
+set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.31), libstdc++6 (>= 10)")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
+set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
+
+# Archive Generators
+set(CPACK_GENERATOR "TGZ;DEB")
+set(CPACK_SOURCE_GENERATOR "TGZ")
+
+include(CPack)
+
+

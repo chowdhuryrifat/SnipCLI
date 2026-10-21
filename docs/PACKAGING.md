@@ -74,3 +74,21 @@ ctest --test-dir build --output-on-failure
 # Execute integration smoke test
 ./tests/smoke/smoke_test.sh ./build/snip
 ```
+
+---
+
+## Debian Package Generation (`.deb`)
+
+Debian packages are generated using CPack as the single source of truth, configured in root `CMakeLists.txt`:
+
+```bash
+# Configure and build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSNIPCLI_BUILD_TESTS=OFF
+cmake --build build -j"$(nproc)"
+
+# Package with CPack
+cd build && cpack -G DEB
+```
+
+Package dependencies (`Depends:`) are automatically determined at package time from the compiled binary via `dpkg-shlibdeps` (`CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON`), guaranteeing exact glibc and libstdc++ compatibility without hardcoded version strings. The generated package filename is `snipcli_1.0.0_amd64.deb`.
+

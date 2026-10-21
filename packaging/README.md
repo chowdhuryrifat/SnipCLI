@@ -36,7 +36,7 @@ Prior to v1.0.0 release packaging, name availability for `snip` and `snipcli` wa
 
 - **`winget/`**: Manifest files adhering to the Windows Package Manager schema version 1.6.0 (`ChowdhuryRifat.SnipCLI.yaml`, installer manifest, locale manifest).
 - **`homebrew/`**: Homebrew ruby formula `snipcli.rb` compiling from source and installing completions and man pages.
-- **`debian/`**: Debian package configuration and CPack settings for building `.deb` packages with correct control metadata, architectures, and dependencies.
+- **`debian/`**: Debian package generation is integrated into root `CMakeLists.txt` via CPack (`CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON`) as the single source of truth, computing dynamic shared library dependencies automatically via `dpkg-shlibdeps`.
 - **`aur/`**: Arch Linux `PKGBUILD` and `.SRCINFO` configuring standard CMake compilation and FHS installation for pacman.
 
 ---

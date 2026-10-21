@@ -290,6 +290,7 @@ jobs:
 
       - name: Generate Build Provenance Attestation
         uses: actions/attest-build-provenance@v2
+        continue-on-error: true
         with:
           subject-path: 'release_assets/*'
 

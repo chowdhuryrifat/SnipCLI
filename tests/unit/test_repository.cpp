@@ -977,9 +977,85 @@ void runRepositoryTests() {
         }
     }
 
+    // ---------------------------------------------------------
+    // 22: Unknown field validation, depth cap, and drop-on-save (F3)
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path f3Dir = testDir / "f3_validation";
+        std::filesystem::create_directories(f3Dir, ec);
+
+        auto assertRejected = [&](const std::string& fieldVal, const std::string& desc) {
+            std::filesystem::path badFile = f3Dir / "bad.json";
+            {
+                std::ofstream out(badFile, std::ios::trunc);
+                out << "[{\"id\":1,\"title\":\"T\",\"language\":\"cpp\",\"code\":\"c\",\"tags\":[],"
+                       "\"extra\":"
+                    << fieldVal << "}]";
+            }
+            snipcli::model::JsonSnippetRepository repo(badFile);
+            bool caught = false;
+            try {
+                (void)repo.getAll();
+            } catch (const snipcli::common::StorageException&) {
+                caught = true;
+            }
+            assertTrue(caught, "Malformed unknown field value rejected: " + desc);
+        };
+
+        // (a) Malformed bare tokens and numbers
+        assertRejected("@@!!", "garbage bare token");
+        assertRejected("1e999x", "number with trailing garbage");
+        assertRejected("01", "number with leading zero");
+        assertRejected("+1", "number with leading plus");
+        assertRejected("NaN", "NaN token");
+        assertRejected("Infinity", "Infinity token");
+        assertRejected("tru", "truncated boolean");
+
+        // (b) Unterminated nested object
+        assertRejected("{\"nested\": 1", "unterminated nested object");
+
+        // (c) Depth cap defense (depth 65 and 100k-deep)
+        std::string depth65;
+        for (int i = 0; i < 65; ++i)
+            depth65 += "[";
+        for (int i = 0; i < 65; ++i)
+            depth65 += "]";
+        assertRejected(depth65, "JSON nesting depth exceeding 64");
+
+        std::string deep100k;
+        for (int i = 0; i < 100000; ++i)
+            deep100k += "[";
+        for (int i = 0; i < 100000; ++i)
+            deep100k += "]";
+        assertRejected(deep100k, "100k-deep JSON nesting array");
+
+        // (d) Valid nested structures accepted
+        std::filesystem::path validFile = f3Dir / "valid.json";
+        {
+            std::ofstream out(validFile, std::ios::trunc);
+            out << "[{\"id\":1,\"title\":\"V\",\"language\":\"cpp\",\"code\":\"c\",\"tags\":[],"
+                << "\"meta\":{\"valid\":true,\"flag\":false,\"item\":null,\"val\":-1.5e+3}}]\n";
+        }
+        snipcli::model::JsonSnippetRepository validRepo(validFile);
+        auto validList = validRepo.getAll();
+        assertTrue(validList.size() == 1, "Valid nested structure in unknown field accepted");
+
+        // (e) Characterization test: unknown fields dropped on save (deliberate contract)
+        snipcli::model::Snippet s2(0, "NewSnippet", "cpp", "int y;", {}, "", "");
+        (void)validRepo.save(s2);
+
+        // Read raw disk file to verify "meta" is absent from serialized JSON
+        std::ifstream rawIn(validFile);
+        std::string rawContent((std::istreambuf_iterator<char>(rawIn)),
+                               std::istreambuf_iterator<char>());
+        assertTrue(rawContent.find("\"meta\"") == std::string::npos,
+                   "Characterization: unknown field 'meta' dropped on save per v1.0 closed schema");
+        assertTrue(validRepo.count() == 2, "Both snippets persisted after save");
+    }
+
     // Cleanup test directory
     std::filesystem::remove_all(testDir, ec);
 
-    std::cout << "[PASS] Repository tests passed. (21/21 Invariants & Scenarios Verified)"
+    std::cout << "[PASS] Repository tests passed. (22/22 Invariants & Scenarios Verified)"
               << std::endl;
 }

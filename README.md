@@ -76,7 +76,7 @@ cmake --build build --parallel
 
 ### 3. Verify Build & Run Test Suite
 ```bash
-# Run CTest Unit Tests (All 7 Suites - 137 Scenarios & Invariants)
+# Run CTest Unit Tests (All 7 Suites - 138 Scenarios & Invariants)
 ctest --test-dir build --output-on-failure
 
 # Run Automated End-to-End Smoke & Integration Tests
@@ -286,10 +286,10 @@ flowchart TD
 SnipCLI enforces rigorous multi-layered quality gates across every commit and Pull Request:
 
 ### 1. Multi-Suite Unit Testing (CTest)
-A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 137 domain invariants and behavioral scenarios:
+A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 138 domain invariants and behavioral scenarios:
 - **`Snippet` (10 Invariants):** Immutability, line counting, tag normalization, ISO 8601 timestamps.
 - **`SnippetValidator` (12 Invariants):** Defense against empty titles, illegal characters, empty languages, and missing payloads.
-- **`JsonSnippetRepository` (23 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, atomic file replacement, multi-line CRLF preservation, cross-process advisory lock synchronization with bounded timeout, duplicate-title rejection, symlink loop/recursion depth limit defense, unknown field validation with closed schema drop-on-save characterization, and max(id)+1 ID allocation and reuse on deletion characterization.
+- **`JsonSnippetRepository` (24 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, atomic file replacement, multi-line CRLF preservation, cross-process advisory lock synchronization with bounded timeout, duplicate-title rejection, symlink loop/recursion depth limit defense, unknown field validation with closed schema drop-on-save characterization, max(id)+1 ID allocation and reuse on deletion characterization, and lock file symlink hardening (`O_NOFOLLOW`) with stale lock resilience.
 - **`Strategy Pattern` (10 Scenarios):** Case-insensitive title substring, exact tag matching, and language filtering.
 - **`CliParser` & `CommandDispatcher` (31 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, spaced negative values, valueless option schema validation, global options before verb, `--` delimiter, strict unknown option rejection, command-specific option schema enforcement, and boolean flag equals-syntax rejection.
 - **`Command Wiring` (31 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution, including strict ID parsing, multi-word argument defense, add-command positional quarantine, unknown option state protection, command-specific option rejection state protection, mutually exclusive selector enforcement, and storage exception quarantine.

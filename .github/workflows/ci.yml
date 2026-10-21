@@ -91,7 +91,7 @@ jobs:
         if: matrix.compiler == 'GCC-TSan'
         run: |
           sudo sysctl -w vm.mmap_rnd_bits=28
-          CURRENT_BITS=$(sysctl -n vm.mmap_rnd_bits)
+          CURRENT_BITS=$(sudo sysctl -n vm.mmap_rnd_bits)
           echo "vm.mmap_rnd_bits is now: ${CURRENT_BITS}"
           if [ "${CURRENT_BITS}" -ne 28 ]; then
             echo "ERROR: Failed to set vm.mmap_rnd_bits to 28" >&2

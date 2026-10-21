@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - 'v*.*.*'
+    branches:
+      - 'release/v1.0.0-packaging'
+      - 'ci-verify'
   workflow_dispatch:
 
 permissions:

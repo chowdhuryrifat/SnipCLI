@@ -1,4 +1,4 @@
-# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.9.0.schema.json
 PackageIdentifier: ChowdhuryRifat.SnipCLI
 PackageVersion: 1.0.0
 InstallerType: zip
@@ -13,4 +13,4 @@ Installers:
       - RelativeFilePath: snip.exe
         PortableCommandAlias: snip
 ManifestType: installer
-ManifestVersion: 1.6.0
+ManifestVersion: 1.9.0

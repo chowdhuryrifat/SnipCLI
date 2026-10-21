@@ -15,12 +15,6 @@ class Snipcli < Formula
                     *std_cmake_args
     system "cmake", "--build", "build"
     system "cmake", "--install", "build"
-
-    # In addition to CMake install, guarantee Homebrew prefix completion paths
-    bash_completion.install "completions/snip.bash" => "snip"
-    zsh_completion.install "completions/_snip"
-    fish_completion.install "completions/snip.fish"
-    man1.install "man/snip.1"
   end
 
   test do

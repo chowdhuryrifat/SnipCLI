@@ -82,6 +82,8 @@ jobs:
         run: sudo sysctl vm.mmap_rnd_bits=28 || true
 
       - name: Run CTest Unit Tests
+        env:
+          NO_COLOR: "1"
         run: |
           ctest --test-dir build -C Release --output-on-failure
 

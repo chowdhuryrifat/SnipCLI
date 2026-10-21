@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "scoped_env.hpp"
 #include "snipcli/common/exceptions.hpp"
 #include "snipcli/model/json_snippet_repository.hpp"
 
@@ -21,26 +22,14 @@ void assertTrue(bool condition, const std::string& message) {
     }
 }
 
-void setEnvVar(const char* name, const char* value) {
-#if defined(_WIN32)
-    _putenv_s(name, value);
-#else
-    setenv(name, value, 1);
-#endif
-}
-
-void unsetEnvVar(const char* name) {
-#if defined(_WIN32)
-    _putenv_s(name, "");
-#else
-    unsetenv(name);
-#endif
-}
-
 }  // namespace
 
 void runRepositoryTests() {
     std::cout << "[TEST] Running Repository tests..." << std::endl;
+
+    // Isolate repository unit tests from external lock timeout overrides (e.g.
+    // SNIPCLI_LOCK_TIMEOUT_MS=1)
+    snipcli::test::ScopedEnv lockTimeoutGuard("SNIPCLI_LOCK_TIMEOUT_MS", "10000");
 
     static_assert(std::is_nothrow_move_assignable_v<snipcli::model::Snippet>,
                   "Snippet must be nothrow move assignable for strong exception safety");
@@ -225,6 +214,15 @@ void runRepositoryTests() {
     // Test 8: Default Storage Path & SNIPCLI_STORAGE_PATH Override
     // ---------------------------------------------------------
     {
+        // First isolate and clear any external SNIPCLI_STORAGE_PATH
+        snipcli::test::ScopedEnv clearEnv("SNIPCLI_STORAGE_PATH", std::nullopt);
+        // Ensure HOME or APPDATA exists so getDefaultStoragePath() has an OS anchor even under env
+        // -i
+        std::optional<snipcli::test::ScopedEnv> dummyHome;
+        if (!std::getenv("HOME") && !std::getenv("APPDATA")) {
+            dummyHome.emplace("HOME", testDir.string());
+        }
+
         // Default path resolution
         std::filesystem::path defaultPath =
             snipcli::model::JsonSnippetRepository::getDefaultStoragePath();
@@ -232,18 +230,19 @@ void runRepositoryTests() {
 
         // Environment override
         std::filesystem::path customOverride = testDir / "custom_override.json";
-        setEnvVar("SNIPCLI_STORAGE_PATH", customOverride.string().c_str());
+        {
+            snipcli::test::ScopedEnv overrideEnv("SNIPCLI_STORAGE_PATH", customOverride.string());
 
-        std::filesystem::path resolved =
-            snipcli::model::JsonSnippetRepository::getDefaultStoragePath();
-        assertTrue(resolved == customOverride, "SNIPCLI_STORAGE_PATH must override default path");
+            std::filesystem::path resolved =
+                snipcli::model::JsonSnippetRepository::getDefaultStoragePath();
+            assertTrue(resolved == customOverride,
+                       "SNIPCLI_STORAGE_PATH must override default path");
 
-        // Default constructor uses resolved path
-        snipcli::model::JsonSnippetRepository defaultRepo;
-        assertTrue(defaultRepo.getStoragePath() == customOverride,
-                   "Default constructor must use resolved path from env override");
-
-        unsetEnvVar("SNIPCLI_STORAGE_PATH");
+            // Default constructor uses resolved path
+            snipcli::model::JsonSnippetRepository defaultRepo;
+            assertTrue(defaultRepo.getStoragePath() == customOverride,
+                       "Default constructor must use resolved path from env override");
+        }
     }
 
     // ---------------------------------------------------------

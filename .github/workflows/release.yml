@@ -10,24 +10,76 @@ permissions:
   contents: read
 
 jobs:
-  build-linux:
-    name: Build Linux (x86_64) & Debian Package
+  verify:
+    name: Verify & Test Suite Gate
     runs-on: ubuntu-24.04
+    env:
+      NO_COLOR: "1"
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Extract Tag or Fallback Version
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSNIPCLI_BUILD_TESTS=ON
+
+      - name: Build All Targets
+        run: |
+          cmake --build build -j"$(nproc)"
+
+      - name: Run CTest Unit Test Suite
+        run: |
+          ctest --test-dir build --output-on-failure
+
+      - name: Run End-to-End Integration Smoke Test
+        run: |
+          bash tests/smoke/smoke_test.sh build/snip
+
+      - name: Run Adversarial Audit Reproduction Suite
+        run: |
+          bash scripts/snipcli_audit_repro.sh build/snip
+
+      - name: Run Re-Audit Reproduction Suite
+        run: |
+          bash scripts/snipcli_reaudit_repro.sh build/snip
+
+  build-linux:
+    name: Build Linux (x86_64) & Debian Package
+    needs: [verify]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Version and Guard
         id: meta
         shell: bash
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          if [[ "$TAG" != v* ]]; then
-            TAG="v1.0.0"
+          CMAKE_VER=$(grep -E 'project\(SnipCLI' CMakeLists.txt -A 2 | grep -E 'VERSION' | sed -E 's/.*VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          if [ -z "$CMAKE_VER" ]; then
+            echo "ERROR: Could not parse VERSION from CMakeLists.txt" >&2
+            exit 1
           fi
-          VERSION="${TAG#v}"
+          echo "CMakeLists.txt version: ${CMAKE_VER}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG_VER="${GITHUB_REF_NAME#v}"
+            if [ "${TAG_VER}" != "${CMAKE_VER}" ]; then
+              echo "ERROR: Tag version '${TAG_VER}' does not match CMakeLists.txt version '${CMAKE_VER}'" >&2
+              exit 1
+            fi
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v${CMAKE_VER}"
+          fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version=${CMAKE_VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Debian Packaging Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev file
 
       - name: Configure CMake
         run: |
@@ -39,6 +91,13 @@ jobs:
         run: |
           cmake --build build -j"$(nproc)"
           strip build/snip
+
+      - name: Record LDD and Maximum GLIBC Symbol Version
+        run: |
+          echo "=== Dynamic Library Dependencies (ldd) ==="
+          ldd build/snip
+          echo "=== Maximum GLIBC Symbols Required ==="
+          objdump -T build/snip | grep GLIBC_ | awk '{print $NF}' | tr -d '()' | sort -V | tail -n 10
 
       - name: Stage Artifacts (FHS Layout)
         run: |
@@ -52,7 +111,7 @@ jobs:
           cpack -G DEB
           cd ..
           DEB_FILE=$(ls build/snipcli_*.deb | head -n 1)
-          cp "$DEB_FILE" dist/snipcli_${{ steps.meta.outputs.version }}-1_amd64.deb
+          cp "$DEB_FILE" dist/snipcli_${{ steps.meta.outputs.version }}_amd64.deb
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
@@ -62,38 +121,63 @@ jobs:
           retention-days: 1
 
   build-macos:
-    name: Build macOS (ARM64)
+    name: Build macOS Universal Binary (ARM64 + x86_64)
+    needs: [verify]
     runs-on: macos-14
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Extract Tag or Fallback Version
+      - name: Validate Version and Guard
         id: meta
         shell: bash
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          if [[ "$TAG" != v* ]]; then
-            TAG="v1.0.0"
+          CMAKE_VER=$(grep -E 'project\(SnipCLI' CMakeLists.txt -A 2 | grep -E 'VERSION' | sed -E 's/.*VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          if [ -z "$CMAKE_VER" ]; then
+            echo "ERROR: Could not parse VERSION from CMakeLists.txt" >&2
+            exit 1
+          fi
+          echo "CMakeLists.txt version: ${CMAKE_VER}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG_VER="${GITHUB_REF_NAME#v}"
+            if [ "${TAG_VER}" != "${CMAKE_VER}" ]; then
+              echo "ERROR: Tag version '${TAG_VER}' does not match CMakeLists.txt version '${CMAKE_VER}'" >&2
+              exit 1
+            fi
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v${CMAKE_VER}"
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${CMAKE_VER}" >> "$GITHUB_OUTPUT"
 
-      - name: Configure CMake
+      - name: Configure CMake (Universal macOS Binary)
         run: |
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
-            -DSNIPCLI_BUILD_TESTS=OFF
+            -DSNIPCLI_BUILD_TESTS=OFF \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
 
       - name: Compile and Strip
         run: |
           cmake --build build -j"$(sysctl -n hw.ncpu)"
           strip build/snip
 
+      - name: Verify Universal Binary Architectures
+        run: |
+          echo "=== Verifying lipo binary architectures ==="
+          lipo -info build/snip
+          if ! lipo -info build/snip | grep -q "arm64" || ! lipo -info build/snip | grep -q "x86_64"; then
+            echo "ERROR: snip binary is missing arm64 or x86_64 slice" >&2
+            exit 1
+          fi
+
       - name: Stage Artifacts and Package
         run: |
           cmake --install build --prefix /tmp/stage
           mkdir -p dist
-          tar -czf dist/snipcli-${{ steps.meta.outputs.tag }}-darwin-arm64.tar.gz -C /tmp/stage .
+          tar -czf dist/snipcli-${{ steps.meta.outputs.tag }}-macos-universal.tar.gz -C /tmp/stage .
 
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
@@ -104,20 +188,34 @@ jobs:
 
   build-windows:
     name: Build Windows (x86_64)
+    needs: [verify]
     runs-on: windows-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Extract Tag or Fallback Version
+      - name: Validate Version and Guard
         id: meta
         shell: bash
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          if [[ "$TAG" != v* ]]; then
-            TAG="v1.0.0"
+          CMAKE_VER=$(grep -E 'project\(SnipCLI' CMakeLists.txt -A 2 | grep -E 'VERSION' | sed -E 's/.*VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          if [ -z "$CMAKE_VER" ]; then
+            echo "ERROR: Could not parse VERSION from CMakeLists.txt" >&2
+            exit 1
+          fi
+          echo "CMakeLists.txt version: ${CMAKE_VER}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG_VER="${GITHUB_REF_NAME#v}"
+            if [ "${TAG_VER}" != "${CMAKE_VER}" ]; then
+              echo "ERROR: Tag version '${TAG_VER}' does not match CMakeLists.txt version '${CMAKE_VER}'" >&2
+              exit 1
+            fi
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v${CMAKE_VER}"
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${CMAKE_VER}" >> "$GITHUB_OUTPUT"
 
       - name: Configure CMake (MSVC)
         run: |
@@ -152,6 +250,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -169,13 +269,20 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
+      - name: Generate Build Provenance Attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'release_assets/*'
+
       - name: Extract Release Notes from CHANGELOG.md
         id: notes
         shell: bash
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          if [[ "$TAG" != v* ]]; then
-            TAG="v1.0.0"
+          CMAKE_VER=$(grep -E 'project\(SnipCLI' CMakeLists.txt -A 2 | grep -E 'VERSION' | sed -E 's/.*VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v${CMAKE_VER}"
           fi
           VERSION="${TAG#v}"
           awk -v ver="$VERSION" '
@@ -188,7 +295,8 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Create Draft GitHub Release
+      - name: Create Draft GitHub Release (Tagged Releases Only)
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

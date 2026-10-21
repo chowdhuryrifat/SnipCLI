@@ -6,10 +6,14 @@ on:
   pull_request:
     branches: [ "main", "dev" ]
 
+permissions:
+  contents: read
+
 jobs:
   lint-and-format:
     name: Code Quality & Static Analysis
-    runs-on: ubuntu-latest
+    # Pinned to Ubuntu 24.04 for stable clang-format-18 and cppcheck; bump deliberately
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -44,21 +48,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # Pinned to ubuntu-24.04 deliberately for toolchain consistency; bump deliberately
+          - os: ubuntu-24.04
             compiler: GCC
             artifact_name: snipcli-linux-x86_64
             binary_path: build/snip
             cmake_flags: ""
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             compiler: GCC-Sanitizers
             artifact_name: snipcli-linux-sanitizers
             binary_path: build/snip
             cmake_flags: -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             compiler: GCC-TSan
             artifact_name: snipcli-linux-tsan
             binary_path: build/snip
             cmake_flags: -DCMAKE_CXX_FLAGS="-fsanitize=thread -g"
+          - os: macos-14
+            compiler: AppleClang
+            artifact_name: snipcli-macos-arm64
+            binary_path: build/snip
+            cmake_flags: ""
           - os: windows-latest
             compiler: MSVC
             artifact_name: snipcli-windows-x86_64
@@ -85,19 +95,31 @@ jobs:
         env:
           NO_COLOR: "1"
         run: |
-          ctest --test-dir build -C Release --output-on-failure
+          if [ "${{ runner.os }}" = "Linux" ] && [[ "${{ matrix.cmake_flags }}" == *"sanitize=thread"* ]]; then
+            setarch x86_64 -R ctest --test-dir build -C Release --output-on-failure
+          else
+            ctest --test-dir build -C Release --output-on-failure
+          fi
 
       - name: Run CLI Integration & Smoke Tests
         shell: bash
         run: |
           chmod +x ./tests/smoke/smoke_test.sh || true
-          ./tests/smoke/smoke_test.sh ./${{ matrix.binary_path }}
+          if [ "${{ runner.os }}" = "Linux" ] && [[ "${{ matrix.cmake_flags }}" == *"sanitize=thread"* ]]; then
+            setarch x86_64 -R ./tests/smoke/smoke_test.sh ./${{ matrix.binary_path }}
+          else
+            ./tests/smoke/smoke_test.sh ./${{ matrix.binary_path }}
+          fi
 
       - name: Run Adversarial Audit Reproduction Suite
         shell: bash
         run: |
           chmod +x ./scripts/snipcli_audit_repro.sh || true
-          ./scripts/snipcli_audit_repro.sh ./${{ matrix.binary_path }}
+          if [ "${{ runner.os }}" = "Linux" ] && [[ "${{ matrix.cmake_flags }}" == *"sanitize=thread"* ]]; then
+            setarch x86_64 -R ./scripts/snipcli_audit_repro.sh ./${{ matrix.binary_path }}
+          else
+            ./scripts/snipcli_audit_repro.sh ./${{ matrix.binary_path }}
+          fi
 
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
@@ -105,3 +127,4 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.binary_path }}
           retention-days: 7
+

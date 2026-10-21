@@ -60,7 +60,14 @@ add_library(snipcli_core
     ${SRC_DIR}/controller/commands/stats_command.cpp
 )
 
-target_include_directories(snipcli_core PUBLIC ${INCLUDE_DIR})
+# Generate version header
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/version.hpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/version.hpp
+    @ONLY
+)
+
+target_include_directories(snipcli_core PUBLIC ${INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
 
 # Executable Target
 add_executable(snip ${SRC_DIR}/main.cpp)

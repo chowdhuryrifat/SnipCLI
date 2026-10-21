@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "scoped_env.hpp"
 #include "snipcli/model/snippet.hpp"
 #include "snipcli/view/markdown_view.hpp"
 #include "snipcli/view/terminal_view.hpp"
@@ -161,6 +162,7 @@ void runViewTests() {
     // Test 8: ANSI color toggle enable/disable (TerminalView)
     // ---------------------------------------------------------
     {
+        snipcli::test::ScopedEnv isolateNoColor("NO_COLOR", std::nullopt);
         std::ostringstream outColor;
         std::ostringstream errColor;
         snipcli::view::TerminalView viewColor(outColor, errColor, true);
@@ -408,23 +410,13 @@ void runViewTests() {
     // Test 19: NO_COLOR Environment Variable Disables Colors (Finding B6)
     // ---------------------------------------------------------
     {
-#if defined(_WIN32)
-        _putenv("NO_COLOR=1");
-#else
-        setenv("NO_COLOR", "1", 1);
-#endif
+        snipcli::test::ScopedEnv scopedNoColor("NO_COLOR", "1");
         std::ostringstream out;
         std::ostringstream err;
         snipcli::view::TerminalView viewNoColor(out, err, true);
         assertTrue(
             !viewNoColor.isColorEnabled(),
             "TerminalView must disable colors when NO_COLOR environment variable is present");
-
-#if defined(_WIN32)
-        _putenv("NO_COLOR=");
-#else
-        unsetenv("NO_COLOR");
-#endif
     }
 
     // ---------------------------------------------------------

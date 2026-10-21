@@ -1053,9 +1053,50 @@ void runRepositoryTests() {
         assertTrue(validRepo.count() == 2, "Both snippets persisted after save");
     }
 
+    // ---------------------------------------------------------
+    // 23: Characterization of max(id)+1 ID allocation and reuse on deletion (F4)
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path f4Dir = testDir / "f4_id_reuse";
+        std::filesystem::create_directories(f4Dir, ec);
+        std::filesystem::path f4File = f4Dir / "id_reuse.json";
+
+        snipcli::model::JsonSnippetRepository repo(f4File);
+
+        // Add #1 and #2
+        snipcli::model::Snippet s1(0, "First", "cpp", "int a = 1;", {}, "", "");
+        snipcli::model::Snippet s2(0, "Second", "cpp", "int b = 2;", {}, "", "");
+        auto saved1 = repo.save(s1);
+        auto saved2 = repo.save(s2);
+
+        assertTrue(saved1 == 1, "First snippet receives ID 1");
+        assertTrue(saved2 == 2, "Second snippet receives ID 2");
+
+        // Intentional v1.0 characterization: deleting the highest ID allows ID reuse on next add
+        assertTrue(repo.removeById(2), "Successfully delete highest ID (2)");
+
+        snipcli::model::Snippet s3(0, "Third", "cpp", "int c = 3;", {}, "", "");
+        auto saved3 = repo.save(s3);
+        assertTrue(saved3 == 2,
+                   "Intentional contract: new snippet reuses highest ID 2 after deletion");
+
+        // Verify deleting an interior ID does not reuse:
+        // Add snippet #3
+        snipcli::model::Snippet s4(0, "Fourth", "cpp", "int d = 4;", {}, "", "");
+        auto saved4 = repo.save(s4);
+        assertTrue(saved4 == 3, "Next snippet receives ID 3");
+
+        // Delete interior snippet #2: remaining are #1 and #3 (maxId = 3)
+        assertTrue(repo.removeById(2), "Successfully delete interior ID (2)");
+        snipcli::model::Snippet s5(0, "Fifth", "cpp", "int e = 5;", {}, "", "");
+        auto saved5 = repo.save(s5);
+        assertTrue(saved5 == 4,
+                   "Deleting interior ID does not reuse: next snippet receives maxId+1 = 4");
+    }
+
     // Cleanup test directory
     std::filesystem::remove_all(testDir, ec);
 
-    std::cout << "[PASS] Repository tests passed. (22/22 Invariants & Scenarios Verified)"
+    std::cout << "[PASS] Repository tests passed. (23/23 Invariants & Scenarios Verified)"
               << std::endl;
 }

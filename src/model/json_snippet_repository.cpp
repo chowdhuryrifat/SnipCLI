@@ -126,6 +126,8 @@ public:
         }
 
 #if defined(_WIN32)
+        // Windows file locking via CreateFileW/LockFileEx operates directly on filesystem handles;
+        // symlink resolution is governed by OS privilege and security policies.
         std::wstring wPath = lockPath.wstring();
         m_handle = CreateFileW(wPath.c_str(), GENERIC_READ | GENERIC_WRITE,
                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
@@ -164,10 +166,19 @@ public:
                                            lockPath.string() + ").");
         }
 #else
-        m_fd = ::open(lockPath.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+        m_fd = ::open(lockPath.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
         if (m_fd < 0) {
+            int err = errno;
+            if (err == ELOOP
+#if defined(EMLINK)
+                || err == EMLINK
+#endif
+            ) {
+                throw common::StorageException(
+                    "Lock path is a symbolic link; refusing to follow: " + lockPath.string());
+            }
             throw common::StorageException("Failed to open lock file: " + lockPath.string() + ": " +
-                                           std::strerror(errno));
+                                           std::strerror(err));
         }
         auto start = std::chrono::steady_clock::now();
         bool acquired = false;

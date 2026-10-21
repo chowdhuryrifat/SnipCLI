@@ -1094,9 +1094,88 @@ void runRepositoryTests() {
                    "Deleting interior ID does not reuse: next snippet receives maxId+1 = 4");
     }
 
+    // ---------------------------------------------------------
+    // 24: Lock file symlink hardening (O_NOFOLLOW) & stale lock resilience (F5)
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path f5Dir = testDir / "f5_lock_symlink";
+        std::filesystem::create_directories(f5Dir, ec);
+
+        // (a) Existing file symlinked as lock: must reject and leave victim untouched
+        std::filesystem::path victim = f5Dir / "victim.txt";
+        {
+            std::ofstream out(victim);
+            out << "PROTECTED_DATA\n";
+        }
+        std::filesystem::path storeA = f5Dir / "store_a.json";
+        std::filesystem::path lockA = f5Dir / "store_a.json.lock";
+
+        ec.clear();
+        std::filesystem::create_symlink(victim, lockA, ec);
+        if (!ec) {
+            snipcli::model::JsonSnippetRepository repoA(storeA);
+            snipcli::model::Snippet s(0, "TestA", "cpp", "int a;", {}, "", "");
+            bool caught = false;
+            try {
+                (void)repoA.save(s);
+            } catch (const snipcli::common::StorageException& ex) {
+                caught = true;
+                assertTrue(
+                    std::string(ex.what()).find(
+                        "Lock path is a symbolic link; refusing to follow:") != std::string::npos,
+                    "Exception message indicates refusal to follow symlink lock");
+            }
+            assertTrue(caught, "Symlinked lock pointing to existing file throws StorageException");
+
+            // Verify victim remains byte-identical
+            std::ifstream victimIn(victim);
+            std::string victimContent((std::istreambuf_iterator<char>(victimIn)),
+                                      std::istreambuf_iterator<char>());
+            assertTrue(victimContent == "PROTECTED_DATA\n",
+                       "Victim file content preserved byte-identical");
+        }
+
+        // (b) Dangling symlink as lock: must reject and NOT create target
+        std::filesystem::path target = f5Dir / "target_should_not_exist.txt";
+        std::filesystem::path storeB = f5Dir / "store_b.json";
+        std::filesystem::path lockB = f5Dir / "store_b.json.lock";
+
+        ec.clear();
+        std::filesystem::create_symlink(target, lockB, ec);
+        if (!ec) {
+            snipcli::model::JsonSnippetRepository repoB(storeB);
+            snipcli::model::Snippet s(0, "TestB", "cpp", "int b;", {}, "", "");
+            bool caught = false;
+            try {
+                (void)repoB.save(s);
+            } catch (const snipcli::common::StorageException& ex) {
+                caught = true;
+                assertTrue(
+                    std::string(ex.what()).find(
+                        "Lock path is a symbolic link; refusing to follow:") != std::string::npos,
+                    "Exception message indicates refusal to follow dangling symlink lock");
+            }
+            assertTrue(caught, "Dangling symlinked lock throws StorageException");
+            assertTrue(!std::filesystem::exists(target),
+                       "Target of dangling symlink was not created");
+        }
+
+        // (c) Stale/pre-existing regular lock file works normally
+        std::filesystem::path storeC = f5Dir / "store_c.json";
+        std::filesystem::path lockC = f5Dir / "store_c.json.lock";
+        {
+            std::ofstream staleOut(lockC);
+            // Empty regular file left behind from previous run
+        }
+        snipcli::model::JsonSnippetRepository repoC(storeC);
+        snipcli::model::Snippet sC(0, "TestC", "cpp", "int c;", {}, "", "");
+        auto savedC = repoC.save(sC);
+        assertTrue(savedC == 1, "Normal pre-existing regular lock file allows successful save");
+    }
+
     // Cleanup test directory
     std::filesystem::remove_all(testDir, ec);
 
-    std::cout << "[PASS] Repository tests passed. (23/23 Invariants & Scenarios Verified)"
+    std::cout << "[PASS] Repository tests passed. (24/24 Invariants & Scenarios Verified)"
               << std::endl;
 }

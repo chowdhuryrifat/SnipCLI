@@ -6,8 +6,10 @@
 [![C++ Standard](https://img.shields.io/badge/Language-C%2B%2B17-00599C?logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/17)
 [![Build System](https://img.shields.io/badge/Build-CMake%203.16%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
 [![CI/CD Pipeline](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?logo=github-actions&logoColor=white)](https://github.com/chowdhuryrifat/SnipCLI/actions)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](https://github.com/chowdhuryrifat/SnipCLI)
 [![Architecture](https://img.shields.io/badge/Architecture-Strict%20MVC-brightgreen)](#-system-architecture--mvc-blueprint)
 [![Design Patterns](https://img.shields.io/badge/GoF%20Patterns-Command%20%7C%20Strategy%20%7C%20Factory-orange)](#-gof-design-patterns-mapping)
+[![Release](https://img.shields.io/github/v/release/chowdhuryrifat/SnipCLI?logo=github)](https://github.com/chowdhuryrifat/SnipCLI/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
@@ -34,11 +36,12 @@
 - [🚀 Quick Start & Installation](#-quick-start--installation)
 - [🖥️ Interactive Command Showcase](#️-interactive-command-showcase)
 - [📖 Complete CLI Command & Option Reference](#-complete-cli-command--option-reference)
+- [⚙️ Configuration & Environment](#️-configuration--environment)
 - [🏗️ System Architecture & MVC Blueprint](#️-system-architecture--mvc-blueprint)
 - [🧠 SOLID & GoF Design Patterns](#-solid--gof-design-patterns)
 - [🧪 Automated Testing & CI/CD Pipeline](#-automated-testing--cicd-pipeline)
 - [🛡️ Defense & Live Modification Playbook](#️-defense--live-modification-playbook)
-- [📅 7-Day Sprint Plan & Daily Work Breakdown](docs/SPRINT_PLAN.md)
+- [📅 7-Day Sprint Plan & Daily Work Breakdown](docs/internal/SPRINT_PLAN.md)
 - [👥 Authors & Course Metadata](#-authors--course-metadata)
 
 ---
@@ -58,23 +61,41 @@
 
 ## 🚀 Quick Start & Installation
 
-### 1. Prerequisites
-- **Compiler:** GCC 9+, Clang 10+, or MSVC 2019+ (Supporting C++17)
-- **Build System:** CMake 3.16+
-- **Platform:** Linux, macOS, or Windows (MinGW/MSVC)
+### 1. Package Managers
 
-### 2. Compilation
+Install SnipCLI using your platform's package manager:
+
 ```bash
-# Clone the repository
-git clone https://github.com/chowdhuryrifat/SnipCLI.git
-cd SnipCLI
+# macOS & Linux (Homebrew)
+brew tap chowdhuryrifat/snipcli
+brew install snipcli
 
-# Configure and compile
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
+# Windows (WinGet)
+winget install ChowdhuryRifat.SnipCLI
+
+# Debian / Ubuntu (.deb)
+sudo dpkg -i snipcli_1.0.0_amd64.deb
+
+# Arch Linux (AUR)
+yay -S snipcli
 ```
 
-### 3. Verify Build & Run Test Suite
+### 2. Prebuilt Binaries
+
+Standalone executables for Linux (x86_64), macOS (Apple Silicon / ARM64), and Windows (x86_64) are attached to every [GitHub Release](https://github.com/chowdhuryrifat/SnipCLI/releases) alongside cryptographic checksums (`SHA256SUMS.txt`).
+
+### 3. Build from Source
+
+Build SnipCLI in 3 commands with zero external dependencies:
+
+```bash
+git clone https://github.com/chowdhuryrifat/SnipCLI.git
+cmake -S SnipCLI -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+```
+
+### 4. Verify Build & Run Test Suite
+
 ```bash
 # Run CTest Unit Tests (All 7 Suites - 139 Scenarios & Invariants)
 ctest --test-dir build --output-on-failure
@@ -231,6 +252,20 @@ Export your snippet library directly to GitHub-Flavored Markdown for homework re
 
 > **Note on CLI Options & Aliases:** Single-dash value aliases (`-t`, `-l`, `-f`, and `-c` in `add`) are supported and strictly mapped to their corresponding long options (`--title`, `--lang`, `--file`, `--code`). In `get`, `-c` functions as the pipe-native `--code-only` boolean flag. Global options (`--format`, `--help`, `--version`) may precede or follow the command verb. Options are strictly validated per command schema to guarantee unknown or unsupported options are rejected prior to execution. Valueless options and unquoted multi-word arguments are defensively rejected with explicit diagnostic errors. Standard end-of-options delimiter (`--`) is fully supported.
 
+---
+
+## ⚙️ Configuration & Environment
+
+SnipCLI operates with sensible zero-configuration defaults, but can be customized through environment variables:
+
+| Environment Variable | Allowed Values / Range | Default | Purpose |
+|---|---|---|---|
+| `SNIPCLI_STORAGE_PATH` | Any valid absolute or relative file path | `~/.snipcli/snippets.json` | Specifies the storage file location for snippets. Directory is auto-created if missing. |
+| `SNIPCLI_LOCK_TIMEOUT_MS` | Integer in range `[1, 600000]` ms (1 ms to 10 min) | `10000` (10 seconds) | Maximum polling time to acquire the cross-process storage lock before failing with exit code 1. Non-numeric or out-of-range values fall back safely to default. |
+| `NO_COLOR` | Any non-empty string | *(unset)* | Disables ANSI color codes on terminal output per the [NO_COLOR specification](https://no-color.org/). |
+
+---
+
 ## 🏗️ System Architecture & MVC Blueprint
 
 SnipCLI strictly enforces Model-View-Controller in a terminal CLI environment:
@@ -308,8 +343,8 @@ The bash test suite (`tests/smoke/smoke_test.sh`) verifies the final binary end-
 ### 3. GitHub Actions CI/CD Matrix
 Every pull request targeting `main` or `dev` triggers the automated CI/CD pipeline:
 - **Code Quality & Static Analysis:** Clang-Format 18 check (`git diff --exit-code`) and Cppcheck static analysis (`--enable=warning,performance,portability --error-exitcode=1`).
-- **Build & Test Matrix:** Parallel compilation, CTest execution, and automated smoke & adversarial test suites across `ubuntu-latest` (GCC), `ubuntu-latest` (GCC-Sanitizers with ASan + UBSan), and `windows-latest` (MSVC).
-- **Adversarial Audit Reproduction:** Reproduction script (`scripts/snipcli_audit_repro.sh`) validating adversarial edge cases (B1–B8) and cross-platform CRLF/LF byte-exact roundtrips across all operating systems.
+- **Build & Test Matrix:** Parallel compilation, CTest execution, and automated smoke & adversarial test suites across `ubuntu-24.04` (GCC), `ubuntu-24.04` (GCC-Sanitizers with ASan + UBSan), `ubuntu-24.04` (GCC-TSan with `setarch x86_64 -R`), `macos-14` (AppleClang), and `windows-latest` (MSVC).
+- **Adversarial Audit Reproduction:** Reproduction script (`scripts/snipcli_audit_repro.sh`) validating adversarial edge cases and cross-platform CRLF/LF byte-exact roundtrips across all operating systems.
 - **Automated Artifact Packaging:** Production binaries are automatically archived and published as CI build artifacts.
 
 ---
@@ -323,6 +358,18 @@ Built specifically to satisfy the strict **5-minute live on-the-spot viva modifi
 | **A: New Command** | *"Add a `stats` command showing line totals."* | 2 files (`stats_command.cpp`, `main.cpp`) | Demonstrates **OCP** and the **Command Pattern**: no core router or repository files modified. |
 | **B: New Invariant** | *"Reject snippets with > 100 lines or duplicate tags."* | 1 file (`snippet_validator.cpp`) | Demonstrates **SRP**: validation logic is quarantined from parser and storage layers. |
 | **C: Format Swap** | *"Export snippet listings as Markdown tables."* | 2 files (`markdown_view.cpp`, `view_factory.cpp`) | Demonstrates **DIP** & **Factory Pattern**: Controller is completely agnostic to view implementations. |
+
+---
+
+## 📚 Documentation & Reference Guides
+
+- [System Architecture](docs/ARCHITECTURE.md) — Detailed MVC layer responsibilities and GoF pattern design.
+- [Technical Specification](docs/TECHNICAL.md) — Storage engine, locking mechanics, and JSON schema invariants.
+- [Release Guide](docs/RELEASING.md) — Step-by-step checklist for tagging and release automation.
+- [Downstream Packaging Guide](docs/PACKAGING.md) — Instructions for Homebrew, Debian, WinGet, and AUR maintainers.
+- [Changelog](CHANGELOG.md) — Semantic version history, fixes, and release notes.
+- [Contributing Guide](CONTRIBUTING.md) — Development setup, testing workflows, and PR protocols.
+- [Security Policy](SECURITY.md) — Vulnerability reporting instructions and response SLAs.
 
 ---
 

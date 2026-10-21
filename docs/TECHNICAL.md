@@ -27,8 +27,10 @@
   - Commands catch exceptions, route the user-facing message to `ISnippetView::renderError()`, and return non-zero exit codes.
   - `main()` implements an outer catch-all barrier to prevent unhandled crashes.
 
-## 3. Storage & Concurrency
+- **Closed Schema & Field Contract (v1.0):**
+  - Storage parses snippets from a JSON array of objects with strict UTF-8 encoding validation.
+  - Mandatory fields: `id` (integer > 0), `title` (string, non-empty, case-insensitively unique), `language` (string, non-empty), `code` (string, non-empty), `tags` (array of strings).
+  - Optional fields: `createdAt` (string ISO-8601), `updatedAt` (string ISO-8601).
+  - Validation: Unknown fields are validated as strictly well-formed JSON (strings, booleans, null, numbers matching `-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?`, or nested arrays/objects up to a depth cap of 64).
+  - Drop on Write: In SnipCLI v1.0, the schema is closed. Unknown fields are tolerated on read and dropped upon saving. Preserving arbitrary unknown attributes is scheduled for v1.1.
 
-- **Persistence Format:** JSON file with standard field schema (`id`, `title`, `language`, `code`, `tags`, `createdAt`, `updatedAt`).
-- **Thread Safety:** `JsonSnippetRepository` guards read/write operations using `std::mutex` and `std::lock_guard<std::mutex>`.
-- **File System Portability:** Storage location dynamically resolves via `SNIPCLI_STORAGE_PATH`, `%APPDATA%` (Windows), or `$HOME/.snipcli` (POSIX).

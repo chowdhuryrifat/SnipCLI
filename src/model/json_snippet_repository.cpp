@@ -423,6 +423,279 @@ std::string unescapeJson(const std::string& input) {
     return out;
 }
 
+bool isValidUtf8(std::string_view s) noexcept {
+    size_t i = 0;
+    while (i < s.size()) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (c < 0x80) {
+            i++;
+        } else if (c >= 0xC2 && c <= 0xDF) {
+            if (i + 1 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            if ((c1 & 0xC0) != 0x80)
+                return false;
+            i += 2;
+        } else if (c == 0xE0) {
+            if (i + 2 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            if (c1 < 0xA0 || c1 > 0xBF || (c2 & 0xC0) != 0x80)
+                return false;
+            i += 3;
+        } else if ((c >= 0xE1 && c <= 0xEC) || c == 0xEE || c == 0xEF) {
+            if (i + 2 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80)
+                return false;
+            i += 3;
+        } else if (c == 0xED) {
+            if (i + 2 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            if (c1 < 0x80 || c1 > 0x9F || (c2 & 0xC0) != 0x80)
+                return false;
+            i += 3;
+        } else if (c == 0xF0) {
+            if (i + 3 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            unsigned char c3 = static_cast<unsigned char>(s[i + 3]);
+            if (c1 < 0x90 || c1 > 0xBF || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80)
+                return false;
+            i += 4;
+        } else if (c >= 0xF1 && c <= 0xF3) {
+            if (i + 3 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            unsigned char c3 = static_cast<unsigned char>(s[i + 3]);
+            if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80)
+                return false;
+            i += 4;
+        } else if (c == 0xF4) {
+            if (i + 3 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            unsigned char c3 = static_cast<unsigned char>(s[i + 3]);
+            if (c1 < 0x80 || c1 > 0x8F || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80)
+                return false;
+            i += 4;
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
+
+constexpr int kMaxJsonDepth = 64;
+
+bool isValidJsonNumber(std::string_view s) noexcept {
+    if (s.empty()) {
+        return false;
+    }
+    size_t i = 0;
+    if (s[i] == '-') {
+        i++;
+        if (i == s.size()) {
+            return false;
+        }
+    }
+    if (s[i] == '0') {
+        i++;
+    } else if (s[i] >= '1' && s[i] <= '9') {
+        while (i < s.size() && s[i] >= '0' && s[i] <= '9') {
+            i++;
+        }
+    } else {
+        return false;
+    }
+    if (i < s.size() && s[i] == '.') {
+        i++;
+        if (i == s.size() || s[i] < '0' || s[i] > '9') {
+            return false;
+        }
+        while (i < s.size() && s[i] >= '0' && s[i] <= '9') {
+            i++;
+        }
+    }
+    if (i < s.size() && (s[i] == 'e' || s[i] == 'E')) {
+        i++;
+        if (i < s.size() && (s[i] == '+' || s[i] == '-')) {
+            i++;
+        }
+        if (i == s.size() || s[i] < '0' || s[i] > '9') {
+            return false;
+        }
+        while (i < s.size() && s[i] >= '0' && s[i] <= '9') {
+            i++;
+        }
+    }
+    return i == s.size();
+}
+
+bool isValidJsonBareToken(std::string_view s) noexcept {
+    if (s == "true" || s == "false" || s == "null") {
+        return true;
+    }
+    return isValidJsonNumber(s);
+}
+
+void validateAndSkipJsonValue(const std::string& str, size_t& idx, size_t last, int depth) {
+    while (idx < last && std::isspace(static_cast<unsigned char>(str[idx]))) {
+        idx++;
+    }
+    if (idx >= last) {
+        throw common::StorageException("Corrupt storage file: expected JSON value.");
+    }
+
+    if (depth > kMaxJsonDepth) {
+        throw common::StorageException(
+            "Corrupt storage file: JSON nesting depth exceeds maximum supported (64).");
+    }
+
+    if (str[idx] == '"') {
+        size_t valStart = idx + 1;
+        size_t valEnd = valStart;
+        while (valEnd < last && (str[valEnd] != '"' || isEscaped(str, valEnd))) {
+            if (static_cast<unsigned char>(str[valEnd]) < 0x20) {
+                throw common::StorageException(
+                    "Corrupt storage file: unescaped control character in JSON string.");
+            }
+            valEnd++;
+        }
+        if (valEnd >= last || str[valEnd] != '"') {
+            throw common::StorageException(
+                "Corrupt storage file: unterminated value string in JSON.");
+        }
+        unescapeJson(str.substr(valStart, valEnd - valStart));
+        idx = valEnd + 1;
+    } else if (str[idx] == '[') {
+        idx++;  // skip '['
+        bool expectComma = false;
+        while (idx < last) {
+            while (idx < last && std::isspace(static_cast<unsigned char>(str[idx]))) {
+                idx++;
+            }
+            if (idx >= last) {
+                break;
+            }
+            if (str[idx] == ']') {
+                idx++;
+                return;
+            }
+            if (expectComma) {
+                if (str[idx] != ',') {
+                    throw common::StorageException(
+                        "Corrupt storage file: expected ',' in JSON array.");
+                }
+                idx++;
+                while (idx < last && std::isspace(static_cast<unsigned char>(str[idx]))) {
+                    idx++;
+                }
+                if (idx >= last) {
+                    throw common::StorageException(
+                        "Corrupt storage file: unexpected end of array after comma.");
+                }
+                if (str[idx] == ']') {
+                    throw common::StorageException(
+                        "Corrupt storage file: trailing comma in JSON array.");
+                }
+            }
+            validateAndSkipJsonValue(str, idx, last, depth + 1);
+            expectComma = true;
+        }
+        throw common::StorageException("Corrupt storage file: unclosed array in JSON.");
+    } else if (str[idx] == '{') {
+        idx++;  // skip '{'
+        bool expectComma = false;
+        std::unordered_set<std::string> nestedKeys;
+        while (idx < last) {
+            while (idx < last && std::isspace(static_cast<unsigned char>(str[idx]))) {
+                idx++;
+            }
+            if (idx >= last) {
+                break;
+            }
+            if (str[idx] == '}') {
+                idx++;
+                return;
+            }
+            if (expectComma) {
+                if (str[idx] != ',') {
+                    throw common::StorageException(
+                        "Corrupt storage file: expected ',' in JSON object.");
+                }
+                idx++;
+                while (idx < last && std::isspace(static_cast<unsigned char>(str[idx]))) {
+                    idx++;
+                }
+                if (idx >= last) {
+                    throw common::StorageException(
+                        "Corrupt storage file: unexpected end of object after comma.");
+                }
+                if (str[idx] == '}') {
+                    throw common::StorageException(
+                        "Corrupt storage file: trailing comma in JSON object.");
+                }
+            }
+            if (str[idx] != '"') {
+                throw common::StorageException(
+                    "Corrupt storage file: object key must be a string literal.");
+            }
+            size_t keyStart = idx + 1;
+            size_t keyEnd = keyStart;
+            while (keyEnd < last && (str[keyEnd] != '"' || isEscaped(str, keyEnd))) {
+                if (static_cast<unsigned char>(str[keyEnd]) < 0x20) {
+                    throw common::StorageException(
+                        "Corrupt storage file: unescaped control character in JSON key.");
+                }
+                keyEnd++;
+            }
+            if (keyEnd >= last || str[keyEnd] != '"') {
+                throw common::StorageException(
+                    "Corrupt storage file: unterminated key string in JSON object.");
+            }
+            std::string nKey = unescapeJson(str.substr(keyStart, keyEnd - keyStart));
+            if (!nestedKeys.insert(nKey).second) {
+                throw common::StorageException("Corrupt storage file: duplicate key '" + nKey +
+                                               "' in JSON object.");
+            }
+            idx = keyEnd + 1;
+
+            while (idx < last && std::isspace(static_cast<unsigned char>(str[idx]))) {
+                idx++;
+            }
+            if (idx >= last || str[idx] != ':') {
+                throw common::StorageException(
+                    "Corrupt storage file: expected ':' after key in JSON object.");
+            }
+            idx++;  // skip ':'
+
+            validateAndSkipJsonValue(str, idx, last, depth + 1);
+            expectComma = true;
+        }
+        throw common::StorageException("Corrupt storage file: unclosed nested object in JSON.");
+    } else {
+        size_t valStart = idx;
+        while (idx < last && str[idx] != ',' && str[idx] != ']' && str[idx] != '}' &&
+               !std::isspace(static_cast<unsigned char>(str[idx]))) {
+            idx++;
+        }
+        std::string token = str.substr(valStart, idx - valStart);
+        if (!isValidJsonBareToken(token)) {
+            throw common::StorageException("Corrupt storage file: invalid JSON value '" + token +
+                                           "'.");
+        }
+    }
+}
+
 std::unordered_map<std::string, std::string> parseJsonObject(const std::string& objStr) {
     std::unordered_map<std::string, std::string> fields;
     size_t first = objStr.find_first_not_of(" \t\n\r");
@@ -476,7 +749,7 @@ std::unordered_map<std::string, std::string> parseJsonObject(const std::string& 
             throw common::StorageException(
                 "Corrupt storage file: unterminated key string in JSON object.");
         }
-        std::string key = objStr.substr(keyStart, keyEnd - keyStart);
+        std::string key = unescapeJson(objStr.substr(keyStart, keyEnd - keyStart));
         idx = keyEnd + 1;
 
         while (idx < last && std::isspace(static_cast<unsigned char>(objStr[idx]))) {
@@ -513,59 +786,22 @@ std::unordered_map<std::string, std::string> parseJsonObject(const std::string& 
             }
             value = unescapeJson(objStr.substr(valStart, valEnd - valStart));
             idx = valEnd + 1;
-        } else if (objStr[idx] == '[') {
-            size_t arrStart = idx;
-            size_t arrEnd = idx + 1;
-            int bracketDepth = 1;
-            bool inStr = false;
-            while (arrEnd < last && bracketDepth > 0) {
-                if (objStr[arrEnd] == '"' && !isEscaped(objStr, arrEnd)) {
-                    inStr = !inStr;
-                } else if (!inStr) {
-                    if (objStr[arrEnd] == '[') {
-                        bracketDepth++;
-                    } else if (objStr[arrEnd] == ']') {
-                        bracketDepth--;
-                    }
-                }
-                arrEnd++;
-            }
-            if (bracketDepth != 0) {
-                throw common::StorageException(
-                    "Corrupt storage file: unclosed array in JSON object.");
-            }
-            value = objStr.substr(arrStart, arrEnd - arrStart);
-            idx = arrEnd;
-        } else if (objStr[idx] == '{') {
+        } else if (objStr[idx] == '[' || objStr[idx] == '{') {
             size_t subStart = idx;
-            size_t subEnd = idx + 1;
-            int braceDepth = 1;
-            bool inStr = false;
-            while (subEnd < last && braceDepth > 0) {
-                if (objStr[subEnd] == '"' && !isEscaped(objStr, subEnd)) {
-                    inStr = !inStr;
-                } else if (!inStr) {
-                    if (objStr[subEnd] == '{') {
-                        braceDepth++;
-                    } else if (objStr[subEnd] == '}') {
-                        braceDepth--;
-                    }
-                }
-                subEnd++;
-            }
-            if (braceDepth != 0) {
-                throw common::StorageException(
-                    "Corrupt storage file: unclosed nested object in JSON object.");
-            }
-            value = objStr.substr(subStart, subEnd - subStart);
-            idx = subEnd;
+            validateAndSkipJsonValue(objStr, idx, last, 2);
+            value = objStr.substr(subStart, idx - subStart);
         } else {
             size_t valStart = idx;
             while (idx < last && objStr[idx] != ',' &&
                    !std::isspace(static_cast<unsigned char>(objStr[idx]))) {
                 idx++;
             }
-            value = objStr.substr(valStart, idx - valStart);
+            std::string token = objStr.substr(valStart, idx - valStart);
+            if (!isValidJsonBareToken(token)) {
+                throw common::StorageException("Corrupt storage file: invalid JSON value '" +
+                                               token + "'.");
+            }
+            value = std::move(token);
         }
 
         if (fields.count(key)) {
@@ -706,6 +942,11 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
         content.erase(0, 3);
     }
 
+    if (!isValidUtf8(content)) {
+        throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                       ": invalid UTF-8 byte sequence.");
+    }
+
     bool emptyOrWhitespace = true;
     for (char c : content) {
         if (!std::isspace(static_cast<unsigned char>(c))) {
@@ -777,6 +1018,11 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
             } else if (!inStr) {
                 if (content[end] == '{') {
                     depth++;
+                    if (depth > kMaxJsonDepth) {
+                        throw common::StorageException(
+                            "Corrupt storage file at " + m_storagePath.string() +
+                            ": JSON nesting depth exceeds maximum supported (64).");
+                    }
                 } else if (content[end] == '}') {
                     depth--;
                 }

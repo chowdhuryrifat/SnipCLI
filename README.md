@@ -75,7 +75,7 @@ cmake --build build --parallel
 
 ### 3. Verify Build & Run Test Suite
 ```bash
-# Run CTest Unit Tests (All 7 Suites - 134 Scenarios & Invariants)
+# Run CTest Unit Tests (All 7 Suites - 139 Scenarios & Invariants)
 ctest --test-dir build --output-on-failure
 
 # Run Automated End-to-End Smoke & Integration Tests
@@ -260,7 +260,7 @@ flowchart TD
 1. **Model (`snipcli::model`):** Pure domain logic and persistence. Completely isolated from terminal widths, ANSI escapes, or CLI flags.
 2. **View (`snipcli::view`):** Pure presentation. Implements `ISnippetView` to format data to any `std::ostream`. Completely isolated from business logic and database queries.
 3. **Controller (`snipcli::controller`):** Mediator. Executes CLI verbs through the Command Pattern, catches exceptions, and routes results to the View.
-4. **Storage Concurrency & Integrity:** In-process thread-safety guarded by `std::mutex`, cross-process writer exclusion guarded by advisory `<storagePath>.lock` (`flock` on POSIX, `LockFileEx` on Windows) with bounded timeout (default 10s, configurable via `SNIPCLI_LOCK_TIMEOUT_MS`), and lock-free reader operations over atomic file replacement.
+4. **Storage Concurrency & Integrity:** In-process thread-safety guarded by `std::mutex`, cross-process writer exclusion guarded by advisory `<storagePath>.lock` (`flock` on POSIX with `O_NOFOLLOW`, `LockFileEx` on Windows) with bounded timeout (default 10s, configurable via `SNIPCLI_LOCK_TIMEOUT_MS` in range `[1, 600000]` ms with safe bounds clamping and default fallback), POSIX parent directory `fsync` and macOS `F_FULLFSYNC` durability, lock-free reader operations over atomic file replacement, strict UTF-8 validation, closed schema enforcement (unknown fields are validated on read and dropped upon write; preservation is scheduled for v1.1), and sequential ID allocation (IDs are assigned as highest existing ID + 1 and can be reused after deleting the newest snippet; use titles for stable references).
 
 ---
 
@@ -285,10 +285,10 @@ flowchart TD
 SnipCLI enforces rigorous multi-layered quality gates across every commit and Pull Request:
 
 ### 1. Multi-Suite Unit Testing (CTest)
-A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 134 domain invariants and behavioral scenarios:
+A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 139 domain invariants and behavioral scenarios:
 - **`Snippet` (10 Invariants):** Immutability, line counting, tag normalization, ISO 8601 timestamps.
 - **`SnippetValidator` (12 Invariants):** Defense against empty titles, illegal characters, empty languages, and missing payloads.
-- **`JsonSnippetRepository` (20 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, atomic file replacement, multi-line CRLF preservation, cross-process advisory lock synchronization with bounded timeout, and duplicate-title rejection.
+- **`JsonSnippetRepository` (25 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, atomic file replacement, multi-line CRLF preservation, cross-process advisory lock synchronization with bounded timeout, duplicate-title rejection, symlink loop/recursion depth limit defense, unknown field validation with closed schema drop-on-save characterization, max(id)+1 ID allocation and reuse on deletion characterization, lock file symlink hardening (`O_NOFOLLOW`) with stale lock resilience, and `SNIPCLI_LOCK_TIMEOUT_MS` bounds clamping with held-lock timeout measurement.
 - **`Strategy Pattern` (10 Scenarios):** Case-insensitive title substring, exact tag matching, and language filtering.
 - **`CliParser` & `CommandDispatcher` (31 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, spaced negative values, valueless option schema validation, global options before verb, `--` delimiter, strict unknown option rejection, command-specific option schema enforcement, and boolean flag equals-syntax rejection.
 - **`Command Wiring` (31 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution, including strict ID parsing, multi-word argument defense, add-command positional quarantine, unknown option state protection, command-specific option rejection state protection, mutually exclusive selector enforcement, and storage exception quarantine.

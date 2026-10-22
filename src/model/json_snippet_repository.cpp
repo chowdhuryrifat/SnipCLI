@@ -45,22 +45,31 @@ namespace snipcli::model {
 namespace {
 
 std::filesystem::path canonicalizeStorageTarget(const std::filesystem::path& p) {
+    constexpr int kMaxSymlinkHops = 40;
+    std::filesystem::path current = p;
+    int hops = 0;
     std::error_code ec;
-    if (std::filesystem::is_symlink(p, ec)) {
-        auto linkDest = std::filesystem::read_symlink(p, ec);
-        if (!ec) {
-            std::filesystem::path parent =
-                p.has_parent_path() ? p.parent_path() : std::filesystem::current_path();
-            if (linkDest.is_relative()) {
-                linkDest = parent / linkDest;
-            }
-            return canonicalizeStorageTarget(linkDest);
+
+    while (std::filesystem::is_symlink(current, ec)) {
+        if (++hops > kMaxSymlinkHops) {
+            throw common::StorageException(
+                "Too many levels of symbolic links while resolving storage path: " + p.string());
         }
+        auto linkDest = std::filesystem::read_symlink(current, ec);
+        if (ec) {
+            break;
+        }
+        std::filesystem::path parent =
+            current.has_parent_path() ? current.parent_path() : std::filesystem::current_path();
+        if (linkDest.is_relative()) {
+            linkDest = parent / linkDest;
+        }
+        current = linkDest;
     }
     ec.clear();
 
-    if (std::filesystem::exists(p, ec)) {
-        auto canon = std::filesystem::canonical(p, ec);
+    if (std::filesystem::exists(current, ec)) {
+        auto canon = std::filesystem::canonical(current, ec);
         if (!ec) {
             return canon;
         }
@@ -68,13 +77,13 @@ std::filesystem::path canonicalizeStorageTarget(const std::filesystem::path& p) 
     ec.clear();
 
     std::filesystem::path parent =
-        p.has_parent_path() ? p.parent_path() : std::filesystem::current_path();
+        current.has_parent_path() ? current.parent_path() : std::filesystem::current_path();
     std::filesystem::create_directories(parent, ec);
     ec.clear();
 
     auto canonParent = std::filesystem::canonical(parent, ec);
     if (!ec) {
-        std::filesystem::path resolved = canonParent / p.filename();
+        std::filesystem::path resolved = canonParent / current.filename();
         if (std::filesystem::exists(resolved, ec)) {
             auto canonResolved = std::filesystem::canonical(resolved, ec);
             if (!ec) {
@@ -85,12 +94,12 @@ std::filesystem::path canonicalizeStorageTarget(const std::filesystem::path& p) 
     }
 
     ec.clear();
-    auto weakly = std::filesystem::weakly_canonical(p, ec);
+    auto weakly = std::filesystem::weakly_canonical(current, ec);
     if (!ec) {
         return weakly;
     }
 
-    return p;
+    return current;
 }
 
 class FileLock {
@@ -108,15 +117,30 @@ public:
         std::filesystem::path lockPath = target;
         lockPath += ".lock";
 
-        int timeoutMs = 10000;
-        if (const char* timeoutEnv = std::getenv("SNIPCLI_LOCK_TIMEOUT_MS")) {
-            int val = std::atoi(timeoutEnv);
-            if (val > 0) {
-                timeoutMs = val;
+        int timeoutMs =
+            JsonSnippetRepository::parseLockTimeoutMs(std::getenv("SNIPCLI_LOCK_TIMEOUT_MS"));
+
+#if defined(_WIN32)
+        // Windows file locking via CreateFileW/LockFileEx operates directly on filesystem handles.
+        // On Windows with Developer Mode, symlinks can be created; ensure we reject them
+        // (O_NOFOLLOW equivalent).
+        std::error_code symlinkEc;
+        auto st = std::filesystem::symlink_status(lockPath, symlinkEc);
+        if (!symlinkEc && std::filesystem::is_symlink(st)) {
+            throw common::StorageException("Lock path is a symbolic link; refusing to follow: " +
+                                           lockPath.string());
+        }
+        WIN32_FIND_DATAW findData;
+        HANDLE hFind = FindFirstFileW(lockPath.wstring().c_str(), &findData);
+        if (hFind != INVALID_HANDLE_VALUE) {
+            bool isReparse = (findData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+            FindClose(hFind);
+            if (isReparse) {
+                throw common::StorageException(
+                    "Lock path is a symbolic link; refusing to follow: " + lockPath.string());
             }
         }
 
-#if defined(_WIN32)
         std::wstring wPath = lockPath.wstring();
         m_handle = CreateFileW(wPath.c_str(), GENERIC_READ | GENERIC_WRITE,
                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
@@ -155,10 +179,19 @@ public:
                                            lockPath.string() + ").");
         }
 #else
-        m_fd = ::open(lockPath.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+        m_fd = ::open(lockPath.c_str(), O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
         if (m_fd < 0) {
+            int err = errno;
+            if (err == ELOOP
+#if defined(EMLINK)
+                || err == EMLINK
+#endif
+            ) {
+                throw common::StorageException(
+                    "Lock path is a symbolic link; refusing to follow: " + lockPath.string());
+            }
             throw common::StorageException("Failed to open lock file: " + lockPath.string() + ": " +
-                                           std::strerror(errno));
+                                           std::strerror(err));
         }
         auto start = std::chrono::steady_clock::now();
         bool acquired = false;
@@ -414,6 +447,279 @@ std::string unescapeJson(const std::string& input) {
     return out;
 }
 
+bool isValidUtf8(std::string_view s) noexcept {
+    size_t i = 0;
+    while (i < s.size()) {
+        unsigned char c = static_cast<unsigned char>(s[i]);
+        if (c < 0x80) {
+            i++;
+        } else if (c >= 0xC2 && c <= 0xDF) {
+            if (i + 1 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            if ((c1 & 0xC0) != 0x80)
+                return false;
+            i += 2;
+        } else if (c == 0xE0) {
+            if (i + 2 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            if (c1 < 0xA0 || c1 > 0xBF || (c2 & 0xC0) != 0x80)
+                return false;
+            i += 3;
+        } else if ((c >= 0xE1 && c <= 0xEC) || c == 0xEE || c == 0xEF) {
+            if (i + 2 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80)
+                return false;
+            i += 3;
+        } else if (c == 0xED) {
+            if (i + 2 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            if (c1 < 0x80 || c1 > 0x9F || (c2 & 0xC0) != 0x80)
+                return false;
+            i += 3;
+        } else if (c == 0xF0) {
+            if (i + 3 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            unsigned char c3 = static_cast<unsigned char>(s[i + 3]);
+            if (c1 < 0x90 || c1 > 0xBF || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80)
+                return false;
+            i += 4;
+        } else if (c >= 0xF1 && c <= 0xF3) {
+            if (i + 3 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            unsigned char c3 = static_cast<unsigned char>(s[i + 3]);
+            if ((c1 & 0xC0) != 0x80 || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80)
+                return false;
+            i += 4;
+        } else if (c == 0xF4) {
+            if (i + 3 >= s.size())
+                return false;
+            unsigned char c1 = static_cast<unsigned char>(s[i + 1]);
+            unsigned char c2 = static_cast<unsigned char>(s[i + 2]);
+            unsigned char c3 = static_cast<unsigned char>(s[i + 3]);
+            if (c1 < 0x80 || c1 > 0x8F || (c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80)
+                return false;
+            i += 4;
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
+
+constexpr int kMaxJsonDepth = 64;
+
+bool isValidJsonNumber(std::string_view s) noexcept {
+    if (s.empty()) {
+        return false;
+    }
+    size_t i = 0;
+    if (s[i] == '-') {
+        i++;
+        if (i == s.size()) {
+            return false;
+        }
+    }
+    if (s[i] == '0') {
+        i++;
+    } else if (s[i] >= '1' && s[i] <= '9') {
+        while (i < s.size() && s[i] >= '0' && s[i] <= '9') {
+            i++;
+        }
+    } else {
+        return false;
+    }
+    if (i < s.size() && s[i] == '.') {
+        i++;
+        if (i == s.size() || s[i] < '0' || s[i] > '9') {
+            return false;
+        }
+        while (i < s.size() && s[i] >= '0' && s[i] <= '9') {
+            i++;
+        }
+    }
+    if (i < s.size() && (s[i] == 'e' || s[i] == 'E')) {
+        i++;
+        if (i < s.size() && (s[i] == '+' || s[i] == '-')) {
+            i++;
+        }
+        if (i == s.size() || s[i] < '0' || s[i] > '9') {
+            return false;
+        }
+        while (i < s.size() && s[i] >= '0' && s[i] <= '9') {
+            i++;
+        }
+    }
+    return i == s.size();
+}
+
+bool isValidJsonBareToken(std::string_view s) noexcept {
+    if (s == "true" || s == "false" || s == "null") {
+        return true;
+    }
+    return isValidJsonNumber(s);
+}
+
+void validateAndSkipJsonValue(const std::string& str, size_t& idx, size_t last, int depth) {
+    while (idx < last && std::isspace(static_cast<unsigned char>(str[idx]))) {
+        idx++;
+    }
+    if (idx >= last) {
+        throw common::StorageException("Corrupt storage file: expected JSON value.");
+    }
+
+    if (depth > kMaxJsonDepth) {
+        throw common::StorageException(
+            "Corrupt storage file: JSON nesting depth exceeds maximum supported (64).");
+    }
+
+    if (str[idx] == '"') {
+        size_t valStart = idx + 1;
+        size_t valEnd = valStart;
+        while (valEnd < last && (str[valEnd] != '"' || isEscaped(str, valEnd))) {
+            if (static_cast<unsigned char>(str[valEnd]) < 0x20) {
+                throw common::StorageException(
+                    "Corrupt storage file: unescaped control character in JSON string.");
+            }
+            valEnd++;
+        }
+        if (valEnd >= last || str[valEnd] != '"') {
+            throw common::StorageException(
+                "Corrupt storage file: unterminated value string in JSON.");
+        }
+        unescapeJson(str.substr(valStart, valEnd - valStart));
+        idx = valEnd + 1;
+    } else if (str[idx] == '[') {
+        idx++;  // skip '['
+        bool expectComma = false;
+        while (idx < last) {
+            while (idx < last && std::isspace(static_cast<unsigned char>(str[idx]))) {
+                idx++;
+            }
+            if (idx >= last) {
+                break;
+            }
+            if (str[idx] == ']') {
+                idx++;
+                return;
+            }
+            if (expectComma) {
+                if (str[idx] != ',') {
+                    throw common::StorageException(
+                        "Corrupt storage file: expected ',' in JSON array.");
+                }
+                idx++;
+                while (idx < last && std::isspace(static_cast<unsigned char>(str[idx]))) {
+                    idx++;
+                }
+                if (idx >= last) {
+                    throw common::StorageException(
+                        "Corrupt storage file: unexpected end of array after comma.");
+                }
+                if (str[idx] == ']') {
+                    throw common::StorageException(
+                        "Corrupt storage file: trailing comma in JSON array.");
+                }
+            }
+            validateAndSkipJsonValue(str, idx, last, depth + 1);
+            expectComma = true;
+        }
+        throw common::StorageException("Corrupt storage file: unclosed array in JSON.");
+    } else if (str[idx] == '{') {
+        idx++;  // skip '{'
+        bool expectComma = false;
+        std::unordered_set<std::string> nestedKeys;
+        while (idx < last) {
+            while (idx < last && std::isspace(static_cast<unsigned char>(str[idx]))) {
+                idx++;
+            }
+            if (idx >= last) {
+                break;
+            }
+            if (str[idx] == '}') {
+                idx++;
+                return;
+            }
+            if (expectComma) {
+                if (str[idx] != ',') {
+                    throw common::StorageException(
+                        "Corrupt storage file: expected ',' in JSON object.");
+                }
+                idx++;
+                while (idx < last && std::isspace(static_cast<unsigned char>(str[idx]))) {
+                    idx++;
+                }
+                if (idx >= last) {
+                    throw common::StorageException(
+                        "Corrupt storage file: unexpected end of object after comma.");
+                }
+                if (str[idx] == '}') {
+                    throw common::StorageException(
+                        "Corrupt storage file: trailing comma in JSON object.");
+                }
+            }
+            if (str[idx] != '"') {
+                throw common::StorageException(
+                    "Corrupt storage file: object key must be a string literal.");
+            }
+            size_t keyStart = idx + 1;
+            size_t keyEnd = keyStart;
+            while (keyEnd < last && (str[keyEnd] != '"' || isEscaped(str, keyEnd))) {
+                if (static_cast<unsigned char>(str[keyEnd]) < 0x20) {
+                    throw common::StorageException(
+                        "Corrupt storage file: unescaped control character in JSON key.");
+                }
+                keyEnd++;
+            }
+            if (keyEnd >= last || str[keyEnd] != '"') {
+                throw common::StorageException(
+                    "Corrupt storage file: unterminated key string in JSON object.");
+            }
+            std::string nKey = unescapeJson(str.substr(keyStart, keyEnd - keyStart));
+            if (!nestedKeys.insert(nKey).second) {
+                throw common::StorageException("Corrupt storage file: duplicate key '" + nKey +
+                                               "' in JSON object.");
+            }
+            idx = keyEnd + 1;
+
+            while (idx < last && std::isspace(static_cast<unsigned char>(str[idx]))) {
+                idx++;
+            }
+            if (idx >= last || str[idx] != ':') {
+                throw common::StorageException(
+                    "Corrupt storage file: expected ':' after key in JSON object.");
+            }
+            idx++;  // skip ':'
+
+            validateAndSkipJsonValue(str, idx, last, depth + 1);
+            expectComma = true;
+        }
+        throw common::StorageException("Corrupt storage file: unclosed nested object in JSON.");
+    } else {
+        size_t valStart = idx;
+        while (idx < last && str[idx] != ',' && str[idx] != ']' && str[idx] != '}' &&
+               !std::isspace(static_cast<unsigned char>(str[idx]))) {
+            idx++;
+        }
+        std::string token = str.substr(valStart, idx - valStart);
+        if (!isValidJsonBareToken(token)) {
+            throw common::StorageException("Corrupt storage file: invalid JSON value '" + token +
+                                           "'.");
+        }
+    }
+}
+
 std::unordered_map<std::string, std::string> parseJsonObject(const std::string& objStr) {
     std::unordered_map<std::string, std::string> fields;
     size_t first = objStr.find_first_not_of(" \t\n\r");
@@ -467,7 +773,7 @@ std::unordered_map<std::string, std::string> parseJsonObject(const std::string& 
             throw common::StorageException(
                 "Corrupt storage file: unterminated key string in JSON object.");
         }
-        std::string key = objStr.substr(keyStart, keyEnd - keyStart);
+        std::string key = unescapeJson(objStr.substr(keyStart, keyEnd - keyStart));
         idx = keyEnd + 1;
 
         while (idx < last && std::isspace(static_cast<unsigned char>(objStr[idx]))) {
@@ -504,59 +810,22 @@ std::unordered_map<std::string, std::string> parseJsonObject(const std::string& 
             }
             value = unescapeJson(objStr.substr(valStart, valEnd - valStart));
             idx = valEnd + 1;
-        } else if (objStr[idx] == '[') {
-            size_t arrStart = idx;
-            size_t arrEnd = idx + 1;
-            int bracketDepth = 1;
-            bool inStr = false;
-            while (arrEnd < last && bracketDepth > 0) {
-                if (objStr[arrEnd] == '"' && !isEscaped(objStr, arrEnd)) {
-                    inStr = !inStr;
-                } else if (!inStr) {
-                    if (objStr[arrEnd] == '[') {
-                        bracketDepth++;
-                    } else if (objStr[arrEnd] == ']') {
-                        bracketDepth--;
-                    }
-                }
-                arrEnd++;
-            }
-            if (bracketDepth != 0) {
-                throw common::StorageException(
-                    "Corrupt storage file: unclosed array in JSON object.");
-            }
-            value = objStr.substr(arrStart, arrEnd - arrStart);
-            idx = arrEnd;
-        } else if (objStr[idx] == '{') {
+        } else if (objStr[idx] == '[' || objStr[idx] == '{') {
             size_t subStart = idx;
-            size_t subEnd = idx + 1;
-            int braceDepth = 1;
-            bool inStr = false;
-            while (subEnd < last && braceDepth > 0) {
-                if (objStr[subEnd] == '"' && !isEscaped(objStr, subEnd)) {
-                    inStr = !inStr;
-                } else if (!inStr) {
-                    if (objStr[subEnd] == '{') {
-                        braceDepth++;
-                    } else if (objStr[subEnd] == '}') {
-                        braceDepth--;
-                    }
-                }
-                subEnd++;
-            }
-            if (braceDepth != 0) {
-                throw common::StorageException(
-                    "Corrupt storage file: unclosed nested object in JSON object.");
-            }
-            value = objStr.substr(subStart, subEnd - subStart);
-            idx = subEnd;
+            validateAndSkipJsonValue(objStr, idx, last, 2);
+            value = objStr.substr(subStart, idx - subStart);
         } else {
             size_t valStart = idx;
             while (idx < last && objStr[idx] != ',' &&
                    !std::isspace(static_cast<unsigned char>(objStr[idx]))) {
                 idx++;
             }
-            value = objStr.substr(valStart, idx - valStart);
+            std::string token = objStr.substr(valStart, idx - valStart);
+            if (!isValidJsonBareToken(token)) {
+                throw common::StorageException("Corrupt storage file: invalid JSON value '" +
+                                               token + "'.");
+            }
+            value = std::move(token);
         }
 
         if (fields.count(key)) {
@@ -646,6 +915,35 @@ std::filesystem::path JsonSnippetRepository::getDefaultStoragePath() {
         "Cannot determine storage location. Please set SNIPCLI_STORAGE_PATH.");
 }
 
+int JsonSnippetRepository::parseLockTimeoutMs(const char* envVal) noexcept {
+    constexpr int kDefaultTimeoutMs = 10000;
+    constexpr int kMinTimeoutMs = 1;
+    constexpr int kMaxTimeoutMs = 600000;
+
+    if (!envVal || *envVal == '\0') {
+        return kDefaultTimeoutMs;
+    }
+    std::string_view sv(envVal);
+    if (sv.empty() || sv[0] == '-' || sv[0] == '+') {
+        return kDefaultTimeoutMs;
+    }
+    int64_t val = 0;
+    auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), val);
+    if (ec != std::errc{} || ptr != sv.data() + sv.size()) {
+        return kDefaultTimeoutMs;
+    }
+    if (val <= 0) {
+        return kDefaultTimeoutMs;
+    }
+    if (val < kMinTimeoutMs) {
+        return kMinTimeoutMs;
+    }
+    if (val > kMaxTimeoutMs) {
+        return kMaxTimeoutMs;
+    }
+    return static_cast<int>(val);
+}
+
 JsonSnippetRepository::JsonSnippetRepository() : JsonSnippetRepository(getDefaultStoragePath()) {}
 
 JsonSnippetRepository::JsonSnippetRepository(std::filesystem::path storagePath)
@@ -695,6 +993,11 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
         static_cast<unsigned char>(content[1]) == 0xBB &&
         static_cast<unsigned char>(content[2]) == 0xBF) {
         content.erase(0, 3);
+    }
+
+    if (!isValidUtf8(content)) {
+        throw common::StorageException("Corrupt storage file at " + m_storagePath.string() +
+                                       ": invalid UTF-8 byte sequence.");
     }
 
     bool emptyOrWhitespace = true;
@@ -768,6 +1071,11 @@ std::vector<Snippet> JsonSnippetRepository::loadFromFile() const {
             } else if (!inStr) {
                 if (content[end] == '{') {
                     depth++;
+                    if (depth > kMaxJsonDepth) {
+                        throw common::StorageException(
+                            "Corrupt storage file at " + m_storagePath.string() +
+                            ": JSON nesting depth exceeds maximum supported (64).");
+                    }
                 } else if (content[end] == '}') {
                     depth--;
                 }
@@ -1009,12 +1317,19 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
         ptr += written;
         remaining -= static_cast<size_t>(written);
     }
-#if defined(__linux__) || defined(__APPLE__)
+#if defined(__APPLE__) && defined(F_FULLFSYNC)
+    if (::fcntl(fd, F_FULLFSYNC) < 0) {
+        ::fsync(fd);
+    }
+#elif defined(__linux__) || defined(__APPLE__) || defined(__unix__) || defined(_POSIX_VERSION)
     ::fsync(fd);
 #endif
     ::close(fd);
 #endif
 
+    // Best-effort permission restoration; if setting permissions fails (e.g. on exotic or
+    // restricted filesystems), the 0600 mode set during open() provides a safe, conservative
+    // fallback.
     std::filesystem::permissions(tmpPath, targetPerms, std::filesystem::perm_options::replace, ec);
 
 #if defined(_WIN32)
@@ -1045,6 +1360,14 @@ void JsonSnippetRepository::saveToFile(const std::vector<Snippet>& snippets) con
     if (ec) {
         throw common::StorageException("Failed to atomically replace storage file: " +
                                        ec.message());
+    }
+    // Best-effort directory fsync to ensure directory entry durability on POSIX
+    if (parentDir.is_absolute() || !parentDir.empty()) {
+        int dirFd = ::open(parentDir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        if (dirFd >= 0) {
+            ::fsync(dirFd);
+            ::close(dirFd);
+        }
     }
 #endif
 

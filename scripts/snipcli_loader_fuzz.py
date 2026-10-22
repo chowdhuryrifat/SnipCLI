@@ -55,6 +55,29 @@ if rc != 0:
     sys.exit(2)
 print("baseline: %d bytes, %d snippets" % (len(valid), out.count(b"\n| ")))
 
+import json
+
+def _strict_pairs_hook(pairs):
+    seen = set()
+    for k, v in pairs:
+        if k in seen:
+            raise ValueError(f"duplicate key {k}")
+        seen.add(k)
+    return dict(pairs)
+
+def _reject_constant(c):
+    raise ValueError(f"invalid JSON constant {c}")
+
+def python_accepts_json(data):
+    try:
+        text = data.decode("utf-8-sig")
+        if not text.strip():
+            return True
+        json.loads(text, parse_constant=_reject_constant, object_pairs_hook=_strict_pairs_hook)
+        return True
+    except Exception:
+        return False
+
 problems = []
 
 
@@ -64,6 +87,8 @@ def check(label, data, must_fail=False):
         problems.append((label, "CRASH/UB/HANG", rc, err[:160]))
     if must_fail and rc == 0:
         problems.append((label, "ACCEPTED A TRUNCATED FILE", rc, out[-100:]))
+    if rc == 0 and not python_accepts_json(data):
+        problems.append((label, "ACCEPTED MALFORMED JSON (DIFFERENTIAL ORACLE)", rc, data[:100]))
 
 
 for n in range(len(valid.rstrip())):

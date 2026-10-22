@@ -30,3 +30,4 @@ build-evidence/
 *.deb
 *.tar.gz
 *.zip
+SHA256SUMS.txt

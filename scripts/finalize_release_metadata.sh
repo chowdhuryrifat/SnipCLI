@@ -134,6 +134,11 @@ if [ -z "${SRC_TAR_HASH}" ]; then
     SRC_TAR_HASH=$(grep -vE "(linux|macos|darwin)" "${SUMS_FILE}" | grep -E "\.tar\.gz" | head -n 1 | awk '{print $1}' || true)
 fi
 
+if [ -z "${SRC_TAR_HASH}" ]; then
+    echo "Source tarball not listed in ${SUMS_FILE}, fetching GitHub tag archive to compute SHA256..."
+    SRC_TAR_HASH=$(curl -sL "https://github.com/chowdhuryrifat/SnipCLI/archive/refs/tags/${TAG}.tar.gz" | sha256sum | awk '{print $1}')
+fi
+
 validate_sha256() {
     local name="$1"
     local hash="$2"

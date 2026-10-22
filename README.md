@@ -32,16 +32,15 @@
 </div>
 
 ## 📑 Table of Contents
-- [✨ Key Features](#-key-features)
-- [🚀 Quick Start & Installation](#-quick-start--installation)
-- [🖥️ Interactive Command Showcase](#️-interactive-command-showcase)
-- [📖 Complete CLI Command & Option Reference](#-complete-cli-command--option-reference)
-- [⚙️ Configuration & Environment](#️-configuration--environment)
-- [🏗️ System Architecture & MVC Blueprint](#️-system-architecture--mvc-blueprint)
-- [🧠 SOLID & GoF Design Patterns](#-solid--gof-design-patterns)
-- [🧪 Automated Testing & CI/CD Pipeline](#-automated-testing--cicd-pipeline)
-- [🛡️ Defense & Live Modification Playbook](#️-defense--live-modification-playbook)
-- [👥 Authors & Course Metadata](#-authors--course-metadata)
+- [✨ Key Features](#key-features)
+- [🚀 Quick Start & Installation](#quick-start--installation)
+- [🖥️ Interactive Command Showcase](#interactive-command-showcase)
+- [📖 Complete CLI Command & Option Reference](#complete-cli-command--option-reference)
+- [⚙️ Configuration & Environment](#configuration--environment)
+- [🏗️ System Architecture & MVC Blueprint](#system-architecture--mvc-blueprint)
+- [🧠 SOLID & GoF Design Patterns](#solid--gof-design-patterns)
+- [🧪 Automated Testing & CI/CD Pipeline](#automated-testing--cicd-pipeline)
+- [🎓 Course Defense & Authors Metadata](docs/internal/COURSE.md)
 
 ---
 
@@ -60,40 +59,28 @@
 
 ## 🚀 Quick Start & Installation
 
-### 1. Package Managers
+### 1. Prebuilt Binaries (Recommended)
 
-Install SnipCLI using your platform's package manager:
+Standalone, statically-linked executables for Linux (x86_64), macOS (Universal: Apple Silicon & Intel), and Windows (x86_64) are attached to every [GitHub Release](https://github.com/chowdhuryrifat/SnipCLI/releases) accompanied by cryptographic checksums (`SHA256SUMS.txt`) and build provenance attestations:
 
 ```bash
-# macOS & Linux (Homebrew)
-brew tap chowdhuryrifat/snipcli
-brew install snipcli
-
-# Windows (WinGet)
-winget install ChowdhuryRifat.SnipCLI
-
-# Debian / Ubuntu (.deb)
-sudo dpkg -i snipcli_1.0.0_amd64.deb
-
-# Arch Linux (AUR)
-yay -S snipcli
+# Example: Download and run on Linux x86_64
+curl -fsSLO https://github.com/chowdhuryrifat/SnipCLI/releases/download/v1.0.0/snipcli-v1.0.0-linux-x86_64.tar.gz
+tar -xzf snipcli-v1.0.0-linux-x86_64.tar.gz
+./bin/snip --version
 ```
 
-### 2. Prebuilt Binaries
+### 2. Build from Source
 
-Standalone executables for Linux (x86_64), macOS (Apple Silicon / ARM64), and Windows (x86_64) are attached to every [GitHub Release](https://github.com/chowdhuryrifat/SnipCLI/releases) alongside cryptographic checksums (`SHA256SUMS.txt`).
-
-### 3. Build from Source
-
-Build SnipCLI in 3 commands with zero external dependencies:
+Build SnipCLI with zero external dependencies in 3 commands:
 
 ```bash
 git clone https://github.com/chowdhuryrifat/SnipCLI.git
 cmake -S SnipCLI -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+cmake --build build -j"$(nproc)"
 ```
 
-### 4. Verify Build & Run Test Suite
+#### Run Verification Test Suite:
 
 ```bash
 # Run CTest Unit Tests (All 7 Suites - 139 Scenarios & Invariants)
@@ -101,6 +88,25 @@ ctest --test-dir build --output-on-failure
 
 # Run Automated End-to-End Smoke & Integration Tests
 ./tests/smoke/smoke_test.sh ./build/snip
+```
+
+### 3. Package Managers (Coming soon — available after the v1.0.0 release is published)
+
+Once the release is published and upstream registry PRs are accepted, SnipCLI will be installable via standard package managers:
+
+```bash
+# macOS & Linux (Homebrew) — Coming Soon
+brew tap chowdhuryrifat/snipcli
+brew install snipcli
+
+# Windows (WinGet) — Coming Soon
+winget install ChowdhuryRifat.SnipCLI
+
+# Debian / Ubuntu (.deb via Releases or PPA) — Coming Soon
+sudo dpkg -i snipcli_1.0.0_amd64.deb
+
+# Arch Linux (AUR) — Coming Soon
+yay -S snipcli
 ```
 
 ---
@@ -348,18 +354,6 @@ Every pull request targeting `main` or `dev` triggers the automated CI/CD pipeli
 
 ---
 
-## 🛡️ Defense & Live Modification Playbook
-
-Built specifically to satisfy the strict **5-minute live on-the-spot viva modification constraint**:
-
-| Scenario | Professor Challenge | Files Touched | Defense Rationale |
-| :--- | :--- | :--- | :--- |
-| **A: New Command** | *"Add a `stats` command showing line totals."* | 2 files (`stats_command.cpp`, `main.cpp`) | Demonstrates **OCP** and the **Command Pattern**: no core router or repository files modified. |
-| **B: New Invariant** | *"Reject snippets with > 100 lines or duplicate tags."* | 1 file (`snippet_validator.cpp`) | Demonstrates **SRP**: validation logic is quarantined from parser and storage layers. |
-| **C: Format Swap** | *"Export snippet listings as Markdown tables."* | 2 files (`markdown_view.cpp`, `view_factory.cpp`) | Demonstrates **DIP** & **Factory Pattern**: Controller is completely agnostic to view implementations. |
-
----
-
 ## 📚 Documentation & Reference Guides
 
 - [System Architecture](docs/ARCHITECTURE.md) — Detailed MVC layer responsibilities and GoF pattern design.
@@ -369,21 +363,15 @@ Built specifically to satisfy the strict **5-minute live on-the-spot viva modifi
 - [Changelog](CHANGELOG.md) — Semantic version history, fixes, and release notes.
 - [Contributing Guide](CONTRIBUTING.md) — Development setup, testing workflows, and PR protocols.
 - [Security Policy](SECURITY.md) — Vulnerability reporting instructions and response SLAs.
+- [Course & Defense Metadata](docs/internal/COURSE.md) — Defense playbook, 5-minute live modification scenarios, and course rubrics.
 
 ---
 
-## 👥 Authors & Course Metadata
+## 👥 Authors & Academic Credits
 
-**Project:** SnipCLI (Algorithmic Snippet Manager)
+SnipCLI was developed by **Chowdhury Rifat Ahmed** (ID: `@chowdhuryrifat`) and **Lameya Tabasum** (ID: `@lameyatabasum`) for the Competitive Programming course.
 
-<div align="center">
-
-| Developer | Student ID | Primary Responsibilities | Viva Focus |
-| :--- | :---: | :--- | :--- |
-| **Chowdhury Rifat Ahmed** | `@chowdhuryrifat` | **Backend & Core Architect**<br>• Model Layer & Invariants (`SnippetValidator`)<br>• Storage Engine (`JsonSnippetRepository`)<br>• Strategy Pattern (`ISearchStrategy`)<br>• Unit Test Suite (`tests/unit/`) | • SOLID (SRP, ISP, LSP)<br>• Strategy Pattern<br>• Live Validation Scenario |
-| **Lameya Tabasum** | `@lameyatabasum` | **Frontend, Routing & DevOps Lead**<br>• Controller & Command Pattern (`ICommand`)<br>• View Layer & Factory (`TerminalView`, `MarkdownView`)<br>• CLI Argument Parser (`CliParser`)<br>• CI/CD Pipeline & Smoke Tests | • CLI MVC Architecture<br>• Command & Factory Patterns<br>• Live Command/View Scenarios |
-
-</div>
+For the live viva defense breakdown, 5-minute modification playbook, and grading evaluation rubrics, refer to [**Course & Viva Defense Metadata**](docs/internal/COURSE.md).
 
 ---
 

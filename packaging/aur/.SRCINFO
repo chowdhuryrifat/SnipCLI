@@ -1,0 +1,15 @@
+pkgbase = snipcli
+	pkgdesc = Fast, modern C++17 CLI snippet manager for competitive programmers
+	pkgver = 1.0.0
+	pkgrel = 1
+	url = https://github.com/chowdhuryrifat/SnipCLI
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = cmake
+	depends = glibc
+	depends = gcc-libs
+	source = snipcli-1.0.0.tar.gz::https://github.com/chowdhuryrifat/SnipCLI/archive/refs/tags/v1.0.0.tar.gz
+	sha256sums = <SHA256_SOURCE_TARBALL>
+
+pkgname = snipcli

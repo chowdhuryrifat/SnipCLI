@@ -20,3 +20,11 @@ snippets.json
 # OS files
 .DS_Store
 Thumbs.db
+
+# Packaging submission trees and build artifacts
+dist/
+dist-submit/
+build-evidence/
+*.deb
+*.tar.gz
+*.zip

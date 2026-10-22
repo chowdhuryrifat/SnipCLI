@@ -138,14 +138,14 @@ jobs:
           dpkg -c "${DEB_FILE}" | tee deb-evidence/dpkg_contents.txt
 
       - name: Upload Debian Inspection Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: deb-inspection
           path: deb-evidence/*
           retention-days: 7
 
       - name: Upload Linux Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-dist
           path: dist/*
@@ -211,7 +211,7 @@ jobs:
           tar -czf dist/snipcli-${{ steps.meta.outputs.tag }}-macos-universal.tar.gz -C /tmp/stage .
 
       - name: Upload macOS Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-dist
           path: dist/*
@@ -285,7 +285,7 @@ jobs:
           7z a "$GITHUB_WORKSPACE/dist/snipcli-${{ steps.meta.outputs.tag }}-windows-x86_64.zip" *
 
       - name: Upload Windows Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-dist
           path: dist/*

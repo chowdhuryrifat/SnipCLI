@@ -1,8 +1,8 @@
 # SnipCLI System Architecture & Design Blueprint
 
-**Engineers:**  
-- **Chowdhury Rifat Ahmed** (Student ID: `@chowdhuryrifat`) - Backend & Core Architect  
-- **Lameya Tabasum** (Student ID: `@lameyatabasum`) - Frontend, Routing & DevOps Lead  
+**Authors & Roles:**  
+- **Chowdhury Rifat Ahmed** ([@chowdhuryrifat](https://github.com/chowdhuryrifat)) - Backend & Core Architect  
+- **Lameya Tabasum** ([@lameyatabasum](https://github.com/lameyatabasum)) - Frontend, Routing & DevOps Lead  
 
 ---
 

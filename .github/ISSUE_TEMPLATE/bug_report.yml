@@ -1,0 +1,76 @@
+name: Bug Report
+description: Create a report to help us reproduce and fix a bug in SnipCLI
+title: "fix: [Short bug description]"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report an issue! Please search existing issues to confirm this bug has not already been reported.
+
+  - type: input
+    id: version
+    attributes:
+      label: SnipCLI Version
+      description: Run `snip --version` and paste the output here.
+      placeholder: "SnipCLI version 1.0.0 (Modern C++17 MVC Architecture)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Linux (Ubuntu/Debian)
+        - Linux (Arch/Manjaro)
+        - Linux (Fedora/RHEL)
+        - Linux (Other)
+        - macOS
+        - Windows
+    validations:
+      required: true
+
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal Emulator & Shell
+      description: e.g. Alacritty, GNOME Terminal, Windows Terminal, zsh 5.9, bash 5.2, PowerShell 7.4
+      placeholder: "bash 5.2 / GNOME Terminal"
+    validations:
+      required: false
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to Reproduce
+      description: Exact commands run and inputs provided.
+      placeholder: |
+        1. snip add --title "Test" --lang cpp --code "int main(){}"
+        2. snip get --id 1
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior & Output
+      description: What actually happened? Please paste terminal logs and error messages.
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context, environment variables (`SNIPCLI_*`, `NO_COLOR`), or storage configuration.
+    validations:
+      required: false

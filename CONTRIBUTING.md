@@ -1,130 +1,137 @@
-# Contributing & Git Governance Guide (`CONTRIBUTING.md`)
+# Contributing to SnipCLI
 
-This guide defines the collaborative workflow, branching strategy, commit standards, and Pull Request (PR) protocols for the SnipCLI 2-person engineering team.
+Thank you for your interest in contributing to **SnipCLI**! We welcome bug reports, documentation improvements, code fixes, and feature proposals.
 
----
-
-## 1. Branching Strategy (Lightweight GitHub Flow)
-
-To ensure rapid iteration without branch decay or merge nightmares, we maintain two perpetual branches and ephemeral feature branches:
-
-```mermaid
-gitGraph
-   commit id: "v1.0.0-init"
-   branch dev
-   checkout dev
-   commit id: "setup-cmake"
-   branch feat/model-repository
-   checkout feat/model-repository
-   commit id: "feat(model): json repo"
-   checkout dev
-   merge feat/model-repository id: "PR #1 (Squash)"
-   branch feat/cli-parser
-   checkout feat/cli-parser
-   commit id: "feat(cli): arg parser"
-   checkout dev
-   merge feat/cli-parser id: "PR #2 (Squash)"
-   checkout main
-   merge dev id: "Release Sprint 1" tag: "v1.0.0"
-```
-
-### Branch Roles
-- **`main` (Production / Defense Ready):**
-  - Always clean, compiles without warnings, passes 100% of tests.
-  - Protected: Direct pushes forbidden. Merges only occur via PR from `dev` after full CI approval.
-- **`dev` (Integration Branch):**
-  - The working baseline where Developer A and Developer B integrate tested features.
-  - Required CI checks must pass before merging.
-- **`feat/<short-description>`:**
-  - Short-lived feature branch created off `dev` (e.g., `feat/json-repository`, `feat/command-dispatcher`).
-  - Merged into `dev` via PR and deleted immediately upon merge.
-- **`fix/<short-description>`:**
-  - Bug fixes created off `dev` (e.g., `fix/ansi-color-windows`, `fix/line-count-overflow`).
+This guide details the development setup, coding standards, testing workflow, and Pull Request (PR) protocols.
 
 ---
 
-## 2. Commit Message Standard (Conventional Commits)
+## 1. Development Environment Setup
 
-All commits must follow the **Conventional Commits v1.0.0** specification:
+### Prerequisites
+- **C++ Compiler:** Supporting C++17:
+  - GCC >= 9.0
+  - Clang >= 10.0 (or AppleClang >= 12.0)
+  - MSVC >= 2019 (19.28)
+- **Build System:** CMake >= 3.16 and Make or Ninja
+- **Code Formatter:** `clang-format` version 18
+- **Static Analysis:** `cppcheck` >= 2.7 (optional for local checks, verified in CI)
+- **External Dependencies:** **Zero**. SnipCLI has no external library dependencies.
 
+### Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/chowdhuryrifat/SnipCLI.git
+cd SnipCLI
+
+# Configure build with tests enabled
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSNIPCLI_BUILD_TESTS=ON
+
+# Compile in parallel
+cmake --build build --parallel "$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 ```
-<type>(<scope>): <short imperative description>
+
+---
+
+## 2. Testing & Verification
+
+SnipCLI maintains zero tolerance for regressions. Every change must be verified against our multi-tier test suite.
+
+### 2.1 Running the Unit Test Suite
+
+The zero-dependency unit testing framework tests 139 scenarios across 7 domain suites:
+- **`Snippet` (10 scenarios):** Invariants, normalization, timestamps, line counts.
+- **`SnippetValidator` (12 scenarios):** Validation constraints, bad characters, empty payloads.
+- **`JsonSnippetRepository` (25 scenarios):** Persistence, atomic save, lock timeouts, UTF-8, symlink defenses.
+- **`Strategy` (10 scenarios):** Title substring, tag matching, language filtering.
+- **`Parser` (31 scenarios):** Flags, positionals, delimiters, schema rejection.
+- **`Command Wiring` (31 scenarios):** Execution flows, selector exclusivity, error paths.
+- **`View` (20 scenarios):** Terminal ANSI colors, markdown tables, raw byte outputs, `NO_COLOR`.
+
+```bash
+# Run unit tests via CTest
+ctest --test-dir build --output-on-failure
+
+# Or execute the test binary directly
+./build/snip_tests
+```
+
+### 2.2 Integration Smoke Tests
+
+```bash
+# End-to-end integration smoke tests across all CLI commands
+./tests/smoke/smoke_test.sh ./build/snip
+```
+
+### 2.3 Adversarial Reproduction & Differential Fuzzing
+
+```bash
+# Verify regression benchmarks and adversarial edge cases
+./scripts/snipcli_audit_repro.sh ./build/snip
+
+# Differential fuzzing against Python RFC 8259 json parser oracle
+python3 scripts/snipcli_loader_fuzz.py --bin ./build/snip --count 1500
+```
+
+---
+
+## 3. Code Style & Standards
+
+We enforce strict automated formatting and compiler diagnostics:
+- **Formatter:** `clang-format-18` adhering to the repository's `.clang-format` configuration (Google C++ style modified).
+  ```bash
+  # Check formatting
+  clang-format-18 --dry-run --Werror src/**/*.cpp include/**/*.hpp tests/**/*.cpp
+
+  # Apply formatting
+  clang-format-18 -i src/**/*.cpp include/**/*.hpp tests/**/*.cpp
+  ```
+- **Compiler Warnings:** Must compile with zero warnings under `-Wall -Wextra -Wpedantic` on GCC/Clang and `/W4` on MSVC.
+- **Memory Safety:** Zero raw owning pointers; always use `std::unique_ptr` or `std::shared_ptr`.
+- **Hermetic Tests:** When modifying environment variables in unit tests, use the `ScopedEnv` RAII helper to ensure test isolation.
+
+---
+
+## 4. Branching & Commit Guidelines
+
+### 4.1 Branching Strategy
+- **`main`**: Production-ready branch. Releases and tagged versions only.
+- **`dev`**: Active integration branch. All feature and fix branches target `dev`.
+- **Feature Branches:** `feat/<short-name>`
+- **Bug Fix Branches:** `fix/<short-name>`
+
+### 4.2 Conventional Commits
+
+Commit messages must adhere to the [Conventional Commits v1.0.0](https://www.conventionalcommits.org/) format:
+
+```text
+<type>(<scope>): <description>
 
 [optional body explaining motivation and trade-offs]
 
 [optional footer: Closes #issue]
 ```
 
-### Allowed Types
-- **`feat`**: A new user-facing feature or CLI command (e.g., `feat(command): implement stats command`).
-- **`fix`**: A bug fix (e.g., `fix(parser): handle paths with spaces`).
-- **`docs`**: Documentation only changes (e.g., `docs(readme): add installation guide`).
-- **`refactor`**: Code change that neither fixes a bug nor adds a feature (e.g., `refactor(model): decouple search strategy`).
-- **`test`**: Adding missing tests or correcting existing tests (e.g., `test(validator): add 100-line boundary tests`).
-- **`ci`**: Changes to CI/CD workflows and build scripts (e.g., `ci(actions): add Windows matrix runner`).
-
-### Concrete Examples
-```bash
-# Good
-feat(model): implement json snippet repository with file locking
-fix(view): reset ansi color codes on terminal view tear down
-test(controller): add smoke tests for add and delete CLI verbs
-docs(viva): add live modification playbook for final defense
-
-# Bad
-git commit -m "fixed stuff"
-git commit -m "wip"
-git commit -m "dev a finished part 2"
-```
+**Common types:**
+- `feat`: A new user-facing feature, command, or option.
+- `fix`: A bug fix or security patch.
+- `docs`: Documentation updates.
+- `refactor`: Code change that neither fixes a bug nor adds a feature.
+- `test`: Adding or updating test cases.
+- `ci`: Changes to GitHub Actions or packaging scripts.
 
 ---
 
-## 3. Pull Request Protocol & Review Rules
+## 5. Pull Request Process
 
-### 3.1 Mutual Code Review Invariant
-- **Rule of 2:** Neither Lameya Tabasum nor Chowdhury Rifat Ahmed is permitted to merge their own PR. Every PR requires an explicit **"Approve"** review from the peer developer:
-  - PRs submitted by **Lameya Tabasum** (`@lameyatabasum`) must be reviewed and approved by **Chowdhury Rifat Ahmed** (`@chowdhuryrifat`).
-  - PRs submitted by **Chowdhury Rifat Ahmed** (`@chowdhuryrifat`) must be reviewed and approved by **Lameya Tabasum** (`@lameyatabasum`).
-- Reviewer must verify:
-  1. Does it build locally without warnings (`-Wall -Wextra -Wpedantic`)?
-  2. Are all new classes accompanied by Doxygen docstrings?
-  3. Does it violate MVC or SOLID boundaries?
-  4. Is there zero memory leak / zero raw owning pointers?
-- All PRs are merged using **Squash and Merge** to maintain a linear, clean commit history on `dev`.
-
-### 3.2 Pull Request Template (`.github/pull_request_template.md`)
-
-```markdown
-### Summary of Changes
-- Implemented ...
-- Solves issue #...
-
-### Layer Affected
-- [ ] Model (`src/model/`)
-- [ ] View (`src/view/`)
-- [ ] Controller (`src/controller/`)
-- [ ] Build / CI (`CMakeLists.txt`, `.github/`)
-
-### Architecture & SOLID Compliance
-- [ ] Adheres to MVC boundaries (No View code in Model, No Model queries in View)
-- [ ] Zero raw owning pointers (`std::unique_ptr` / `std::shared_ptr` used)
-- [ ] `const` correctness verified
-- [ ] Include guards and `#pragma once` in all headers
-
-### Verification
-- [ ] Local build passes: `cmake --build build --target snip_tests`
-- [ ] Unit tests pass: `ctest --test-dir build --output-on-failure`
-- [ ] Memory checked: Valgrind / AddressSanitizer clean
-```
-
----
-
-## 4. Conflict Prevention: Zero-Collision Strategy
-
-For a fast 7-day sprint between 2 developers, merge conflicts in C++ arise primarily from editing shared header files. SnipCLI prevents conflicts via the **Contract Freeze Protocol**:
-
-1. **Day 1 Contract Freeze:** On Day 1, both developers (Lameya and Chowdhury Rifat) collaborate to finalize and merge all abstract header interfaces (`ISnippetRepository.hpp`, `ISnippetView.hpp`, `ICommand.hpp`, `Snippet.hpp`) into `dev`. Once merged, these headers are **FROZEN**.
-2. **Strict File Ownership:**
-   - **Chowdhury Rifat Ahmed's Domain (Backend / Core):** `include/snipcli/model/`, `src/model/`, `tests/unit/test_snippet.cpp`, `tests/unit/test_validator.cpp`, `tests/unit/test_repository.cpp`, `tests/unit/test_strategy.cpp`.
-   - **Lameya Tabasum's Domain (Frontend / Routing & DevOps):** `include/snipcli/view/`, `include/snipcli/controller/`, `src/view/`, `src/controller/`, `tests/smoke/smoke_test.sh`, `.github/workflows/ci.yml`.
-3. **No Cross-Editing:** If Lameya needs an additional method in Model, she requests an interface adjustment via a GitHub issue/PR rather than modifying Rifat's implementation files, and vice versa.
+1. Open your PR against the `dev` branch.
+2. Complete the checklist in `.github/pull_request_template.md`.
+3. Ensure all CI checks pass:
+   - Code Quality (clang-format and cppcheck)
+   - Linux GCC (Release)
+   - Linux Sanitizers (ASan + UBSan)
+   - Linux ThreadSanitizer (TSan)
+   - macOS AppleClang (ARM64)
+   - Windows MSVC (x86_64)
+4. A maintainer will review your PR. At least one approving review is required before merging.

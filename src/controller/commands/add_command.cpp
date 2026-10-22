@@ -9,20 +9,24 @@
 namespace snipcli::controller::commands {
 
 namespace {
+
 std::vector<std::string> splitTags(const std::string& raw) {
     std::vector<std::string> tags;
+    if (raw.empty()) {
+        return tags;
+    }
     std::stringstream ss(raw);
     std::string item;
     while (std::getline(ss, item, ',')) {
-        // trim whitespace
-        size_t start = item.find_first_not_of(" \t");
-        size_t end = item.find_last_not_of(" \t");
+        size_t start = item.find_first_not_of(" \t\r\n");
+        size_t end = item.find_last_not_of(" \t\r\n");
         if (start != std::string::npos && end != std::string::npos) {
             tags.push_back(item.substr(start, end - start + 1));
         }
     }
     return tags;
 }
+
 }  // namespace
 
 AddCommand::AddCommand(ParsedArgs args, std::shared_ptr<model::ISnippetWriter> writer,
@@ -43,19 +47,27 @@ std::string AddCommand::getDescription() const {
 
 int AddCommand::execute() {
     try {
+        if ((m_args.hasOption("title") && !m_args.positionals.empty()) ||
+            m_args.positionals.size() > 1) {
+            m_view->renderError(
+                "Unexpected extra argument(s). For multi-word snippet titles, please enclose in "
+                "quotes (e.g., 'Binary Search').");
+            return 1;
+        }
+
         std::string title = m_args.getOption("title");
         if (title.empty() && !m_args.positionals.empty()) {
             title = m_args.positionals[0];
         }
 
         std::string lang = m_args.getOption("lang", m_args.getOption("language", "cpp"));
-        std::string tagsStr = m_args.getOption("tags");
+        std::string tagsStr = m_args.getOption("tags", m_args.getOption("tag"));
         std::vector<std::string> tags = splitTags(tagsStr);
 
         std::string code = m_args.getOption("code");
         if (code.empty() && m_args.hasOption("file")) {
             std::string filePath = m_args.getOption("file");
-            std::ifstream file(filePath);
+            std::ifstream file(filePath, std::ios::binary);
             if (!file.is_open()) {
                 throw common::StorageException("Unable to read source code file: " + filePath);
             }
@@ -64,17 +76,17 @@ int AddCommand::execute() {
             code = buffer.str();
         }
 
-        if (m_reader->exists(title)) {
-            throw common::ValidationException("A snippet with title '" + title +
-                                              "' already exists.");
-        }
-
         model::Snippet snippet(0, title, lang, code, tags, "", "");
         model::SnippetValidator::validate(snippet);
 
+        if (m_reader->exists(snippet.getTitle())) {
+            throw common::ValidationException("A snippet with title '" + snippet.getTitle() +
+                                              "' already exists.");
+        }
+
         uint64_t newId = m_writer->save(snippet);
-        m_view->renderSuccess("Snippet '" + title + "' created successfully with ID #" +
-                              std::to_string(newId));
+        m_view->renderSuccess("Snippet '" + snippet.getTitle() +
+                              "' created successfully with ID #" + std::to_string(newId));
         return 0;
     } catch (const common::SnipException& ex) {
         m_view->renderError(ex.what());

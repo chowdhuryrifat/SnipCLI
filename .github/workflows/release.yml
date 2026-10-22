@@ -1,0 +1,374 @@
+name: Release Automation
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+    branches:
+      - 'release/v1.0.0-packaging'
+      - 'release/v1.0.0-final'
+      - 'ci-verify'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify & Test Suite Gate
+    runs-on: ubuntu-24.04
+    env:
+      NO_COLOR: "1"
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSNIPCLI_BUILD_TESTS=ON
+
+      - name: Build All Targets
+        run: |
+          cmake --build build -j"$(nproc)"
+
+      - name: Run CTest Unit Test Suite
+        run: |
+          ctest --test-dir build --output-on-failure
+
+      - name: Run End-to-End Integration Smoke Test
+        run: |
+          bash tests/smoke/smoke_test.sh build/snip
+
+      - name: Run Adversarial Audit Reproduction Suite
+        run: |
+          bash scripts/snipcli_audit_repro.sh build/snip
+
+      - name: Run Re-Audit Reproduction Suite
+        run: |
+          bash scripts/snipcli_reaudit_repro.sh build/snip
+
+  build-linux:
+    name: Build Linux (x86_64) & Debian Package
+    needs: [verify]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Version and Guard
+        id: meta
+        shell: bash
+        run: |
+          CMAKE_VER=$(grep -E 'project\(SnipCLI' CMakeLists.txt -A 2 | grep -E 'VERSION' | sed -E 's/.*VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          if [ -z "$CMAKE_VER" ]; then
+            echo "ERROR: Could not parse VERSION from CMakeLists.txt" >&2
+            exit 1
+          fi
+          echo "CMakeLists.txt version: ${CMAKE_VER}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG_VER="${GITHUB_REF_NAME#v}"
+            if [ "${TAG_VER}" != "${CMAKE_VER}" ]; then
+              echo "ERROR: Tag version '${TAG_VER}' does not match CMakeLists.txt version '${CMAKE_VER}'" >&2
+              exit 1
+            fi
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v${CMAKE_VER}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${CMAKE_VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Debian Packaging Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev file
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSNIPCLI_BUILD_TESTS=OFF
+
+      - name: Compile and Strip
+        run: |
+          cmake --build build -j"$(nproc)"
+          strip build/snip
+
+      - name: Stage Artifacts (FHS Layout)
+        run: |
+          cmake --install build --prefix /tmp/stage
+          mkdir -p dist
+          tar -czf dist/snipcli-${{ steps.meta.outputs.tag }}-linux-x86_64.tar.gz -C /tmp/stage .
+
+      - name: Build Debian (.deb) Package via CPack
+        run: |
+          cd build
+          cpack -G DEB
+          cd ..
+          DEB_FILE=$(ls build/snipcli_*.deb | head -n 1)
+          cp "$DEB_FILE" dist/snipcli_${{ steps.meta.outputs.version }}_amd64.deb
+          echo "DEB_FILE=${DEB_FILE}" >> "$GITHUB_ENV"
+
+      - name: Record LDD and Maximum GLIBC Symbol Version
+        run: |
+          echo "=== Dynamic Library Dependencies (ldd) ==="
+          ldd build/snip
+          echo "=== Extracting Maximum Required GLIBC Symbol Version ==="
+          MAX_GLIBC=$(objdump -T build/snip | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n1)
+          echo "Maximum required GLIBC symbol: ${MAX_GLIBC}"
+          MAX_VER="${MAX_GLIBC#GLIBC_}"
+          
+          DEB_LIBC_VER=$(dpkg-deb -I "${DEB_FILE}" | grep 'Depends:' | grep -o 'libc6 (>= [0-9.]*)' | sed -E 's/.*>= ([0-9.]+).*/\1/')
+          echo "Debian package declared libc6 dependency: libc6 (>= ${DEB_LIBC_VER})"
+          
+          if dpkg --compare-versions "${MAX_VER}" gt "${DEB_LIBC_VER}"; then
+            echo "ERROR: Maximum required GLIBC version (${MAX_VER}) exceeds Debian dependency (${DEB_LIBC_VER})" >&2
+            exit 1
+          fi
+          echo "GLIBC symbol compatibility check: PASS (${MAX_VER} <= ${DEB_LIBC_VER})"
+
+      - name: Inspect Debian Package (dpkg -I, dpkg -c)
+        run: |
+          mkdir -p deb-evidence
+          echo "=== Debian Package Information (dpkg -I) ==="
+          dpkg -I "${DEB_FILE}" | tee deb-evidence/dpkg_info.txt
+          echo "=== Debian Package Contents (dpkg -c) ==="
+          dpkg -c "${DEB_FILE}" | tee deb-evidence/dpkg_contents.txt
+
+      - name: Upload Debian Inspection Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-inspection
+          path: deb-evidence/*
+          retention-days: 7
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-dist
+          path: dist/*
+          retention-days: 1
+
+  build-macos:
+    name: Build macOS Universal Binary (ARM64 + x86_64)
+    needs: [verify]
+    runs-on: macos-14
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Version and Guard
+        id: meta
+        shell: bash
+        run: |
+          CMAKE_VER=$(grep -E 'project\(SnipCLI' CMakeLists.txt -A 2 | grep -E 'VERSION' | sed -E 's/.*VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          if [ -z "$CMAKE_VER" ]; then
+            echo "ERROR: Could not parse VERSION from CMakeLists.txt" >&2
+            exit 1
+          fi
+          echo "CMakeLists.txt version: ${CMAKE_VER}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG_VER="${GITHUB_REF_NAME#v}"
+            if [ "${TAG_VER}" != "${CMAKE_VER}" ]; then
+              echo "ERROR: Tag version '${TAG_VER}' does not match CMakeLists.txt version '${CMAKE_VER}'" >&2
+              exit 1
+            fi
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v${CMAKE_VER}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${CMAKE_VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure CMake (Universal macOS Binary)
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSNIPCLI_BUILD_TESTS=OFF \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Compile and Strip
+        run: |
+          cmake --build build -j"$(sysctl -n hw.ncpu)"
+          strip build/snip
+
+      - name: Verify Universal Binary Architectures
+        run: |
+          echo "=== Verifying lipo binary architectures ==="
+          lipo -info build/snip
+          if ! lipo -info build/snip | grep -q "arm64" || ! lipo -info build/snip | grep -q "x86_64"; then
+            echo "ERROR: snip binary is missing arm64 or x86_64 slice" >&2
+            exit 1
+          fi
+
+      - name: Stage Artifacts and Package
+        run: |
+          cmake --install build --prefix /tmp/stage
+          mkdir -p dist
+          tar -czf dist/snipcli-${{ steps.meta.outputs.tag }}-macos-universal.tar.gz -C /tmp/stage .
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dist
+          path: dist/*
+          retention-days: 1
+
+  build-windows:
+    name: Build Windows (x86_64)
+    needs: [verify]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Validate Version and Guard
+        id: meta
+        shell: bash
+        run: |
+          CMAKE_VER=$(grep -E 'project\(SnipCLI' CMakeLists.txt -A 2 | grep -E 'VERSION' | sed -E 's/.*VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          if [ -z "$CMAKE_VER" ]; then
+            echo "ERROR: Could not parse VERSION from CMakeLists.txt" >&2
+            exit 1
+          fi
+          echo "CMakeLists.txt version: ${CMAKE_VER}"
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG_VER="${GITHUB_REF_NAME#v}"
+            if [ "${TAG_VER}" != "${CMAKE_VER}" ]; then
+              echo "ERROR: Tag version '${TAG_VER}' does not match CMakeLists.txt version '${CMAKE_VER}'" >&2
+              exit 1
+            fi
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v${CMAKE_VER}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${CMAKE_VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure CMake (MSVC)
+        run: |
+          cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DSNIPCLI_BUILD_TESTS=OFF
+
+      - name: Compile
+        run: |
+          cmake --build build --config Release
+
+      - name: Verify Static CRT (Zero Dynamic MSVC CRT Dependencies)
+        shell: bash
+        run: |
+          mkdir -p dist
+          dumpbin //dependents build/Release/snip.exe > dist/windows_dependents.txt 2>&1 || dumpbin /dependents build/Release/snip.exe > dist/windows_dependents.txt 2>&1
+          echo "=== DLL Dependencies of snip.exe ==="
+          cat dist/windows_dependents.txt
+          if grep -iE '(vcruntime|msvcp|api-ms-win-crt)' dist/windows_dependents.txt; then
+            echo "ERROR: Dynamic MSVC CRT runtime dependencies detected in snip.exe" >&2
+            exit 1
+          fi
+          echo "Windows static CRT verification: PASS (Zero dynamic MSVC CRT runtime dependencies)"
+
+      - name: Stage Artifacts and Package
+        shell: bash
+        run: |
+          mkdir -p /tmp/win_stage
+          cp build/Release/snip.exe /tmp/win_stage/
+          cp LICENSE NOTICE README.md /tmp/win_stage/
+          mkdir -p /tmp/win_stage/completions
+          cp completions/* /tmp/win_stage/completions/
+          mkdir -p dist
+          cd /tmp/win_stage
+          7z a "$GITHUB_WORKSPACE/dist/snipcli-${{ steps.meta.outputs.tag }}-windows-x86_64.zip" *
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-dist
+          path: dist/*
+          retention-days: 1
+
+  draft-release:
+    name: Assemble Artifacts & Create Draft Release
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download All Dist Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare Release Directory & Checksums
+        run: |
+          mkdir -p release_assets
+          find artifacts -type f -exec cp {} release_assets/ \;
+          cd release_assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          
+          echo "## Release Assets & SHA-256 Checksums" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Asset File | SHA-256 | Size |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| :--- | :--- | :--- |" >> "$GITHUB_STEP_SUMMARY"
+          while read -r hash fname; do
+            sz=$(stat -c%s "$fname")
+            echo "| \`$fname\` | \`$hash\` | $sz bytes |" >> "$GITHUB_STEP_SUMMARY"
+          done < SHA256SUMS.txt
+
+      - name: Generate Build Provenance Attestation
+        id: attest
+        uses: actions/attest-build-provenance@v2
+        continue-on-error: true
+        with:
+          subject-path: 'release_assets/*'
+
+      - name: Record Build Provenance Summary
+        if: always()
+        run: |
+          echo "## Build Provenance Attestation" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.attest.outcome }}" = "success" ]; then
+            echo "- **Status:** SUCCESS (Cryptographic provenance attestation recorded)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- **Status:** SKIPPED (Repository is private; build provenance attestation requires a public GitHub repository or GitHub Enterprise and will activate upon public release)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Extract Release Notes from CHANGELOG.md
+        id: notes
+        shell: bash
+        run: |
+          CMAKE_VER=$(grep -E 'project\(SnipCLI' CMakeLists.txt -A 2 | grep -E 'VERSION' | sed -E 's/.*VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v${CMAKE_VER}"
+          fi
+          VERSION="${TAG#v}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { found=1; next }
+            $0 ~ "^## \\[" && found { exit }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "Release notes for SnipCLI $TAG" > release_notes.md
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create Draft GitHub Release (Tagged Releases Only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.notes.outputs.tag }}" \
+            --title "SnipCLI ${{ steps.notes.outputs.tag }}" \
+            --notes-file release_notes.md \
+            --draft \
+            release_assets/*

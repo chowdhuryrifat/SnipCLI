@@ -6,8 +6,10 @@
 [![C++ Standard](https://img.shields.io/badge/Language-C%2B%2B17-00599C?logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/17)
 [![Build System](https://img.shields.io/badge/Build-CMake%203.16%2B-064F8C?logo=cmake&logoColor=white)](https://cmake.org/)
 [![CI/CD Pipeline](https://img.shields.io/badge/CI%2FCD-GitHub%20Actions-2088FF?logo=github-actions&logoColor=white)](https://github.com/chowdhuryrifat/SnipCLI/actions)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)](https://github.com/chowdhuryrifat/SnipCLI)
 [![Architecture](https://img.shields.io/badge/Architecture-Strict%20MVC-brightgreen)](#-system-architecture--mvc-blueprint)
 [![Design Patterns](https://img.shields.io/badge/GoF%20Patterns-Command%20%7C%20Strategy%20%7C%20Factory-orange)](#-gof-design-patterns-mapping)
+[![Release](https://img.shields.io/github/v/release/chowdhuryrifat/SnipCLI?logo=github)](https://github.com/chowdhuryrifat/SnipCLI/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
@@ -30,13 +32,15 @@
 </div>
 
 ## 📑 Table of Contents
-- [✨ Key Features](#-key-features)
-- [🚀 Quick Start & Installation](#-quick-start--installation)
-- [🖥️ Interactive Command Showcase](#️-interactive-command-showcase)
-- [🏗️ System Architecture & MVC Blueprint](#️-system-architecture--mvc-blueprint)
-- [🧠 SOLID & GoF Design Patterns](#-solid--gof-design-patterns)
-- [🛡️ Defense & Live Modification Playbook](#️-defense--live-modification-playbook)
-- [👥 Authors & Course Metadata](#-authors--course-metadata)
+- [✨ Key Features](#key-features)
+- [🚀 Quick Start & Installation](#quick-start--installation)
+- [🖥️ Interactive Command Showcase](#interactive-command-showcase)
+- [📖 Complete CLI Command & Option Reference](#complete-cli-command--option-reference)
+- [⚙️ Configuration & Environment](#configuration--environment)
+- [🏗️ System Architecture & MVC Blueprint](#system-architecture--mvc-blueprint)
+- [🧠 SOLID & GoF Design Patterns](#solid--gof-design-patterns)
+- [🧪 Automated Testing & CI/CD Pipeline](#automated-testing--cicd-pipeline)
+- [📖 Detailed User Manual & Command Guide](docs/USAGE.md)
 
 ---
 
@@ -44,40 +48,65 @@
 
 | Capability | Description | Advantage |
 | :--- | :--- | :--- |
-| ⚡ **Instant CLI Querying** | Filter templates by tag (`#graph`, `#dp`) or case-insensitive title search. | **O(1) to O(N)** in-memory querying under 5ms. |
+| ⚡ **Instant CLI Querying** | Filter templates by tag (`#graph`, `#dp`), language (`cpp`, `python`), or case-insensitive title search. | **O(1) to O(N)** in-memory querying under 5ms. |
 | 🎨 **Dual Presentation Engine** | Toggle between styled **ANSI colorized tables** and **GitHub-Flavored Markdown**. | Pipe ready-to-publish tables directly into docs. |
 | 🧩 **Strict MVC Separation** | Zero presentation code in Models; zero business logic in Views. | Total layer independence and 100% testability. |
 | 🛡️ **Defensive Domain Validation** | Rejects empty payloads, duplicate titles, and invalid language formats. | Prevents silent database corruption. |
 | 📋 **Unix Pipe Native** | Extract raw source code directly via `--code-only` or `-c`. | Pipe directly to clipboard (`xclip`/`pbcopy`) or compiler. |
-| 📊 **Repository Telemetry** | Aggregate line counts, snippet volumes, and language distributions. | Track algorithmic toolkit growth over time. |
+| 📊 **Repository Telemetry** | Aggregate line counts, snippet volumes, and sorted language distributions. | Track algorithmic toolkit growth over time. |
 
 ---
 
 ## 🚀 Quick Start & Installation
 
-### 1. Prerequisites
-- **Compiler:** GCC 9+, Clang 10+, or MSVC 2019+ (Supporting C++17)
-- **Build System:** CMake 3.16+
-- **Platform:** Linux, macOS, or Windows (MinGW/MSVC)
+### 1. Prebuilt Binaries (Recommended)
 
-### 2. Compilation
+Standalone, statically-linked executables for Linux (x86_64), macOS (Universal: Apple Silicon & Intel), and Windows (x86_64) are attached to every [GitHub Release](https://github.com/chowdhuryrifat/SnipCLI/releases) accompanied by cryptographic checksums (`SHA256SUMS.txt`) and build provenance attestations:
+
 ```bash
-# Clone the repository
-git clone https://github.com/chowdhuryrifat/SnipCLI.git
-cd SnipCLI
-
-# Configure and compile
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
+# Example: Download and run on Linux x86_64
+curl -fsSLO https://github.com/chowdhuryrifat/SnipCLI/releases/download/v1.0.0/snipcli-v1.0.0-linux-x86_64.tar.gz
+tar -xzf snipcli-v1.0.0-linux-x86_64.tar.gz
+./bin/snip --version
 ```
 
-### 3. Verify Build & Run Test Suite
+### 2. Build from Source
+
+Build SnipCLI with zero external dependencies in 3 commands:
+
 ```bash
-# Run CTest Unit Tests (All 4 Suites)
+git clone https://github.com/chowdhuryrifat/SnipCLI.git
+cmake -S SnipCLI -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j"$(nproc)"
+```
+
+#### Run Verification Test Suite:
+
+```bash
+# Run CTest Unit Tests (All 7 Suites - 139 Scenarios & Invariants)
 ctest --test-dir build --output-on-failure
 
-# Run Integration & CLI Smoke Tests
+# Run Automated End-to-End Smoke & Integration Tests
 ./tests/smoke/smoke_test.sh ./build/snip
+```
+
+### 3. Package Managers (Coming soon — available after the v1.0.0 release is published)
+
+Once the release is published and upstream registry PRs are accepted, SnipCLI will be installable via standard package managers:
+
+```bash
+# macOS & Linux (Homebrew) — Coming Soon
+brew tap chowdhuryrifat/snipcli
+brew install snipcli
+
+# Windows (WinGet) — Coming Soon
+winget install ChowdhuryRifat.SnipCLI
+
+# Debian / Ubuntu (.deb via Releases or PPA) — Coming Soon
+sudo dpkg -i snipcli_1.0.0_amd64.deb
+
+# Arch Linux (AUR) — Coming Soon
+yay -S snipcli
 ```
 
 ---
@@ -90,6 +119,9 @@ ctest --test-dir build --output-on-failure
 ```bash
 # Add a snippet with inline code and multiple category tags
 ./build/snip add --title "Dijkstra" --lang "cpp" --tags "graph,shortest_path" --code "vector<int> dist(n, INF); priority_queue<pair<int,int>> pq;"
+
+# Add code starting with hyphens or comments using equals syntax
+./build/snip add --title "SqlComment" --lang "sql" --code="-- comment starting with dashes"
 
 # Add a complex template directly from a source file
 ./build/snip add --title "SegmentTree" --lang "cpp" --tags "tree,range_query" --file ./templates/segtree.cpp
@@ -130,6 +162,9 @@ ID    TITLE                    LANGUAGE    LINES     TAGS
 
 # Tag-based exact search
 ./build/snip search --tag "tree"
+
+# Language-based exact search (LanguageSearchStrategy)
+./build/snip search --lang "cpp"
 ```
 </details>
 
@@ -139,6 +174,9 @@ ID    TITLE                    LANGUAGE    LINES     TAGS
 ```bash
 # Inspect snippet with formatted banner, metadata, and line numbers
 ./build/snip get --title "Dijkstra"
+
+# Retrieve snippet by numeric ID
+./build/snip get --id 1
 
 # Pipe pure source code straight into system clipboard
 ./build/snip get --title "Dijkstra" --code-only | pbcopy    # macOS
@@ -183,6 +221,54 @@ Export your snippet library directly to GitHub-Flavored Markdown for homework re
 | 2 | SegmentTree | cpp | 45 | `tree`, `range_query` |
 </details>
 
+<details>
+<summary><b>7. 🗑️ Snippet Deletion & Mutation</b></summary>
+
+```bash
+# Delete snippet by unique title
+./build/snip delete --title "Dijkstra"
+
+# Delete snippet by numeric ID
+./build/snip delete --id 1
+
+# Delete snippet via positional query
+./build/snip delete "BinarySearch"
+```
+> **Output:** `> **Success:** Snippet 'Dijkstra' deleted successfully.`
+</details>
+
+---
+
+## 📖 Complete CLI Command & Option Reference
+
+| Verb | Syntax | Flags & Options | Description |
+| :--- | :--- | :--- | :--- |
+| `add` | `snip add --title <t> --lang <l> [--code <c> \| --file <f>] [--tags <t1,t2>]` | `--title`<br>`--lang, --language`<br>`--code`<br>`--file`<br>`--tags, --tag` | Persists a new code snippet with strict domain validation. |
+| `list` | `snip list [--tag <tag>] [--lang <lang>] [--format <fmt>]` | `--tag, --tags`<br>`--lang, --language`<br>`--format` (`terminal` \| `markdown`) | Displays tabular snippet library with optional category/language filters. |
+| `get` | `snip get [--title <t> \| --id <id> \| <query>] [--code-only] [--format <fmt>]` | `--title`<br>`--id`<br>`--code-only, -c`<br>`--format` | Retrieves and inspects a snippet; `--code-only` outputs pure source for pipes. |
+| `search` | `snip search [<query>] [--tag <tag>] [--lang <lang>] [--format <fmt>]` | `--tag, --tags`<br>`--lang, --language`<br>`--format` | Dynamic GoF Strategy search across substrings, tags, or languages. |
+| `stats` | `snip stats [--format <fmt>]` | `--format` (`terminal` \| `markdown`) | Computes repository telemetry, total line count, and sorted language metrics. |
+| `delete` | `snip delete [--title <t> \| --id <id> \| <query>] [--format <fmt>]` | `--title`<br>`--id`<br>`--format` | Deletes a snippet by title or ID with verification and clean error reporting. |
+
+**Global Options:**
+- `--help, -h`: Display command-line manual and option syntax.
+- `--version, -v`: Display application name and semantic version.
+- `--format <terminal|markdown>`: Globally override presentation engine format.
+
+> **Note on CLI Options & Aliases:** Single-dash value aliases (`-t`, `-l`, `-f`, and `-c` in `add`) are supported and strictly mapped to their corresponding long options (`--title`, `--lang`, `--file`, `--code`). In `get`, `-c` functions as the pipe-native `--code-only` boolean flag. Global options (`--format`, `--help`, `--version`) may precede or follow the command verb. Options are strictly validated per command schema to guarantee unknown or unsupported options are rejected prior to execution. Valueless options and unquoted multi-word arguments are defensively rejected with explicit diagnostic errors. Standard end-of-options delimiter (`--`) is fully supported.
+
+---
+
+## ⚙️ Configuration & Environment
+
+SnipCLI operates with sensible zero-configuration defaults, but can be customized through environment variables:
+
+| Environment Variable | Allowed Values / Range | Default | Purpose |
+|---|---|---|---|
+| `SNIPCLI_STORAGE_PATH` | Any valid absolute or relative file path | `~/.snipcli/snippets.json` | Specifies the storage file location for snippets. Directory is auto-created if missing. |
+| `SNIPCLI_LOCK_TIMEOUT_MS` | Integer in range `[1, 600000]` ms (1 ms to 10 min) | `10000` (10 seconds) | Maximum polling time to acquire the cross-process storage lock before failing with exit code 1. Non-numeric or out-of-range values fall back safely to default. |
+| `NO_COLOR` | Any non-empty string | *(unset)* | Disables ANSI color codes on terminal output per the [NO_COLOR specification](https://no-color.org/). |
+
 ---
 
 ## 🏗️ System Architecture & MVC Blueprint
@@ -215,6 +301,7 @@ flowchart TD
 1. **Model (`snipcli::model`):** Pure domain logic and persistence. Completely isolated from terminal widths, ANSI escapes, or CLI flags.
 2. **View (`snipcli::view`):** Pure presentation. Implements `ISnippetView` to format data to any `std::ostream`. Completely isolated from business logic and database queries.
 3. **Controller (`snipcli::controller`):** Mediator. Executes CLI verbs through the Command Pattern, catches exceptions, and routes results to the View.
+4. **Storage Concurrency & Integrity:** In-process thread-safety guarded by `std::mutex`, cross-process writer exclusion guarded by advisory `<storagePath>.lock` (`flock` on POSIX with `O_NOFOLLOW`, `LockFileEx` on Windows) with bounded timeout (default 10s, configurable via `SNIPCLI_LOCK_TIMEOUT_MS` in range `[1, 600000]` ms with safe bounds clamping and default fallback), POSIX parent directory `fsync` and macOS `F_FULLFSYNC` durability, lock-free reader operations over atomic file replacement, strict UTF-8 validation, closed schema enforcement (unknown fields are validated on read and dropped upon write; preservation is scheduled for v1.1), and sequential ID allocation (IDs are assigned as highest existing ID + 1 and can be reused after deleting the newest snippet; use titles for stable references).
 
 ---
 
@@ -228,36 +315,62 @@ flowchart TD
 - **D - Dependency Inversion Principle (DIP):** High-level command modules depend on abstract interfaces (`ISnippetReader`, `ISnippetWriter`, `ISnippetView`), injected via constructors at application startup.
 
 ### 2. GoF Design Patterns Mapping
-- **Command Pattern (Behavioral):** Encapsulates CLI operations as objects (`ICommand` $\rightarrow$ `AddCommand`, `ListCommand`, etc.), decoupling the parser from business execution.
-- **Strategy Pattern (Behavioral):** Dynamic search algorithms (`ISearchStrategy` $\rightarrow$ `TagSearchStrategy`, `TitleSearchStrategy`) selected at runtime based on CLI parameters.
-- **Factory Pattern (Creational):** Polymorphic view creation (`ViewFactory` $\rightarrow$ `TerminalView`, `MarkdownView`) based on user-supplied format flags.
+- **Command Pattern (Behavioral):** Encapsulates CLI operations as objects (`ICommand` $\rightarrow$ `AddCommand`, `ListCommand`, `GetCommand`, `DeleteCommand`, `SearchCommand`, `StatsCommand`), decoupling the CLI argument parser from domain business execution.
+- **Strategy Pattern (Behavioral):** Dynamic algorithmic search strategies (`ISearchStrategy` $\rightarrow$ `TagSearchStrategy`, `TitleSearchStrategy`, `LanguageSearchStrategy`) dynamically bound at runtime based on CLI flags, eliminating nested conditional logic.
+- **Factory Pattern (Creational):** Polymorphic view creation (`ViewFactory` $\rightarrow$ `TerminalView`, `MarkdownView`) based on user-supplied format flags, featuring standard and custom stream injection for 100% test isolation.
 
 ---
 
-## 🛡️ Defense & Live Modification Playbook
+## 🧪 Automated Testing & CI/CD Pipeline
 
-Built specifically to satisfy the strict **5-minute live on-the-spot viva modification constraint**:
+SnipCLI enforces rigorous multi-layered quality gates across every commit and Pull Request:
 
-| Scenario | Professor Challenge | Files Touched | Defense Rationale |
-| :--- | :--- | :--- | :--- |
-| **A: New Command** | *"Add a `stats` command showing line totals."* | 2 files (`stats_command.cpp`, `main.cpp`) | Demonstrates **OCP** and the **Command Pattern**: no core router or repository files modified. |
-| **B: New Invariant** | *"Reject snippets with > 100 lines or duplicate tags."* | 1 file (`snippet_validator.cpp`) | Demonstrates **SRP**: validation logic is quarantined from parser and storage layers. |
-| **C: Format Swap** | *"Export snippet listings as Markdown tables."* | 2 files (`markdown_view.cpp`, `view_factory.cpp`) | Demonstrates **DIP** & **Factory Pattern**: Controller is completely agnostic to view implementations. |
+### 1. Multi-Suite Unit Testing (CTest)
+A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 139 domain invariants and behavioral scenarios:
+- **`Snippet` (10 Invariants):** Immutability, line counting, tag normalization, ISO 8601 timestamps.
+- **`SnippetValidator` (12 Invariants):** Defense against empty titles, illegal characters, empty languages, and missing payloads.
+- **`JsonSnippetRepository` (25 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, atomic file replacement, multi-line CRLF preservation, cross-process advisory lock synchronization with bounded timeout, duplicate-title rejection, symlink loop/recursion depth limit defense, unknown field validation with closed schema drop-on-save characterization, max(id)+1 ID allocation and reuse on deletion characterization, lock file symlink hardening (`O_NOFOLLOW`) with stale lock resilience, and `SNIPCLI_LOCK_TIMEOUT_MS` bounds clamping with held-lock timeout measurement.
+- **`Strategy Pattern` (10 Scenarios):** Case-insensitive title substring, exact tag matching, and language filtering.
+- **`CliParser` & `CommandDispatcher` (31 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, spaced negative values, valueless option schema validation, global options before verb, `--` delimiter, strict unknown option rejection, command-specific option schema enforcement, and boolean flag equals-syntax rejection.
+- **`Command Wiring` (31 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution, including strict ID parsing, multi-word argument defense, add-command positional quarantine, unknown option state protection, command-specific option rejection state protection, mutually exclusive selector enforcement, and storage exception quarantine.
+- **`View Engine & Factory` (20 Scenarios):** Stream-injected verification of `TerminalView`, `MarkdownView`, `ViewFactory`, byte-exact `renderRaw`, cross-platform CRLF/LF stream identity, and `NO_COLOR` color suppression.
+
+### 2. Automated End-to-End Smoke & Integration Suite
+The bash test suite (`tests/smoke/smoke_test.sh`) verifies the final binary end-to-end:
+- Full CLI verb lifecycle (`add`, `list`, `get`, `search`, `stats`, `delete`).
+- Dual presentation engines (ANSI terminal formatting vs GitHub-Flavored Markdown).
+- Pipe-native extraction (`--code-only`) ensuring zero extraneous metadata leaks into shell pipes.
+- Error quarantine: cleanly exits with non-zero exit codes upon duplicate titles, invalid verbs, missing IDs, unquoted multi-word positionals, or unsupported command options.
+- Cross-process concurrency: 20 parallel adds and race safety verified without lost updates.
+- Isolated environment resilience: `--help` execution under stripped environment (containers, cron, `env -i`).
+- Cross-platform path normalization (`cygpath`) for seamless execution across Linux, macOS, and Windows Git Bash.
+
+### 3. GitHub Actions CI/CD Matrix
+Every pull request targeting `main` or `dev` triggers the automated CI/CD pipeline:
+- **Code Quality & Static Analysis:** Clang-Format 18 check (`git diff --exit-code`) and Cppcheck static analysis (`--enable=warning,performance,portability --error-exitcode=1`).
+- **Build & Test Matrix:** Parallel compilation, CTest execution, and automated smoke & adversarial test suites across `ubuntu-24.04` (GCC), `ubuntu-24.04` (GCC-Sanitizers with ASan + UBSan), `ubuntu-24.04` (GCC-TSan with `setarch x86_64 -R`), `macos-14` (AppleClang), and `windows-latest` (MSVC).
+- **Adversarial Audit Reproduction:** Reproduction script (`scripts/snipcli_audit_repro.sh`) validating adversarial edge cases and cross-platform CRLF/LF byte-exact roundtrips across all operating systems.
+- **Automated Artifact Packaging:** Production binaries are automatically archived and published as CI build artifacts.
 
 ---
 
-## 👥 Authors & Course Metadata
+## 📚 Documentation & Reference Guides
 
-**Project:** SnipCLI (Algorithmic Snippet Manager)
+- [User Manual & Command Reference](docs/USAGE.md) — Comprehensive guide to commands, flags, installation, and pipelines.
+- [System Architecture](docs/ARCHITECTURE.md) — Detailed MVC layer responsibilities and GoF pattern design.
+- [Technical Specification](docs/TECHNICAL.md) — Storage engine, locking mechanics, and JSON schema invariants.
+- [Release Guide](docs/RELEASING.md) — Step-by-step checklist for tagging and release automation.
+- [Downstream Packaging Guide](docs/PACKAGING.md) — Instructions for Homebrew, Debian, WinGet, and AUR maintainers.
+- [Changelog](CHANGELOG.md) — Semantic version history, fixes, and release notes.
+- [Contributing Guide](CONTRIBUTING.md) — Development setup, testing workflows, and PR protocols.
+- [Security Policy](SECURITY.md) — Vulnerability reporting instructions and response SLAs.
 
-<div align="center">
+---
 
-| Developer | Student ID | Primary Responsibilities | Viva Focus |
-| :--- | :---: | :--- | :--- |
-| **Chowdhury Rifat Ahmed** | `@chowdhuryrifat` | **Backend & Core Architect**<br>• Model Layer & Invariants (`SnippetValidator`)<br>• Storage Engine (`JsonSnippetRepository`)<br>• Strategy Pattern (`ISearchStrategy`)<br>• Unit Test Suite (`tests/unit/`) | • SOLID (SRP, ISP, LSP)<br>• Strategy Pattern<br>• Live Validation Scenario |
-| **Lameya Tabasum** | `@lameyatabasum` | **Frontend, Routing & DevOps Lead**<br>• Controller & Command Pattern (`ICommand`)<br>• View Layer & Factory (`TerminalView`, `MarkdownView`)<br>• CLI Argument Parser (`CliParser`)<br>• CI/CD Pipeline & Smoke Tests | • CLI MVC Architecture<br>• Command & Factory Patterns<br>• Live Command/View Scenarios |
+## 👥 Authors & Maintainers
 
-</div>
+- **Chowdhury Rifat Ahmed** ([@chowdhuryrifat](https://github.com/chowdhuryrifat)) — Core Architecture & Storage Engine
+- **Lameya Tabasum** ([@lameyatabasum](https://github.com/lameyatabasum)) — CLI Presentation, Routing & CI/CD
 
 ---
 

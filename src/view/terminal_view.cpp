@@ -1,71 +1,230 @@
 #include "snipcli/view/terminal_view.hpp"
 
+#include <cstdlib>
 #include <iomanip>
 #include <sstream>
+
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <fcntl.h>
+#include <io.h>
+#include <stdio.h>
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace snipcli::view {
 
 namespace {
-constexpr const char* kReset = "\033[0m";
-constexpr const char* kBold = "\033[1m";
-constexpr const char* kRed = "\033[31m";
-constexpr const char* kGreen = "\033[32m";
-constexpr const char* kYellow = "\033[33m";
-constexpr const char* kBlue = "\033[34m";
-constexpr const char* kCyan = "\033[36m";
-constexpr const char* kDim = "\033[2m";
+constexpr const char* kAnsiReset = "\033[0m";
+constexpr const char* kAnsiBold = "\033[1m";
+constexpr const char* kAnsiRed = "\033[31m";
+constexpr const char* kAnsiGreen = "\033[32m";
+constexpr const char* kAnsiYellow = "\033[33m";
+constexpr const char* kAnsiBlue = "\033[34m";
+constexpr const char* kAnsiCyan = "\033[36m";
+constexpr const char* kAnsiDim = "\033[2m";
+constexpr const char* kEmpty = "";
+
+void setupWindowsConsoleVT() {
+#if defined(_WIN32)
+    SetConsoleOutputCP(CP_UTF8);
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        DWORD mode = 0;
+        if (GetConsoleMode(hOut, &mode)) {
+            SetConsoleMode(hOut, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        }
+    }
+    HANDLE hErr = GetStdHandle(STD_ERROR_HANDLE);
+    if (hErr != INVALID_HANDLE_VALUE) {
+        DWORD mode = 0;
+        if (GetConsoleMode(hErr, &mode)) {
+            SetConsoleMode(hErr, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        }
+    }
+#endif
+}
+
+bool detectStreamColorSupport(std::ostream& stream, bool useColors) {
+    if (!useColors) {
+        return false;
+    }
+    if (const char* noColor = std::getenv("NO_COLOR"); noColor != nullptr && noColor[0] != '\0') {
+        return false;
+    }
+    if (&stream == &std::cout) {
+#if defined(_WIN32)
+        if (!_isatty(_fileno(stdout))) {
+            return false;
+        }
+#else
+        if (!isatty(fileno(stdout))) {
+            return false;
+        }
+#endif
+    } else if (&stream == &std::cerr) {
+#if defined(_WIN32)
+        if (!_isatty(_fileno(stderr))) {
+            return false;
+        }
+#else
+        if (!isatty(fileno(stderr))) {
+            return false;
+        }
+#endif
+    }
+    return true;
+}
+
 }  // namespace
 
-TerminalView::TerminalView(std::ostream& outStream, std::ostream& errStream)
-    : m_out(outStream), m_err(errStream) {}
+TerminalView::TerminalView(std::ostream& outStream, std::ostream& errStream, bool useColors)
+    : m_out(outStream),
+      m_err(errStream),
+      m_useOutColors(detectStreamColorSupport(outStream, useColors)),
+      m_useErrColors(detectStreamColorSupport(errStream, useColors)) {
+    if (m_useOutColors || m_useErrColors) {
+        setupWindowsConsoleVT();
+    }
+}
+
+void TerminalView::setColorEnabled(bool enabled) noexcept {
+    m_useOutColors = enabled;
+    m_useErrColors = enabled;
+}
+
+bool TerminalView::isColorEnabled() const noexcept {
+    return m_useOutColors;
+}
+
+const char* TerminalView::colorReset() const noexcept {
+    return m_useOutColors ? kAnsiReset : kEmpty;
+}
+
+const char* TerminalView::colorBold() const noexcept {
+    return m_useOutColors ? kAnsiBold : kEmpty;
+}
+
+const char* TerminalView::colorRed() const noexcept {
+    return m_useOutColors ? kAnsiRed : kEmpty;
+}
+
+const char* TerminalView::colorGreen() const noexcept {
+    return m_useOutColors ? kAnsiGreen : kEmpty;
+}
+
+const char* TerminalView::colorYellow() const noexcept {
+    return m_useOutColors ? kAnsiYellow : kEmpty;
+}
+
+const char* TerminalView::colorBlue() const noexcept {
+    return m_useOutColors ? kAnsiBlue : kEmpty;
+}
+
+const char* TerminalView::colorCyan() const noexcept {
+    return m_useOutColors ? kAnsiCyan : kEmpty;
+}
+
+const char* TerminalView::colorDim() const noexcept {
+    return m_useOutColors ? kAnsiDim : kEmpty;
+}
+
+const char* TerminalView::errColorReset() const noexcept {
+    return m_useErrColors ? kAnsiReset : kEmpty;
+}
+
+const char* TerminalView::errColorBold() const noexcept {
+    return m_useErrColors ? kAnsiBold : kEmpty;
+}
+
+const char* TerminalView::errColorRed() const noexcept {
+    return m_useErrColors ? kAnsiRed : kEmpty;
+}
 
 void TerminalView::renderSnippet(const model::Snippet& snippet) {
-    m_out << kBold << kCyan << "=== Snippet: " << snippet.getTitle() << " ===" << kReset << "\n";
-    m_out << kDim << "ID: " << snippet.getId() << " | Language: " << snippet.getLanguage()
-          << " | Lines: " << snippet.getLineCount() << kReset << "\n";
+    m_out << colorBold() << colorCyan() << "=== Snippet: " << snippet.getTitle()
+          << " ===" << colorReset() << "\n";
+    m_out << colorDim() << "ID: " << snippet.getId() << " | Language: " << snippet.getLanguage()
+          << " | Lines: " << snippet.getLineCount() << colorReset() << "\n";
 
-    m_out << kYellow << "Tags: ";
+    m_out << colorYellow() << "Tags: ";
     const auto& tags = snippet.getTags();
-    for (size_t i = 0; i < tags.size(); ++i) {
-        m_out << "#" << tags[i] << (i + 1 < tags.size() ? " " : "");
+    if (tags.empty()) {
+        m_out << "(none)";
+    } else {
+        for (size_t i = 0; i < tags.size(); ++i) {
+            m_out << "#" << tags[i] << (i + 1 < tags.size() ? " " : "");
+        }
     }
-    m_out << kReset << "\n";
-    m_out << kDim << "----------------------------------------------------" << kReset << "\n";
+    m_out << colorReset() << "\n";
+    m_out << colorDim() << "----------------------------------------------------" << colorReset()
+          << "\n";
 
     // Print code with line numbers
     std::istringstream stream(snippet.getCode());
     std::string line;
     size_t lineNum = 1;
     while (std::getline(stream, line)) {
-        m_out << kDim << std::setw(4) << lineNum++ << " | " << kReset << line << "\n";
+        m_out << colorDim() << std::setw(4) << lineNum++ << " | " << colorReset() << line << "\n";
     }
-    m_out << kDim << "----------------------------------------------------" << kReset << "\n";
+    m_out << colorDim() << "----------------------------------------------------" << colorReset()
+          << "\n";
 }
 
 void TerminalView::renderSnippetList(const std::vector<model::Snippet>& snippets) {
     if (snippets.empty()) {
-        m_out << kYellow << "No snippets found in library." << kReset << "\n";
+        m_out << colorYellow() << "No snippets found in library." << colorReset() << "\n";
         return;
     }
 
-    m_out << kBold << std::left << std::setw(6) << "ID" << std::setw(25) << "TITLE" << std::setw(12)
-          << "LANGUAGE" << std::setw(10) << "LINES" << "TAGS" << kReset << "\n";
+    m_out << colorBold() << std::left << std::setw(6) << "ID" << std::setw(25) << "TITLE"
+          << std::setw(12) << "LANGUAGE" << std::setw(10) << "LINES" << "TAGS" << colorReset()
+          << "\n";
 
-    m_out << kDim << std::string(75, '-') << kReset << "\n";
+    m_out << colorDim() << std::string(75, '-') << colorReset() << "\n";
 
     for (const auto& s : snippets) {
         std::string tagStr;
         for (size_t i = 0; i < s.getTags().size(); ++i) {
             tagStr += s.getTags()[i];
-            if (i + 1 < s.getTags().size())
+            if (i + 1 < s.getTags().size()) {
                 tagStr += ", ";
+            }
         }
 
-        m_out << std::left << std::setw(6) << s.getId() << kCyan << std::setw(25)
-              << (s.getTitle().length() > 23 ? s.getTitle().substr(0, 20) + "..." : s.getTitle())
-              << kReset << std::setw(12) << s.getLanguage() << std::setw(10) << s.getLineCount()
-              << kDim << tagStr << kReset << "\n";
+        std::string displayTitle = s.getTitle();
+        if (displayTitle.length() > 23) {
+            displayTitle.replace(20, std::string::npos, "...");
+        }
+
+        m_out << std::left << std::setw(6) << s.getId() << colorCyan() << std::setw(25)
+              << displayTitle << colorReset() << std::setw(12) << s.getLanguage() << std::setw(10)
+              << s.getLineCount() << colorDim() << tagStr << colorReset() << "\n";
     }
+}
+
+void TerminalView::renderRaw(const std::string& content) {
+#if defined(_WIN32)
+    if (&m_out == &std::cout) {
+        m_out.flush();
+        int prevMode = _setmode(_fileno(stdout), _O_BINARY);
+        m_out.write(content.data(), static_cast<std::streamsize>(content.size()));
+        m_out.flush();
+        if (prevMode != -1) {
+            _setmode(_fileno(stdout), prevMode);
+        }
+        return;
+    }
+#endif
+    m_out << content;
+    m_out.flush();
 }
 
 void TerminalView::renderMessage(const std::string& message) {
@@ -73,26 +232,27 @@ void TerminalView::renderMessage(const std::string& message) {
 }
 
 void TerminalView::renderSuccess(const std::string& message) {
-    m_out << kBold << kGreen << "[✓] " << kReset << message << "\n";
+    m_out << colorBold() << colorGreen() << "[✓] " << colorReset() << message << "\n";
 }
 
 void TerminalView::renderError(const std::string& message) {
-    m_err << kBold << kRed << "[✗] Error: " << kReset << message << "\n";
+    m_err << errColorBold() << errColorRed() << "[✗] Error: " << errColorReset() << message << "\n";
 }
 
 void TerminalView::renderStats(
     size_t totalSnippets, size_t totalLines,
     const std::vector<std::pair<std::string, size_t>>& languageBreakdown) {
-    m_out << kBold << kBlue << "📊 SnipCLI Repository Statistics" << kReset << "\n";
-    m_out << kDim << "========================================" << kReset << "\n";
-    m_out << "  • Total Snippets:      " << kBold << totalSnippets << kReset << "\n";
-    m_out << "  • Total Lines of Code: " << kBold << totalLines << kReset << "\n";
-    m_out << "\n" << kBold << "Language Breakdown:" << kReset << "\n";
+    m_out << colorBold() << colorBlue() << "📊 SnipCLI Repository Statistics" << colorReset()
+          << "\n";
+    m_out << colorDim() << "========================================" << colorReset() << "\n";
+    m_out << "  • Total Snippets:      " << colorBold() << totalSnippets << colorReset() << "\n";
+    m_out << "  • Total Lines of Code: " << colorBold() << totalLines << colorReset() << "\n";
+    m_out << "\n" << colorBold() << "Language Breakdown:" << colorReset() << "\n";
 
     for (const auto& [lang, count] : languageBreakdown) {
         m_out << "  - " << std::left << std::setw(15) << lang << ": " << count << " snippets\n";
     }
-    m_out << kDim << "========================================" << kReset << "\n";
+    m_out << colorDim() << "========================================" << colorReset() << "\n";
 }
 
 }  // namespace snipcli::view

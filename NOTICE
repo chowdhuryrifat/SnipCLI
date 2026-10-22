@@ -1,0 +1,10 @@
+SnipCLI
+Copyright (c) 2026 Chowdhury Rifat Ahmed & Lameya Tabasum
+
+This product includes software developed as part of SnipCLI
+(https://github.com/chowdhuryrifat/SnipCLI).
+
+All third-party architecture patterns (Model-View-Controller, Command, Strategy,
+Factory) implemented in this codebase are derived from standard software
+engineering design literature (Gang of Four - Design Patterns).
+All code is licensed under the MIT License. See LICENSE for details.

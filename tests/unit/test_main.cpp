@@ -4,6 +4,9 @@ void runSnippetTests();
 void runValidatorTests();
 void runRepositoryTests();
 void runStrategyTests();
+void runParserTests();
+void runCommandTests();
+void runViewTests();
 
 int main() {
     std::cout << "========================================" << std::endl;
@@ -14,9 +17,12 @@ int main() {
     runValidatorTests();
     runRepositoryTests();
     runStrategyTests();
+    runParserTests();
+    runCommandTests();
+    runViewTests();
 
     std::cout << "========================================" << std::endl;
-    std::cout << "All Unit Tests Passed Successfully! (4/4)" << std::endl;
+    std::cout << "All Unit Tests Passed Successfully! (7/7)" << std::endl;
     std::cout << "========================================" << std::endl;
     return 0;
 }

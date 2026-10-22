@@ -2,14 +2,18 @@ name: SnipCLI CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main", "dev" ]
+    branches: [ "main", "dev", "release/**", "docs/**", "ci-verify" ]
   pull_request:
-    branches: [ "main", "dev" ]
+    branches: [ "main", "dev", "release/**", "docs/**" ]
+
+permissions:
+  contents: read
 
 jobs:
   lint-and-format:
     name: Code Quality & Static Analysis
-    runs-on: ubuntu-latest
+    # Pinned to Ubuntu 24.04 for stable clang-format-18 and cppcheck; bump deliberately
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -17,12 +21,12 @@ jobs:
       - name: Install Clang-Format and Cppcheck
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-format cppcheck
+          sudo apt-get install -y clang-format-18 cppcheck
 
       - name: Run Clang-Format Style Check
         run: |
           echo "Verifying code formatting with clang-format..."
-          find include src tests -name '*.hpp' -o -name '*.cpp' -exec clang-format -i {} +
+          find include src tests \( -name '*.hpp' -o -name '*.cpp' \) -exec clang-format-18 -i {} +
           git diff --exit-code || (echo "Code formatting violations detected. Please apply clang-format." && exit 1)
 
       - name: Run Cppcheck Static Analysis
@@ -32,6 +36,7 @@ jobs:
             --suppress=missingIncludeSystem \
             --suppress=unusedFunction \
             --suppress=unmatchedSuppression \
+            --suppress=normalCheckLevelMaxBranches \
             --error-exitcode=1 \
             -I include include/ src/
 
@@ -43,12 +48,32 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # Pinned to ubuntu-24.04 deliberately for toolchain consistency; bump deliberately
+          - os: ubuntu-24.04
+            compiler: GCC
             artifact_name: snipcli-linux-x86_64
             binary_path: build/snip
+            cmake_flags: ""
+          - os: ubuntu-24.04
+            compiler: GCC-Sanitizers
+            artifact_name: snipcli-linux-sanitizers
+            binary_path: build/snip
+            cmake_flags: -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g"
+          - os: ubuntu-24.04
+            compiler: GCC-TSan
+            artifact_name: snipcli-linux-tsan
+            binary_path: build/snip
+            cmake_flags: -DCMAKE_CXX_FLAGS="-fsanitize=thread -g"
+          - os: macos-14
+            compiler: AppleClang
+            artifact_name: snipcli-macos-arm64
+            binary_path: build/snip
+            cmake_flags: ""
           - os: windows-latest
+            compiler: MSVC
             artifact_name: snipcli-windows-x86_64
             binary_path: build/Release/snip.exe
+            cmake_flags: ""
 
     steps:
       - name: Checkout Code
@@ -56,21 +81,53 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_flags }}
 
       - name: Build Library, CLI, and Test Suite
         run: |
           cmake --build build --config Release --parallel
 
-      - name: Run CTest Unit Tests
+      - name: Disable TSan ASLR clash on Linux
+        if: matrix.compiler == 'GCC-TSan'
         run: |
-          ctest --test-dir build -C Release --output-on-failure
+          sudo sysctl -w vm.mmap_rnd_bits=28
+          CURRENT_BITS=$(sudo sysctl -n vm.mmap_rnd_bits)
+          echo "vm.mmap_rnd_bits is now: ${CURRENT_BITS}"
+          if [ "${CURRENT_BITS}" -ne 28 ]; then
+            echo "ERROR: Failed to set vm.mmap_rnd_bits to 28" >&2
+            exit 1
+          fi
 
-      - name: Run CLI Integration & Smoke Tests (Linux)
-        if: runner.os == 'Linux'
+      - name: Run CTest Unit Tests
+        shell: bash
+        env:
+          NO_COLOR: "1"
         run: |
-          chmod +x ./tests/smoke/smoke_test.sh
-          ./tests/smoke/smoke_test.sh ./build/snip
+          if [ "${{ matrix.compiler }}" = "GCC-TSan" ]; then
+            setarch x86_64 -R ctest --test-dir build -C Release --output-on-failure
+          else
+            ctest --test-dir build -C Release --output-on-failure
+          fi
+
+      - name: Run CLI Integration & Smoke Tests
+        shell: bash
+        run: |
+          chmod +x ./tests/smoke/smoke_test.sh || true
+          if [ "${{ matrix.compiler }}" = "GCC-TSan" ]; then
+            setarch x86_64 -R ./tests/smoke/smoke_test.sh ./${{ matrix.binary_path }}
+          else
+            ./tests/smoke/smoke_test.sh ./${{ matrix.binary_path }}
+          fi
+
+      - name: Run Adversarial Audit Reproduction Suite
+        shell: bash
+        run: |
+          chmod +x ./scripts/snipcli_audit_repro.sh || true
+          if [ "${{ matrix.compiler }}" = "GCC-TSan" ]; then
+            setarch x86_64 -R ./scripts/snipcli_audit_repro.sh ./${{ matrix.binary_path }}
+          else
+            ./scripts/snipcli_audit_repro.sh ./${{ matrix.binary_path }}
+          fi
 
       - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
@@ -78,3 +135,4 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.binary_path }}
           retention-days: 7
+

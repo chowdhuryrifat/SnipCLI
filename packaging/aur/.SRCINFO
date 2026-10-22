@@ -10,6 +10,6 @@ pkgbase = snipcli
 	depends = glibc
 	depends = gcc-libs
 	source = snipcli-1.0.0.tar.gz::https://github.com/chowdhuryrifat/SnipCLI/archive/refs/tags/v1.0.0.tar.gz
-	sha256sums = <SHA256_SOURCE_TARBALL>
+	sha256sums = ba9de162b5a0b61a60a6bbd0c6adc9c7c7e0cab072299cc0284baf48e36a49df
 
 pkgname = snipcli

@@ -9,7 +9,7 @@ license=('MIT')
 depends=('glibc' 'gcc-libs')
 makedepends=('cmake')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('<SHA256_SOURCE_TARBALL>')
+sha256sums=('ba9de162b5a0b61a60a6bbd0c6adc9c7c7e0cab072299cc0284baf48e36a49df')
 
 build() {
     cd "SnipCLI-$pkgver"

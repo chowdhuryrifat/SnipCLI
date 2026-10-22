@@ -2,7 +2,7 @@ class Snipcli < Formula
   desc "High-performance algorithmic snippet manager CLI for competitive programmers"
   homepage "https://github.com/chowdhuryrifat/SnipCLI"
   url "https://github.com/chowdhuryrifat/SnipCLI/archive/refs/tags/v1.0.0.tar.gz"
-  sha256 "<SHA256_SOURCE_TARBALL>"
+  sha256 "ba9de162b5a0b61a60a6bbd0c6adc9c7c7e0cab072299cc0284baf48e36a49df"
   license "MIT"
   head "https://github.com/chowdhuryrifat/SnipCLI.git", branch: "dev"
 

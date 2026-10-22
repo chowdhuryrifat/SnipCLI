@@ -1,0 +1,83 @@
+#compdef snip
+
+_snip() {
+    local -a commands
+    commands=(
+        'add:Add a new snippet'
+        'list:List all stored snippets'
+        'get:Retrieve a snippet by ID or Title'
+        'delete:Delete a snippet by ID or Title'
+        'search:Search snippets by query, tag, or language'
+        'stats:Display repository snippet statistics'
+        'help:Display help information'
+    )
+
+    local -a formats
+    formats=(
+        'terminal:Human-readable colored terminal output'
+        'markdown:Markdown formatted output'
+    )
+
+    _arguments -C \
+        '(-h --help)'{-h,--help}'[Display help information]' \
+        '(-v --version)'{-v,--version}'[Display version information]' \
+        '1: :->command' \
+        '*:: :->args'
+
+    case $state in
+        command)
+            _describe -t commands 'snip commands' commands
+            ;;
+        args)
+            case $line[1] in
+                add)
+                    _arguments \
+                        '(-t --title)'{-t,--title}'[Snippet title]:title:' \
+                        '(-l --lang --language)'{-l,--lang,--language}'[Programming language]:language:(cpp c python rust go java javascript typescript bash)' \
+                        '(-c --code)'{-c,--code}'[Snippet source code]:code:' \
+                        '(-f --file)'{-f,--file}'[Source code file path]:file:_files' \
+                        '--tags=[Comma-separated tags]:tags:' \
+                        '--tag=[Comma-separated tags]:tag:' \
+                        '--format=[Output format]:format:(terminal markdown)'
+                    ;;
+                list)
+                    _arguments \
+                        '--tag=[Filter by category tag]:tag:' \
+                        '--tags=[Filter by category tag]:tags:' \
+                        '(-l --lang --language)'{-l,--lang,--language}'[Filter by programming language]:language:(cpp c python rust go java javascript typescript bash)' \
+                        '--format=[Output format]:format:(terminal markdown)'
+                    ;;
+                get)
+                    _arguments \
+                        '--id=[Snippet ID]:id:' \
+                        '(-t --title)'{-t,--title}'[Snippet title]:title:' \
+                        '(-c --code-only)'{-c,--code-only}'[Output raw code byte-exact without decorations]' \
+                        '--format=[Output format]:format:(terminal markdown)'
+                    ;;
+                delete)
+                    _arguments \
+                        '--id=[Snippet ID]:id:' \
+                        '(-t --title)'{-t,--title}'[Snippet title]:title:' \
+                        '--format=[Output format]:format:(terminal markdown)'
+                    ;;
+                search)
+                    _arguments \
+                        '(-t --title)'{-t,--title}'[Filter by title substring]:title:' \
+                        '--tag=[Filter by tag]:tag:' \
+                        '--tags=[Filter by tag]:tags:' \
+                        '(-l --lang --language)'{-l,--lang,--language}'[Filter by programming language]:language:(cpp c python rust go java javascript typescript bash)' \
+                        '--format=[Output format]:format:(terminal markdown)'
+                    ;;
+                stats)
+                    _arguments \
+                        '--format=[Output format]:format:(terminal markdown)'
+                    ;;
+                help)
+                    _describe -t commands 'snip commands' commands
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_snip "$@"

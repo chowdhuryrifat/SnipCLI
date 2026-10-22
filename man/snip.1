@@ -1,0 +1,120 @@
+.TH SNIP 1 "2026-10-21" "SnipCLI 1.0.0" "User Commands"
+.SH NAME
+snip \- fast, modern command-line snippet manager
+.SH SYNOPSIS
+.B snip
+[\fIOPTIONS\fR]
+.br
+.B snip
+\fICOMMAND\fR [\fICOMMAND_OPTIONS\fR]
+.SH DESCRIPTION
+.B SnipCLI
+is a lightweight, zero-dependency command-line code snippet manager built in modern C++17.
+It organizes code snippets with metadata, tags, and languages, persisting them to an atomic,
+file-locked JSON repository.
+.SH COMMANDS
+.TP
+.BR add " [\fIOPTIONS\fR]"
+Store a new code snippet. Requires \fB\-\-title\fR, \fB\-\-lang\fR (or \fB\-\-language\fR),
+and either \fB\-\-code\fR or \fB\-\-file\fR.
+.TP
+.BR list " [\fIOPTIONS\fR]"
+List all stored snippets in the repository, with optional \fB\-\-tag\fR or \fB\-\-lang\fR filters.
+.TP
+.BR get " [\fIOPTIONS\fR]"
+Retrieve and display a snippet by exact numeric identifier (\fB\-\-id\fR) or exact title (\fB\-\-title\fR).
+Use \fB\-\-code\-only\fR to extract only the raw snippet contents.
+.TP
+.BR delete " [\fIOPTIONS\fR]"
+Delete a snippet from the repository by ID (\fB\-\-id\fR) or title (\fB\-\-title\fR).
+.TP
+.BR search " [\fIQUERY\fR] [\fIOPTIONS\fR]"
+Search stored snippets by title substring (positional argument or \fB\-\-title\fR), tag (\fB\-\-tag\fR), or language (\fB\-\-language\fR).
+.TP
+.BR stats " [\fIOPTIONS\fR]"
+Display aggregate repository statistics, including total snippet counts, language distributions, and tag usage.
+.TP
+.BR help " [\fICOMMAND\fR]"
+Display usage documentation.
+.SH OPTIONS
+.SS Global Options
+.TP
+.BR \-h ", " \-\-help
+Print the command-line help summary and exit.
+.TP
+.BR \-v ", " \-\-version
+Print the program version and architecture banner.
+.SS Command Options
+.TP
+.BI \-t ", " \-\-title= TITLE
+Specify the snippet title. In \fBsearch\fR, filters snippets by case-insensitive title substring.
+.TP
+.BI \-l ", " \-\-lang= LANG ", " \-\-language= LANG
+Specify the programming language of the snippet (e.g., \fBcpp\fR, \fBpython\fR, \fBrust\fR).
+.TP
+.BI \-c ", " \-\-code= CODE
+Specify the source code contents directly as a string argument.
+.TP
+.BI \-f ", " \-\-file= FILE
+Specify a file path from which to read snippet source code.
+.TP
+.BI \-\-tags= TAGS ", " \-\-tag= TAG
+Specify comma-separated category tags (in \fBadd\fR) or filter by tag (in \fBlist\fR and \fBsearch\fR).
+.TP
+.BI \-\-id= ID
+Specify the unique positive integer ID of the snippet.
+.TP
+.BR \-c ", " \-\-code\-only
+Used with \fBget\fR. Outputs the raw snippet source code byte-for-byte to standard output without headers or syntax wrappers.
+.TP
+.BI \-\-format= FORMAT
+Specify rendering view: \fBterminal\fR (default ANSI color formatting) or \fBmarkdown\fR.
+.SH ENVIRONMENT
+.TP
+.B SNIPCLI_STORAGE_PATH
+Overrides the default storage path. Defaults to \fI~/.snipcli/snippets.json\fR.
+.TP
+.B SNIPCLI_LOCK_TIMEOUT_MS
+Configures storage lock acquisition timeout in milliseconds (bounds: 1 to 600000 ms; default: 10000 ms).
+.TP
+.B NO_COLOR
+When set to any non-empty value, disables ANSI color styling on terminal output.
+.SH FILES
+.TP
+.I ~/.snipcli/snippets.json
+Default JSON file storage containing all saved snippets and metadata.
+.TP
+.I ~/.snipcli/snippets.json.lock
+Advisory file lock used across concurrent instances to prevent race conditions during updates.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Failure (validation error, snippet not found, lock timeout, or filesystem storage error).
+.SH EXAMPLES
+.PP
+Add a new C++ snippet:
+.RS
+.B snip add \-\-title "Binary Exponentiation" \-\-lang cpp \-\-code "long long power(long long b, long long e) { ... }" \-\-tags math,algo
+.RE
+.PP
+List all snippets in Markdown format:
+.RS
+.B snip list \-\-format markdown
+.RE
+.PP
+Retrieve snippet #1 code directly into clipboard (X11):
+.RS
+.B snip get \-\-id 1 \-\-code\-only | xclip \-selection clipboard
+.RE
+.PP
+Search for snippets with the tag "math":
+.RS
+.B snip search \-\-tag math
+.RE
+.SH AUTHORS
+Chowdhury Rifat Ahmed & Lameya Tabasum.
+.SH REPORTING BUGS
+Submit issues and bug reports at: \fIhttps://github.com/chowdhuryrifat/SnipCLI/issues\fR

@@ -40,7 +40,7 @@
 - [🏗️ System Architecture & MVC Blueprint](#system-architecture--mvc-blueprint)
 - [🧠 SOLID & GoF Design Patterns](#solid--gof-design-patterns)
 - [🧪 Automated Testing & CI/CD Pipeline](#automated-testing--cicd-pipeline)
-- [🎓 Course Defense & Authors Metadata](docs/internal/COURSE.md)
+- [📖 Detailed User Manual & Command Guide](docs/USAGE.md)
 
 ---
 
@@ -356,6 +356,7 @@ Every pull request targeting `main` or `dev` triggers the automated CI/CD pipeli
 
 ## 📚 Documentation & Reference Guides
 
+- [User Manual & Command Reference](docs/USAGE.md) — Comprehensive guide to commands, flags, installation, and pipelines.
 - [System Architecture](docs/ARCHITECTURE.md) — Detailed MVC layer responsibilities and GoF pattern design.
 - [Technical Specification](docs/TECHNICAL.md) — Storage engine, locking mechanics, and JSON schema invariants.
 - [Release Guide](docs/RELEASING.md) — Step-by-step checklist for tagging and release automation.
@@ -363,15 +364,13 @@ Every pull request targeting `main` or `dev` triggers the automated CI/CD pipeli
 - [Changelog](CHANGELOG.md) — Semantic version history, fixes, and release notes.
 - [Contributing Guide](CONTRIBUTING.md) — Development setup, testing workflows, and PR protocols.
 - [Security Policy](SECURITY.md) — Vulnerability reporting instructions and response SLAs.
-- [Course & Defense Metadata](docs/internal/COURSE.md) — Defense playbook, 5-minute live modification scenarios, and course rubrics.
 
 ---
 
-## 👥 Authors & Academic Credits
+## 👥 Authors & Maintainers
 
-SnipCLI was developed by **Chowdhury Rifat Ahmed** (ID: `@chowdhuryrifat`) and **Lameya Tabasum** (ID: `@lameyatabasum`) for the Competitive Programming course.
-
-For the live viva defense breakdown, 5-minute modification playbook, and grading evaluation rubrics, refer to [**Course & Viva Defense Metadata**](docs/internal/COURSE.md).
+- **Chowdhury Rifat Ahmed** ([@chowdhuryrifat](https://github.com/chowdhuryrifat)) — Core Architecture & Storage Engine
+- **Lameya Tabasum** ([@lameyatabasum](https://github.com/lameyatabasum)) — CLI Presentation, Routing & CI/CD
 
 ---
 

@@ -61,7 +61,15 @@ int main(int argc, char* argv[]) {
             std::make_unique<controller::commands::StatsCommand>(args, repository, view));
 
         if (args.hasFlag("--help") || args.hasFlag("-h") || args.verb == "help") {
-            dispatcher.printHelp();
+            std::string helpTarget;
+            if (args.verb == "help") {
+                if (!args.positionals.empty()) {
+                    helpTarget = args.positionals.front();
+                }
+            } else if (!args.verb.empty()) {
+                helpTarget = args.verb;
+            }
+            dispatcher.printHelp(std::cout, helpTarget);
             return 0;
         }
 

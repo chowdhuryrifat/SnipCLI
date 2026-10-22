@@ -38,10 +38,11 @@ public:
     [[nodiscard]] int dispatch(const std::string& verb);
 
     /**
-     * @brief Formats and prints the global CLI help documentation to the specified output stream.
+     * @brief Formats and prints CLI help documentation to the specified output stream.
      * @param os Target output stream (defaults to std::cout).
+     * @param specificCommand Optional command name to display detailed per-command options.
      */
-    void printHelp(std::ostream& os = std::cout) const;
+    void printHelp(std::ostream& os = std::cout, const std::string& specificCommand = "") const;
 
     /**
      * @brief Formats and prints the application version banner to the specified output stream.

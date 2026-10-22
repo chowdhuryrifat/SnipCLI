@@ -1,6 +1,6 @@
 # SnipCLI Technical Reference Manual
 
-**Engineers:** Chowdhury Rifat Ahmed (ID: `@chowdhuryrifat`) & Lameya Tabasum (ID: `@lameyatabasum`)
+**Maintainers:** Chowdhury Rifat Ahmed & Lameya Tabasum
 
 ---
 

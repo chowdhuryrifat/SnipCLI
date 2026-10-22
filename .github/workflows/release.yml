@@ -6,6 +6,7 @@ on:
       - 'v*.*.*'
     branches:
       - 'release/v1.0.0-packaging'
+      - 'release/v1.0.0-final'
       - 'ci-verify'
   workflow_dispatch:
 
@@ -95,13 +96,6 @@ jobs:
           cmake --build build -j"$(nproc)"
           strip build/snip
 
-      - name: Record LDD and Maximum GLIBC Symbol Version
-        run: |
-          echo "=== Dynamic Library Dependencies (ldd) ==="
-          ldd build/snip
-          echo "=== Maximum GLIBC Symbols Required ==="
-          objdump -T build/snip | grep GLIBC_ | awk '{print $NF}' | tr -d '()' | sort -V | tail -n 10
-
       - name: Stage Artifacts (FHS Layout)
         run: |
           cmake --install build --prefix /tmp/stage
@@ -115,6 +109,40 @@ jobs:
           cd ..
           DEB_FILE=$(ls build/snipcli_*.deb | head -n 1)
           cp "$DEB_FILE" dist/snipcli_${{ steps.meta.outputs.version }}_amd64.deb
+          echo "DEB_FILE=${DEB_FILE}" >> "$GITHUB_ENV"
+
+      - name: Record LDD and Maximum GLIBC Symbol Version
+        run: |
+          echo "=== Dynamic Library Dependencies (ldd) ==="
+          ldd build/snip
+          echo "=== Extracting Maximum Required GLIBC Symbol Version ==="
+          MAX_GLIBC=$(objdump -T build/snip | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n1)
+          echo "Maximum required GLIBC symbol: ${MAX_GLIBC}"
+          MAX_VER="${MAX_GLIBC#GLIBC_}"
+          
+          DEB_LIBC_VER=$(dpkg-deb -I "${DEB_FILE}" | grep 'Depends:' | grep -o 'libc6 (>= [0-9.]*)' | sed -E 's/.*>= ([0-9.]+).*/\1/')
+          echo "Debian package declared libc6 dependency: libc6 (>= ${DEB_LIBC_VER})"
+          
+          if dpkg --compare-versions "${MAX_VER}" gt "${DEB_LIBC_VER}"; then
+            echo "ERROR: Maximum required GLIBC version (${MAX_VER}) exceeds Debian dependency (${DEB_LIBC_VER})" >&2
+            exit 1
+          fi
+          echo "GLIBC symbol compatibility check: PASS (${MAX_VER} <= ${DEB_LIBC_VER})"
+
+      - name: Inspect Debian Package (dpkg -I, dpkg -c)
+        run: |
+          mkdir -p deb-evidence
+          echo "=== Debian Package Information (dpkg -I) ==="
+          dpkg -I "${DEB_FILE}" | tee deb-evidence/dpkg_info.txt
+          echo "=== Debian Package Contents (dpkg -c) ==="
+          dpkg -c "${DEB_FILE}" | tee deb-evidence/dpkg_contents.txt
+
+      - name: Upload Debian Inspection Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-inspection
+          path: deb-evidence/*
+          retention-days: 7
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
@@ -287,12 +315,31 @@ jobs:
           cd release_assets
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
+          
+          echo "## Release Assets & SHA-256 Checksums" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Asset File | SHA-256 | Size |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| :--- | :--- | :--- |" >> "$GITHUB_STEP_SUMMARY"
+          while read -r hash fname; do
+            sz=$(stat -c%s "$fname")
+            echo "| \`$fname\` | \`$hash\` | $sz bytes |" >> "$GITHUB_STEP_SUMMARY"
+          done < SHA256SUMS.txt
 
       - name: Generate Build Provenance Attestation
+        id: attest
         uses: actions/attest-build-provenance@v2
         continue-on-error: true
         with:
           subject-path: 'release_assets/*'
+
+      - name: Record Build Provenance Summary
+        if: always()
+        run: |
+          echo "## Build Provenance Attestation" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.attest.outcome }}" = "success" ]; then
+            echo "- **Status:** SUCCESS (Cryptographic provenance attestation recorded)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- **Status:** SKIPPED (Repository is private; build provenance attestation requires a public GitHub repository or GitHub Enterprise and will activate upon public release)" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Extract Release Notes from CHANGELOG.md
         id: notes

@@ -15,10 +15,10 @@ We take the security of SnipCLI seriously. If you discover or suspect a security
 
 ### How to Report
 
-1. **GitHub Security Advisory (Preferred):**  
-   Navigate to the repository's [Security Advisories](https://github.com/chowdhuryrifat/SnipCLI/security/advisories) tab and click **"Report a vulnerability"**.
-2. **Email Fallback:**  
-   If you cannot submit via GitHub Advisories, email the maintainer directly at `67093774+chowdhuryrifat@users.noreply.github.com` with the subject `[SECURITY VULNERABILITY] SnipCLI`.
+1. **GitHub Security Advisory (Primary):**  
+   Navigate to the repository's [Security Advisories](https://github.com/chowdhuryrifat/SnipCLI/security/advisories) tab and click **"Report a vulnerability"** to submit private details directly to the maintainers.
+2. **Fallback Contact:**  
+   If private vulnerability reporting is unavailable, reach out to `<MAINTAINER_CONTACT>` with the subject `[SECURITY VULNERABILITY] SnipCLI`.
 
 ### What to Include in Your Report
 

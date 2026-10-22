@@ -153,9 +153,9 @@ endif()
 set(CPACK_PACKAGE_NAME "snipcli")
 set(CPACK_PACKAGE_VENDOR "Chowdhury Rifat Ahmed & Lameya Tabasum")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Fast, modern C++17 CLI snippet manager for competitive programmers")
-set(CPACK_PACKAGE_DESCRIPTION "Fast, modern C++17 CLI snippet manager for competitive programmers.
- SnipCLI persists snippets to an atomic JSON repository with sub-5ms query times,
- multi-format rendering (ANSI terminal and Markdown), and cross-process file locking.")
+set(CPACK_PACKAGE_DESCRIPTION "SnipCLI persists snippets to an atomic JSON repository with sub-5ms
+ query times, multi-format rendering (ANSI terminal and Markdown),
+ and cross-process file locking.")
 set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})

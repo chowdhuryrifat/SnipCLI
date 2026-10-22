@@ -26,7 +26,7 @@ def lint_final_report(report_path, bundle_root):
 
     success_markers = [
         "pass", "100%", "success", "0 mismatches", "0 errors", "clean",
-        "verified", "ok", "no leaks", "0 failed", "passed"
+        "verified", "ok", "no leaks", "0 failed", "passed", "problems: 0", "0 problems"
     ]
 
     for line_no, line in enumerate(lines, 1):

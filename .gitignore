@@ -27,6 +27,7 @@ Thumbs.db
 dist/
 dist-submit/
 build-evidence/
+review_bundle/
 *.deb
 *.tar.gz
 *.zip

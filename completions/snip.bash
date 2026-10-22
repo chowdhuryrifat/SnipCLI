@@ -34,14 +34,18 @@ _snip_completions() {
     # Subcommand specific options
     case "$cmd" in
         add)
-            local add_opts="--title --lang --language --code --tags --desc --description --format"
+            local add_opts="--title -t --lang --language -l --code -c --file -f --tags --format"
             case "$prev" in
                 --format)
                     COMPREPLY=($(compgen -W "terminal markdown" -- "$cur"))
                     return 0
                     ;;
-                --lang|--language)
+                --lang|--language|-l)
                     COMPREPLY=($(compgen -W "cpp c python rust go java javascript typescript bash" -- "$cur"))
+                    return 0
+                    ;;
+                --file|-f)
+                    COMPREPLY=($(compgen -f -- "$cur"))
                     return 0
                     ;;
                 *)
@@ -51,10 +55,14 @@ _snip_completions() {
             esac
             ;;
         list)
-            local list_opts="--format"
+            local list_opts="--tag --tags --lang --language -l --format"
             case "$prev" in
                 --format)
                     COMPREPLY=($(compgen -W "terminal markdown" -- "$cur"))
+                    return 0
+                    ;;
+                --lang|--language|-l)
+                    COMPREPLY=($(compgen -W "cpp c python rust go java javascript typescript bash" -- "$cur"))
                     return 0
                     ;;
                 *)
@@ -90,13 +98,13 @@ _snip_completions() {
             esac
             ;;
         search)
-            local search_opts="--tag --query --language --format"
+            local search_opts="--title -t --tag --tags --lang --language -l --format"
             case "$prev" in
                 --format)
                     COMPREPLY=($(compgen -W "terminal markdown" -- "$cur"))
                     return 0
                     ;;
-                --language)
+                --lang|--language|-l)
                     COMPREPLY=($(compgen -W "cpp c python rust go java javascript typescript bash" -- "$cur"))
                     return 0
                     ;;

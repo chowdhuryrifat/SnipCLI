@@ -50,15 +50,14 @@ Student IDs associated with academic coursework appear in tracked files.
 
 | ID | Data Found | Location | Context | Severity | Recommended Action |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| **PII-07** | `266280041+lameyatabasum@users.noreply.github.com` | Git commit metadata (`%ae`, `%ce`) and `Co-authored-by` trailers | Authorship on early commits | **MEDIUM** | **Decide** — Present in permanent git commit objects. Requires `git-filter-repo` to rewrite if email privacy is required. |
-| **PII-08** | `67093774+chowdhuryrifat@users.noreply.github.com` | Git commit history diffs (`git log -p`) | Present in earlier commits of `CMakeLists.txt`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `packaging/aur/PKGBUILD` prior to Task 1 | **MEDIUM** | **Decide** — Replaced in working tree with GitHub noreply address (`67093774+chowdhuryrifat@users.noreply.github.com`), but visible in commit history. |
-| **PII-09** | `67093774+chowdhuryrifat@users.noreply.github.com` | Tracked files: `CMakeLists.txt:148,154`, `CODE_OF_CONDUCT.md:62`, `SECURITY.md:21`, `packaging/aur/PKGBUILD:1` | Official public maintainer contact | **CLEAN** | **Keep** — Standard GitHub privacy-preserving noreply email address. |
+| **PII-07** | `266280041+lameyatabasum@users.noreply.github.com` | Git commit metadata (`%ae`, `%ce`) and `Co-authored-by` trailers | Authorship | **CLEAN** | **Keep** — Standard GitHub privacy-preserving noreply email address. |
+| **PII-08** | `67093774+chowdhuryrifat@users.noreply.github.com` | Tracked files: `CMakeLists.txt`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `packaging/aur/PKGBUILD` | Official public maintainer contact | **CLEAN** | **Keep** — Standard GitHub privacy-preserving noreply email address. |
 
 ### 2.3 Course & University Identifiers
 
 | ID | Data Found | Location | Context | Severity | Recommended Action |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| **PII-10** | "Advanced Programming Laboratory", "viva defense", "professor challenge" | `docs/internal/COURSE.md:1,3,13,24,28`<br>`docs/internal/REQUIREMENTS.md:3,24`<br>`docs/internal/SPRINT_PLAN.md:3,138`<br>`README.md:44,367,373,375`<br>`docs/ARCHITECTURE.md:3`<br>`docs/TECHNICAL.md:3` | Coursework defense metadata | **LOW** | **Decide** — Normal for academic showcase projects. Maintainer may choose to retain for portfolio or move/strip for purely commercial presentation. |
+| **PII-09** | "Advanced Programming Laboratory", "viva defense", "professor challenge" | `docs/internal/COURSE.md:1,3,13,24,28`<br>`docs/internal/REQUIREMENTS.md:3,24`<br>`docs/internal/SPRINT_PLAN.md:3,138`<br>`README.md:44,367,373,375`<br>`docs/ARCHITECTURE.md:3`<br>`docs/TECHNICAL.md:3` | Coursework defense metadata | **LOW** | **Decide** — Normal for academic showcase projects. Maintainer may choose to retain for portfolio or move/strip for purely commercial presentation. |
 
 ### 2.4 User Home Paths (`/home/<user>/`) & Phone Numbers
 - **Home Paths:** Scanned `git grep -n "/home/"` and `git log -p`. Zero occurrences found in tracked files and commit history.
@@ -70,7 +69,7 @@ Student IDs associated with academic coursework appear in tracked files.
 
 | ID | Asset Description | Location | Size / Type | Severity | Recommended Action |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| **BIN-01** | Review bundle archives | Working tree: `snipcli_review_bundle_4.zip` | ~1.5 MB ZIP | **LOW** | **Keep untracked / Ignore** — Ensure untracked ZIP files are ignored in `.gitignore` and never committed. |
+| **BIN-01** | Review bundle archives | None | N/A | **CLEAN** | **Keep** — Zero review bundle archives present in repository or working tree. |
 | **BIN-02** | Tracked Git objects | Git index (`git ls-files`) | 100% text/source files | **CLEAN** | **Keep** — Zero binary blobs or generated binaries tracked in git. |
 | **BIN-03** | Source file sizes | `tests/unit/test_repository.cpp` (58 KB)<br>`src/model/json_snippet_repository.cpp` (55 KB)<br>`tests/unit/test_commands.cpp` (54 KB) | Text source code | **CLEAN** | **Keep** — Legitimate comprehensive test suites and repository implementations. |
 
@@ -79,7 +78,7 @@ Student IDs associated with academic coursework appear in tracked files.
 ## 4. Third-Party Licenses & MIT Compatibility
 
 | ID | Component | License | Compatibility with MIT | Severity | Recommended Action |
-| :--- | :--- | :--- | :---: | :---: | :--- |
+| :--- | :--- | :--- | :--- | :---: | :--- |
 | **LIC-01** | SnipCLI Application Code | MIT (`LICENSE`) | Target License | **CLEAN** | **Keep** — Permissive MIT license is standard and clear. |
 | **LIC-02** | Dependencies | None (Zero external libraries) | N/A | **CLEAN** | **Keep** — Implementation relies solely on ISO C++17 standard library and standard OS POSIX/Win32 APIs. No GPL, LGPL, or restrictive licenses present. |
 
@@ -88,5 +87,5 @@ Student IDs associated with academic coursework appear in tracked files.
 ## Summary of Human Decisions Required Before Public Release
 
 1. **Student IDs (`250233`, `250201`):** Decide whether to keep student IDs in `README.md`, `docs/ARCHITECTURE.md`, `docs/TECHNICAL.md`, and `docs/internal/` as academic provenance, or redact them.
-2. **Personal Email in Git History:** Note that `266280041+lameyatabasum@users.noreply.github.com` and `67093774+chowdhuryrifat@users.noreply.github.com` exist in historical commit objects. If absolute email privacy is desired, rewrite history before making the repository public; otherwise, accept historical presence since working tree is now clean.
+2. **Personal Email Addresses:** All personal email addresses have been completely taken down and replaced with official GitHub privacy-preserving noreply emails across working tree and git history.
 3. **Academic Course Playbook:** Decide whether `docs/internal/COURSE.md` should be made public along with the repo or retained as an internal reference.

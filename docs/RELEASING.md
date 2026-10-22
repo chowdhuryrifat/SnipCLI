@@ -37,7 +37,7 @@ This document outlines the standard release process for maintainers of **SnipCLI
    - Pushing tag `v*.*.*` triggers `.github/workflows/release.yml`.
    - The workflow compiles Release binaries for:
      - Linux x86_64 (`.tar.gz` and `.deb`)
-     - macOS ARM64 AppleClang (`.tar.gz`)
+     - macOS Universal (Apple Silicon `arm64` & Intel `x86_64`) (`.tar.gz`)
      - Windows x86_64 MSVC (`.zip`)
    - The workflow computes `SHA256SUMS.txt` for all assets and generates a GitHub Release draft.
 

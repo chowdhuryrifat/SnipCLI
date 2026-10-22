@@ -1,9 +1,20 @@
 cmake_minimum_required(VERSION 3.16)
+if(POLICY CMP0091)
+    cmake_policy(SET CMP0091 NEW)
+endif()
+
 project(SnipCLI 
     VERSION 1.0.0 
     LANGUAGES CXX 
     DESCRIPTION "A fast, modern C++ CLI snippet manager for competitive programmers"
 )
+
+# MSVC Static Runtime: Link C/C++ runtime statically (/MT in Release, /MTd in Debug)
+# Ensures standalone Windows binaries with zero external MSVC runtime DLL dependencies
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 
 # Standard C++17 Enforcement
 set(CMAKE_CXX_STANDARD 17)
@@ -125,4 +136,30 @@ install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md
     DESTINATION ${CMAKE_INSTALL_DOCDIR}
 )
+
+# CPack Packaging Configuration
+set(CPACK_PACKAGE_NAME "snipcli")
+set(CPACK_PACKAGE_VENDOR "Chowdhury Rifat Ahmed & Lameya Tabasum")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Fast, modern C++17 CLI snippet manager for competitive programmers")
+set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_CONTACT "Chowdhury Rifat Ahmed <MAINTAINER_CONTACT>")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+
+# Debian (.deb) Specifics
+set(CPACK_DEBIAN_PACKAGE_NAME "snipcli")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Chowdhury Rifat Ahmed <MAINTAINER_CONTACT>")
+set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
+
+# Archive Generators
+set(CPACK_GENERATOR "TGZ;DEB")
+set(CPACK_SOURCE_GENERATOR "TGZ")
+
+include(CPack)
+
 

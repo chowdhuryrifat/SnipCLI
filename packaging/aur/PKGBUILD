@@ -1,0 +1,32 @@
+# Maintainer: Chowdhury Rifat Ahmed <MAINTAINER_CONTACT>
+pkgname=snipcli
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Fast, modern C++17 CLI snippet manager for competitive programmers"
+arch=('x86_64' 'aarch64')
+url="https://github.com/chowdhuryrifat/SnipCLI"
+license=('MIT')
+depends=('glibc' 'gcc-libs')
+makedepends=('cmake')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('<SHA256_SOURCE_TARBALL>')
+
+build() {
+    cd "SnipCLI-$pkgver"
+    cmake -B build -S . \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DSNIPCLI_BUILD_TESTS=ON
+    cmake --build build
+}
+
+check() {
+    cd "SnipCLI-$pkgver"
+    ctest --test-dir build --output-on-failure
+}
+
+package() {
+    cd "SnipCLI-$pkgver"
+    DESTDIR="$pkgdir" cmake --install build
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

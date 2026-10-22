@@ -9,8 +9,17 @@
 #include <unordered_set>
 #include <vector>
 
+#include "scoped_env.hpp"
 #include "snipcli/common/exceptions.hpp"
 #include "snipcli/model/json_snippet_repository.hpp"
+
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+#endif
 
 namespace {
 
@@ -21,26 +30,14 @@ void assertTrue(bool condition, const std::string& message) {
     }
 }
 
-void setEnvVar(const char* name, const char* value) {
-#if defined(_WIN32)
-    _putenv_s(name, value);
-#else
-    setenv(name, value, 1);
-#endif
-}
-
-void unsetEnvVar(const char* name) {
-#if defined(_WIN32)
-    _putenv_s(name, "");
-#else
-    unsetenv(name);
-#endif
-}
-
 }  // namespace
 
 void runRepositoryTests() {
     std::cout << "[TEST] Running Repository tests..." << std::endl;
+
+    // Isolate repository unit tests from external lock timeout overrides (e.g.
+    // SNIPCLI_LOCK_TIMEOUT_MS=1)
+    snipcli::test::ScopedEnv lockTimeoutGuard("SNIPCLI_LOCK_TIMEOUT_MS", "10000");
 
     static_assert(std::is_nothrow_move_assignable_v<snipcli::model::Snippet>,
                   "Snippet must be nothrow move assignable for strong exception safety");
@@ -225,6 +222,15 @@ void runRepositoryTests() {
     // Test 8: Default Storage Path & SNIPCLI_STORAGE_PATH Override
     // ---------------------------------------------------------
     {
+        // First isolate and clear any external SNIPCLI_STORAGE_PATH
+        snipcli::test::ScopedEnv clearEnv("SNIPCLI_STORAGE_PATH", std::nullopt);
+        // Ensure HOME or APPDATA exists so getDefaultStoragePath() has an OS anchor even under env
+        // -i
+        std::optional<snipcli::test::ScopedEnv> dummyHome;
+        if (!std::getenv("HOME") && !std::getenv("APPDATA")) {
+            dummyHome.emplace("HOME", testDir.string());
+        }
+
         // Default path resolution
         std::filesystem::path defaultPath =
             snipcli::model::JsonSnippetRepository::getDefaultStoragePath();
@@ -232,18 +238,19 @@ void runRepositoryTests() {
 
         // Environment override
         std::filesystem::path customOverride = testDir / "custom_override.json";
-        setEnvVar("SNIPCLI_STORAGE_PATH", customOverride.string().c_str());
+        {
+            snipcli::test::ScopedEnv overrideEnv("SNIPCLI_STORAGE_PATH", customOverride.string());
 
-        std::filesystem::path resolved =
-            snipcli::model::JsonSnippetRepository::getDefaultStoragePath();
-        assertTrue(resolved == customOverride, "SNIPCLI_STORAGE_PATH must override default path");
+            std::filesystem::path resolved =
+                snipcli::model::JsonSnippetRepository::getDefaultStoragePath();
+            assertTrue(resolved == customOverride,
+                       "SNIPCLI_STORAGE_PATH must override default path");
 
-        // Default constructor uses resolved path
-        snipcli::model::JsonSnippetRepository defaultRepo;
-        assertTrue(defaultRepo.getStoragePath() == customOverride,
-                   "Default constructor must use resolved path from env override");
-
-        unsetEnvVar("SNIPCLI_STORAGE_PATH");
+            // Default constructor uses resolved path
+            snipcli::model::JsonSnippetRepository defaultRepo;
+            assertTrue(defaultRepo.getStoragePath() == customOverride,
+                       "Default constructor must use resolved path from env override");
+        }
     }
 
     // ---------------------------------------------------------
@@ -899,9 +906,385 @@ void runRepositoryTests() {
         }
     }
 
+    // ---------------------------------------------------------
+    // 21: Symlink loop and recursion depth defense (F1)
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path symloopDir = testDir / "symloop_test";
+        std::filesystem::create_directories(symloopDir, ec);
+
+        // (a) 2-link loop: a -> b, b -> a
+        std::filesystem::path linkA = symloopDir / "link_a.json";
+        std::filesystem::path linkB = symloopDir / "link_b.json";
+        std::filesystem::create_symlink(linkB, linkA, ec);
+        if (!ec) {
+            std::filesystem::create_symlink(linkA, linkB, ec);
+            if (!ec) {
+                bool caught2Hop = false;
+                try {
+                    snipcli::model::JsonSnippetRepository loopRepo(linkA);
+                    (void)loopRepo.getAll();
+                } catch (const snipcli::common::StorageException& ex) {
+                    caught2Hop = true;
+                    assertTrue(std::string(ex.what()).find("Too many levels of symbolic links") !=
+                                   std::string::npos,
+                               "StorageException message mentions symlink loop");
+                }
+                assertTrue(caught2Hop, "2-link symlink loop throws StorageException");
+            }
+        }
+
+        // (b) Self-link: loop_self -> loop_self
+        ec.clear();
+        std::filesystem::path selfLink = symloopDir / "self_link.json";
+        std::filesystem::create_symlink(selfLink, selfLink, ec);
+        if (!ec) {
+            bool caughtSelf = false;
+            try {
+                snipcli::model::JsonSnippetRepository selfRepo(selfLink);
+                (void)selfRepo.getAll();
+            } catch (const snipcli::common::StorageException& ex) {
+                caughtSelf = true;
+                assertTrue(std::string(ex.what()).find("Too many levels of symbolic links") !=
+                               std::string::npos,
+                           "Self-link throws StorageException with symlink loop message");
+            }
+            assertTrue(caughtSelf, "Self-symlink loop throws StorageException");
+        }
+
+        // (c) 41-hop symlink chain (exceeds kMaxSymlinkHops = 40)
+        ec.clear();
+        std::filesystem::path targetFile = symloopDir / "real_target.json";
+        {
+            std::ofstream out(targetFile);
+            out << "[]";
+        }
+        std::filesystem::path prev = targetFile;
+        bool chainCreated = true;
+        for (int i = 41; i >= 1; --i) {
+            std::filesystem::path currentLink = symloopDir / ("hop_" + std::to_string(i) + ".json");
+            std::filesystem::create_symlink(prev, currentLink, ec);
+            if (ec) {
+                chainCreated = false;
+                break;
+            }
+            prev = currentLink;
+        }
+        if (chainCreated) {
+            bool caught41Hop = false;
+            try {
+                snipcli::model::JsonSnippetRepository hopRepo(prev);
+                (void)hopRepo.getAll();
+            } catch (const snipcli::common::StorageException& ex) {
+                caught41Hop = true;
+                assertTrue(std::string(ex.what()).find("Too many levels of symbolic links") !=
+                               std::string::npos,
+                           "41-hop symlink chain throws StorageException with depth message");
+            }
+            assertTrue(caught41Hop, "41-hop symlink chain throws StorageException");
+        }
+    }
+
+    // ---------------------------------------------------------
+    // 22: Unknown field validation, depth cap, and drop-on-save (F3)
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path f3Dir = testDir / "f3_validation";
+        std::filesystem::create_directories(f3Dir, ec);
+
+        auto assertRejected = [&](const std::string& fieldVal, const std::string& desc) {
+            std::filesystem::path badFile = f3Dir / "bad.json";
+            {
+                std::ofstream out(badFile, std::ios::trunc);
+                out << "[{\"id\":1,\"title\":\"T\",\"language\":\"cpp\",\"code\":\"c\",\"tags\":[],"
+                       "\"extra\":"
+                    << fieldVal << "}]";
+            }
+            snipcli::model::JsonSnippetRepository repo(badFile);
+            bool caught = false;
+            try {
+                (void)repo.getAll();
+            } catch (const snipcli::common::StorageException&) {
+                caught = true;
+            }
+            assertTrue(caught, "Malformed unknown field value rejected: " + desc);
+        };
+
+        // (a) Malformed bare tokens and numbers
+        assertRejected("@@!!", "garbage bare token");
+        assertRejected("1e999x", "number with trailing garbage");
+        assertRejected("01", "number with leading zero");
+        assertRejected("+1", "number with leading plus");
+        assertRejected("NaN", "NaN token");
+        assertRejected("Infinity", "Infinity token");
+        assertRejected("tru", "truncated boolean");
+
+        // (b) Unterminated nested object
+        assertRejected("{\"nested\": 1", "unterminated nested object");
+
+        // (c) Depth cap defense (depth 65 and 100k-deep)
+        std::string depth65;
+        for (int i = 0; i < 65; ++i)
+            depth65 += "[";
+        for (int i = 0; i < 65; ++i)
+            depth65 += "]";
+        assertRejected(depth65, "JSON nesting depth exceeding 64");
+
+        std::string deep100k;
+        for (int i = 0; i < 100000; ++i)
+            deep100k += "[";
+        for (int i = 0; i < 100000; ++i)
+            deep100k += "]";
+        assertRejected(deep100k, "100k-deep JSON nesting array");
+
+        // (d) Valid nested structures accepted
+        std::filesystem::path validFile = f3Dir / "valid.json";
+        {
+            std::ofstream out(validFile, std::ios::trunc);
+            out << "[{\"id\":1,\"title\":\"V\",\"language\":\"cpp\",\"code\":\"c\",\"tags\":[],"
+                << "\"meta\":{\"valid\":true,\"flag\":false,\"item\":null,\"val\":-1.5e+3}}]\n";
+        }
+        snipcli::model::JsonSnippetRepository validRepo(validFile);
+        auto validList = validRepo.getAll();
+        assertTrue(validList.size() == 1, "Valid nested structure in unknown field accepted");
+
+        // (e) Characterization test: unknown fields dropped on save (deliberate contract)
+        snipcli::model::Snippet s2(0, "NewSnippet", "cpp", "int y;", {}, "", "");
+        (void)validRepo.save(s2);
+
+        // Read raw disk file to verify "meta" is absent from serialized JSON
+        std::ifstream rawIn(validFile);
+        std::string rawContent((std::istreambuf_iterator<char>(rawIn)),
+                               std::istreambuf_iterator<char>());
+        assertTrue(rawContent.find("\"meta\"") == std::string::npos,
+                   "Characterization: unknown field 'meta' dropped on save per v1.0 closed schema");
+        assertTrue(validRepo.count() == 2, "Both snippets persisted after save");
+    }
+
+    // ---------------------------------------------------------
+    // 23: Characterization of max(id)+1 ID allocation and reuse on deletion (F4)
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path f4Dir = testDir / "f4_id_reuse";
+        std::filesystem::create_directories(f4Dir, ec);
+        std::filesystem::path f4File = f4Dir / "id_reuse.json";
+
+        snipcli::model::JsonSnippetRepository repo(f4File);
+
+        // Add #1 and #2
+        snipcli::model::Snippet s1(0, "First", "cpp", "int a = 1;", {}, "", "");
+        snipcli::model::Snippet s2(0, "Second", "cpp", "int b = 2;", {}, "", "");
+        auto saved1 = repo.save(s1);
+        auto saved2 = repo.save(s2);
+
+        assertTrue(saved1 == 1, "First snippet receives ID 1");
+        assertTrue(saved2 == 2, "Second snippet receives ID 2");
+
+        // Intentional v1.0 characterization: deleting the highest ID allows ID reuse on next add
+        assertTrue(repo.removeById(2), "Successfully delete highest ID (2)");
+
+        snipcli::model::Snippet s3(0, "Third", "cpp", "int c = 3;", {}, "", "");
+        auto saved3 = repo.save(s3);
+        assertTrue(saved3 == 2,
+                   "Intentional contract: new snippet reuses highest ID 2 after deletion");
+
+        // Verify deleting an interior ID does not reuse:
+        // Add snippet #3
+        snipcli::model::Snippet s4(0, "Fourth", "cpp", "int d = 4;", {}, "", "");
+        auto saved4 = repo.save(s4);
+        assertTrue(saved4 == 3, "Next snippet receives ID 3");
+
+        // Delete interior snippet #2: remaining are #1 and #3 (maxId = 3)
+        assertTrue(repo.removeById(2), "Successfully delete interior ID (2)");
+        snipcli::model::Snippet s5(0, "Fifth", "cpp", "int e = 5;", {}, "", "");
+        auto saved5 = repo.save(s5);
+        assertTrue(saved5 == 4,
+                   "Deleting interior ID does not reuse: next snippet receives maxId+1 = 4");
+    }
+
+    // ---------------------------------------------------------
+    // 24: Lock file symlink hardening (O_NOFOLLOW) & stale lock resilience (F5)
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path f5Dir = testDir / "f5_lock_symlink";
+        std::filesystem::create_directories(f5Dir, ec);
+
+        // (a) Existing file symlinked as lock: must reject and leave victim untouched
+        std::filesystem::path victim = f5Dir / "victim.txt";
+        {
+            std::ofstream out(victim);
+            out << "PROTECTED_DATA\n";
+        }
+        std::filesystem::path storeA = f5Dir / "store_a.json";
+        std::filesystem::path lockA = f5Dir / "store_a.json.lock";
+
+        ec.clear();
+        std::filesystem::create_symlink(victim, lockA, ec);
+        if (!ec) {
+            snipcli::model::JsonSnippetRepository repoA(storeA);
+            snipcli::model::Snippet s(0, "TestA", "cpp", "int a;", {}, "", "");
+            bool caught = false;
+            try {
+                (void)repoA.save(s);
+            } catch (const snipcli::common::StorageException& ex) {
+                caught = true;
+                assertTrue(
+                    std::string(ex.what()).find(
+                        "Lock path is a symbolic link; refusing to follow:") != std::string::npos,
+                    "Exception message indicates refusal to follow symlink lock");
+            }
+            assertTrue(caught, "Symlinked lock pointing to existing file throws StorageException");
+
+            // Verify victim remains byte-identical
+            std::ifstream victimIn(victim);
+            std::string victimContent((std::istreambuf_iterator<char>(victimIn)),
+                                      std::istreambuf_iterator<char>());
+            assertTrue(victimContent == "PROTECTED_DATA\n",
+                       "Victim file content preserved byte-identical");
+        }
+
+        // (b) Dangling symlink as lock: must reject and NOT create target
+        std::filesystem::path target = f5Dir / "target_should_not_exist.txt";
+        std::filesystem::path storeB = f5Dir / "store_b.json";
+        std::filesystem::path lockB = f5Dir / "store_b.json.lock";
+
+        ec.clear();
+        std::filesystem::create_symlink(target, lockB, ec);
+        if (!ec) {
+            snipcli::model::JsonSnippetRepository repoB(storeB);
+            snipcli::model::Snippet s(0, "TestB", "cpp", "int b;", {}, "", "");
+            bool caught = false;
+            try {
+                (void)repoB.save(s);
+            } catch (const snipcli::common::StorageException& ex) {
+                caught = true;
+                assertTrue(
+                    std::string(ex.what()).find(
+                        "Lock path is a symbolic link; refusing to follow:") != std::string::npos,
+                    "Exception message indicates refusal to follow dangling symlink lock");
+            }
+            assertTrue(caught, "Dangling symlinked lock throws StorageException");
+            assertTrue(!std::filesystem::exists(target),
+                       "Target of dangling symlink was not created");
+        }
+
+        // (c) Stale/pre-existing regular lock file works normally
+        std::filesystem::path storeC = f5Dir / "store_c.json";
+        std::filesystem::path lockC = f5Dir / "store_c.json.lock";
+        {
+            std::ofstream staleOut(lockC);
+            // Empty regular file left behind from previous run
+        }
+        snipcli::model::JsonSnippetRepository repoC(storeC);
+        snipcli::model::Snippet sC(0, "TestC", "cpp", "int c;", {}, "", "");
+        auto savedC = repoC.save(sC);
+        assertTrue(savedC == 1, "Normal pre-existing regular lock file allows successful save");
+    }
+
+    // ---------------------------------------------------------
+    // 25: Lock timeout parsing, bounds clamping, and held lock timeout (F6)
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path f6Dir = testDir / "f6_timeout";
+        std::filesystem::create_directories(f6Dir, ec);
+        std::filesystem::path storeFile = f6Dir / "store.json";
+        std::filesystem::path lockFile = f6Dir / "store.json.lock";
+
+        // (a) Timeout parsing unit tests
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs(nullptr) == 10000,
+                   "nullptr falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("") == 10000,
+                   "empty string falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("abc") == 10000,
+                   "non-numeric falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("100ms") == 10000,
+                   "trailing garbage falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("-500") == 10000,
+                   "negative falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("0") == 10000,
+                   "zero falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs(
+                       "99999999999999999999999999999999") == 10000,
+                   "overflow falls back to 10000ms");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("1") == 1,
+                   "lower bound 1ms accepted");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("500") == 500,
+                   "in-range 500ms accepted");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("600000") == 600000,
+                   "upper bound 600000ms accepted");
+        assertTrue(snipcli::model::JsonSnippetRepository::parseLockTimeoutMs("700000") == 600000,
+                   "out-of-range clamps to 600000ms");
+
+        // (b) Live held lock timeout measurement with SNIPCLI_LOCK_TIMEOUT_MS=1000
+        struct ScopedExternalLock {
+            std::filesystem::path p;
+#if defined(_WIN32)
+            HANDLE h{INVALID_HANDLE_VALUE};
+            OVERLAPPED ov{};
+            explicit ScopedExternalLock(const std::filesystem::path& path) : p(path) {
+                h = CreateFileW(p.wstring().c_str(), GENERIC_READ | GENERIC_WRITE,
+                                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS,
+                                FILE_ATTRIBUTE_NORMAL, nullptr);
+                if (h != INVALID_HANDLE_VALUE) {
+                    LockFileEx(h, LOCKFILE_EXCLUSIVE_LOCK | LOCKFILE_FAIL_IMMEDIATELY, 0, MAXDWORD,
+                               MAXDWORD, &ov);
+                }
+            }
+            ~ScopedExternalLock() {
+                if (h != INVALID_HANDLE_VALUE) {
+                    UnlockFileEx(h, 0, MAXDWORD, MAXDWORD, &ov);
+                    CloseHandle(h);
+                }
+            }
+#else
+            int fd{-1};
+            explicit ScopedExternalLock(const std::filesystem::path& path) : p(path) {
+                fd = ::open(p.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0600);
+                if (fd >= 0) {
+                    ::flock(fd, LOCK_EX | LOCK_NB);
+                }
+            }
+            ~ScopedExternalLock() {
+                if (fd >= 0) {
+                    ::flock(fd, LOCK_UN);
+                    ::close(fd);
+                }
+            }
+#endif
+        };
+
+        snipcli::model::JsonSnippetRepository repo(storeFile);
+        snipcli::model::Snippet s(0, "T", "cpp", "int a;", {}, "", "");
+        {
+            ScopedExternalLock externalLock(lockFile);
+            snipcli::test::ScopedEnv timeoutEnv("SNIPCLI_LOCK_TIMEOUT_MS", "1000");
+
+            auto start = std::chrono::steady_clock::now();
+            bool caught = false;
+            try {
+                (void)repo.save(s);
+            } catch (const snipcli::common::StorageException& ex) {
+                caught = true;
+                assertTrue(std::string(ex.what()).find(
+                               "Storage is locked by another snip process") != std::string::npos,
+                           "Lock timeout exception message matches");
+            }
+            auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                 std::chrono::steady_clock::now() - start)
+                                 .count();
+            assertTrue(caught, "Held lock causes StorageException on timeout");
+            assertTrue(
+                elapsedMs >= 900 && elapsedMs <= 3500,
+                "Timeout elapsed roughly 1000ms (measured " + std::to_string(elapsedMs) + "ms)");
+        }
+        // Lock released: saving succeeds
+        auto saved = repo.save(s);
+        assertTrue(saved == 1, "Save succeeds after lock is released");
+    }
+
     // Cleanup test directory
     std::filesystem::remove_all(testDir, ec);
 
-    std::cout << "[PASS] Repository tests passed. (20/20 Invariants & Scenarios Verified)"
+    std::cout << "[PASS] Repository tests passed. (25/25 Invariants & Scenarios Verified)"
               << std::endl;
 }

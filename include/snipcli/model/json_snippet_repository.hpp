@@ -41,6 +41,12 @@ public:
     [[nodiscard]] static std::filesystem::path getDefaultStoragePath();
 
     /**
+     * @brief Parses and validates lock acquisition timeout from environment string.
+     * Clamps to [1, 600000] ms; falls back to 10000 ms on invalid/empty/negative/zero.
+     */
+    [[nodiscard]] static int parseLockTimeoutMs(const char* envVal) noexcept;
+
+    /**
      * @brief Constructs repository using the default resolved storage path.
      * @throws common::StorageException If the storage directory cannot be created.
      */

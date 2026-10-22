@@ -465,6 +465,18 @@ if [ -z "${WINDIR:-}" ] && [ -z "${COMSPEC:-}" ]; then
     COUNT_ALIAS=$(SNIPCLI_STORAGE_PATH="$ALIAS_REAL_DIR/db.json" "$BIN" list --format markdown | grep -c '^| [0-9]' || true)
     [ "$COUNT_ALIAS" -eq 20 ] || fail "Storage path alias adds lost updates: expected 20 snippets, found $COUNT_ALIAS"
     pass "Storage path alias locking: 20/20 writes preserved across symlinked parent directories"
+
+    # 11d: Symlink loop storage path defensively rejected without crash (F1)
+    SYMLOOP_DIR="$TEMP_DIR/symloop_smoke"
+    mkdir -p "$SYMLOOP_DIR"
+    ln -s "$SYMLOOP_DIR/loop_b.json" "$SYMLOOP_DIR/loop_a.json"
+    ln -s "$SYMLOOP_DIR/loop_a.json" "$SYMLOOP_DIR/loop_b.json"
+    LOOP_OUT=$(SNIPCLI_STORAGE_PATH="$SYMLOOP_DIR/loop_a.json" "$BIN" list 2>&1 || true)
+    LOOP_RC=0
+    SNIPCLI_STORAGE_PATH="$SYMLOOP_DIR/loop_a.json" "$BIN" list > /dev/null 2>&1 || LOOP_RC=$?
+    [ "$LOOP_RC" -eq 1 ] || fail "Symlink loop did not exit with code 1 (got $LOOP_RC)"
+    echo "$LOOP_OUT" | grep -q "Too many levels of symbolic links" || fail "Symlink loop output missing expected error message"
+    pass "Symlink loop defense: loop path exited cleanly with code 1 and error message"
     export SNIPCLI_STORAGE_PATH="$TEST_STORAGE"
 fi
 

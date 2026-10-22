@@ -134,24 +134,40 @@ install(FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/NOTICE
     ${CMAKE_CURRENT_SOURCE_DIR}/README.md
     ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md
-    DESTINATION ${CMAKE_INSTALL_DOCDIR}
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/snipcli
 )
+
+# Debian Packaging Compliance Files
+if(UNIX AND NOT APPLE)
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/packaging/debian/overrides
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/lintian/overrides
+        RENAME snipcli
+    )
+    install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/snipcli
+        RENAME copyright
+    )
+endif()
 
 # CPack Packaging Configuration
 set(CPACK_PACKAGE_NAME "snipcli")
 set(CPACK_PACKAGE_VENDOR "Chowdhury Rifat Ahmed & Lameya Tabasum")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Fast, modern C++17 CLI snippet manager for competitive programmers")
+set(CPACK_PACKAGE_DESCRIPTION "SnipCLI persists snippets to an atomic JSON repository with sub-5ms
+ query times, multi-format rendering (ANSI terminal and Markdown),
+ and cross-process file locking.")
 set(CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH})
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
-set(CPACK_PACKAGE_CONTACT "Chowdhury Rifat Ahmed <MAINTAINER_CONTACT>")
+set(CPACK_PACKAGE_CONTACT "Chowdhury Rifat Ahmed <67093774+chowdhuryrifat@users.noreply.github.com>")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+set(CPACK_STRIP_FILES ON)
 
 # Debian (.deb) Specifics
 set(CPACK_DEBIAN_PACKAGE_NAME "snipcli")
-set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Chowdhury Rifat Ahmed <MAINTAINER_CONTACT>")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Chowdhury Rifat Ahmed <67093774+chowdhuryrifat@users.noreply.github.com>")
 set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")

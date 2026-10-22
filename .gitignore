@@ -11,6 +11,8 @@ out/
 *.swo
 compile_commands.json
 .cache/
+__pycache__/
+*.pyc
 
 # Local snippet database files
 *.snipcli_snippets.json
@@ -20,3 +22,11 @@ snippets.json
 # OS files
 .DS_Store
 Thumbs.db
+
+# Packaging submission trees and build artifacts
+dist/
+dist-submit/
+build-evidence/
+*.deb
+*.tar.gz
+*.zip

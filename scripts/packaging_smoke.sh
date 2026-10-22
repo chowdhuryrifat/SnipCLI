@@ -5,6 +5,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
+if [ $# -ge 1 ]; then
+    BIN="$1"
+    echo "=== Running packaging smoke test on binary: ${BIN} ==="
+    exec "${REPO_DIR}/tests/smoke/smoke_test.sh" "${BIN}"
+fi
+
 BUILD_DIR="/tmp/snipcli_packaging_smoke_build"
 STAGE_DIR="/tmp/snipcli_packaging_smoke_stage"
 DIST_DIR="/tmp/snipcli_packaging_smoke_dist"

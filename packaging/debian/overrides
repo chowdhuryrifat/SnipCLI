@@ -1,0 +1,7 @@
+# Lintian overrides for SnipCLI Debian package generated via CPack
+snipcli: no-changelog usr/share/doc/snipcli/changelog.gz (native package)
+snipcli: no-changelog *
+snipcli: uncompressed-manual-page usr/share/man/man1/snip.1
+snipcli: uncompressed-manual-page *
+snipcli: bash-completion-with-hashbang usr/share/bash-completion/completions/snip (/usr/bin/env bash)
+snipcli: bash-completion-with-hashbang *

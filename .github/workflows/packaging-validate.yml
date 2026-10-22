@@ -272,6 +272,7 @@ jobs:
       - name: Mark Workspace Safe for Git
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          chown -R builder:builder "$GITHUB_WORKSPACE"
 
       - name: Diff .SRCINFO Against makepkg --printsrcinfo
         run: |

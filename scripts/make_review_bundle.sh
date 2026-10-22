@@ -76,7 +76,7 @@ echo "Running Release unit tests (NO_COLOR=1)..."
 (cd "${BUILD_TMP}/release" && NO_COLOR=1 ctest --output-on-failure) > "${BUNDLE_DIR}/logs/ctest_release_nocolor.log" 2>&1
 
 echo "Running Release unit tests (env -i)..."
-env -i PATH="$PATH" "${BUILD_TMP}/release/tests/snip_tests" > "${BUNDLE_DIR}/logs/ctest_release_envi.log" 2>&1
+env -i PATH="$PATH" "${BUILD_TMP}/release/snip_tests" > "${BUNDLE_DIR}/logs/ctest_release_envi.log" 2>&1
 
 echo "Running CLI Smoke Tests on Release binary..."
 bash "${REPO_DIR}/tests/smoke/smoke_test.sh" "${BUILD_TMP}/release/snip" > "${BUNDLE_DIR}/logs/smoke_test_release.log" 2>&1

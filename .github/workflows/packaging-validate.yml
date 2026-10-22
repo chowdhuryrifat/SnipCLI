@@ -303,7 +303,7 @@ jobs:
           git archive --format=tar.gz --prefix=SnipCLI-1.0.0/ -o /tmp/aur-build/snipcli-1.0.0.tar.gz HEAD
           TAR_SHA=$(sha256sum /tmp/aur-build/snipcli-1.0.0.tar.gz | awk '{print $1}')
           
-          sed "s/<SHA256_SOURCE_TARBALL>/$TAR_SHA/g" packaging/aur/PKGBUILD > /tmp/aur-build/PKGBUILD
+          sed -E "s/sha256sums=\(.*\)/sha256sums=('$TAR_SHA')/g" packaging/aur/PKGBUILD > /tmp/aur-build/PKGBUILD
           chown -R builder:builder /tmp/aur-build
           
           echo "=== Executing makepkg -f as non-root user ==="

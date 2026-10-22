@@ -3,6 +3,8 @@
 #include <iomanip>
 #include <iostream>
 
+#include "version.hpp"
+
 namespace snipcli::controller {
 
 void CommandDispatcher::registerCommand(std::unique_ptr<ICommand> command) {
@@ -58,7 +60,7 @@ void CommandDispatcher::printHelp(std::ostream& os) const {
 }
 
 void CommandDispatcher::printVersion(std::ostream& os) const {
-    os << "SnipCLI version 1.0.0 (Modern C++17 MVC Architecture)\n";
+    os << "SnipCLI version " << SNIPCLI_VERSION_STRING << " (Modern C++17 MVC Architecture)\n";
 }
 
 }  // namespace snipcli::controller

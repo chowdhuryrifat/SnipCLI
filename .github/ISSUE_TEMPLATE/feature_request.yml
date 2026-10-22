@@ -1,0 +1,43 @@
+name: Feature Request
+description: Suggest an idea or enhancement for SnipCLI
+title: "feat: [Short feature description]"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting an improvement! Please explain your use case clearly.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Motivation
+      description: Is your feature request related to a problem or workflow limitation?
+      placeholder: "A clear and concise description of what the problem is."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution or CLI Interface
+      description: Describe what you want to happen and how the command or flag should behave.
+      placeholder: "e.g. Add --export flag to batch export snippets to a directory."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Describe any alternative solutions, tools, or workarounds you've considered.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context, mockups, or relevant references here.
+    validations:
+      required: false

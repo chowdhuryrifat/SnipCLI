@@ -60,29 +60,69 @@ add_library(snipcli_core
     ${SRC_DIR}/controller/commands/stats_command.cpp
 )
 
-target_include_directories(snipcli_core PUBLIC ${INCLUDE_DIR})
+# Generate version header
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/version.hpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/version.hpp
+    @ONLY
+)
+
+target_include_directories(snipcli_core PUBLIC ${INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/generated)
 
 # Executable Target
 add_executable(snip ${SRC_DIR}/main.cpp)
 target_link_libraries(snip PRIVATE snipcli_core)
 
-# CTest / Unit Testing Target
-enable_testing()
-add_executable(snip_tests 
-    tests/unit/test_main.cpp
-    tests/unit/test_snippet.cpp
-    tests/unit/test_validator.cpp
-    tests/unit/test_repository.cpp
-    tests/unit/test_strategy.cpp
-    tests/unit/test_parser.cpp
-    tests/unit/test_commands.cpp
-    tests/unit/test_view.cpp
-)
-target_link_libraries(snip_tests PRIVATE snipcli_core)
-add_test(NAME CoreUnitTests COMMAND snip_tests)
+# Testing Target
+option(SNIPCLI_BUILD_TESTS "Build SnipCLI unit test targets" ON)
 
-# Installation Target
+if(SNIPCLI_BUILD_TESTS)
+    enable_testing()
+    add_executable(snip_tests 
+        tests/unit/test_main.cpp
+        tests/unit/test_snippet.cpp
+        tests/unit/test_validator.cpp
+        tests/unit/test_repository.cpp
+        tests/unit/test_strategy.cpp
+        tests/unit/test_parser.cpp
+        tests/unit/test_commands.cpp
+        tests/unit/test_view.cpp
+    )
+    target_link_libraries(snip_tests PRIVATE snipcli_core)
+    add_test(NAME CoreUnitTests COMMAND snip_tests)
+endif()
+
+# Installation Targets (FHS Compliant)
 include(GNUInstallDirs)
+
+# Binary
 install(TARGETS snip
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
+
+# Man page
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/man/snip.1
+    DESTINATION ${CMAKE_INSTALL_MANDIR}/man1
+)
+
+# Shell Completions
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/completions/snip.bash
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/bash-completion/completions
+    RENAME snip
+)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/completions/_snip
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/zsh/site-functions
+)
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/completions/snip.fish
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/fish/vendor_completions.d
+)
+
+# Documentation and License
+install(FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE
+    ${CMAKE_CURRENT_SOURCE_DIR}/NOTICE
+    ${CMAKE_CURRENT_SOURCE_DIR}/README.md
+    ${CMAKE_CURRENT_SOURCE_DIR}/CHANGELOG.md
+    DESTINATION ${CMAKE_INSTALL_DOCDIR}
+)
+

@@ -14,6 +14,7 @@
 #include "snipcli/controller/commands/stats_command.hpp"
 #include "snipcli/model/json_snippet_repository.hpp"
 #include "snipcli/view/view_factory.hpp"
+#include "version.hpp"
 
 int main(int argc, char* argv[]) {
     using namespace snipcli;
@@ -23,7 +24,8 @@ int main(int argc, char* argv[]) {
 
         // Global flags handling
         if (args.hasFlag("--version") || args.hasFlag("-v")) {
-            std::cout << "SnipCLI version 1.0.0 (Modern C++17 MVC Architecture)\n";
+            std::cout << "SnipCLI version " << SNIPCLI_VERSION_STRING
+                      << " (Modern C++17 MVC Architecture)\n";
             return 0;
         }
 

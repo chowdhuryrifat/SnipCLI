@@ -50,11 +50,11 @@ Register-ArgumentCompleter -Native -CommandName snip -ScriptBlock {
     }
 
     $options = switch ($cmd) {
-        "add"    { @("--title", "--lang", "--language", "--code", "--tags", "--desc", "--description", "--format") }
-        "list"   { @("--format") }
-        "get"    { @("--id", "--title", "--code-only", "--format") }
-        "delete" { @("--id", "--title", "--format") }
-        "search" { @("--tag", "--query", "--language", "--format") }
+        "add"    { @("--title", "-t", "--lang", "--language", "-l", "--code", "-c", "--file", "-f", "--tags", "--tag", "--format") }
+        "list"   { @("--tag", "--tags", "--lang", "--language", "-l", "--format") }
+        "get"    { @("--id", "--title", "-t", "--code-only", "-c", "--format") }
+        "delete" { @("--id", "--title", "-t", "--format") }
+        "search" { @("--title", "-t", "--tag", "--tags", "--lang", "--language", "-l", "--format") }
         "stats"  { @("--format") }
         default  { @() }
     }

@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Zero-dependency modern C++17 command-line snippet manager (`snip`) designed for competitive programmers and software engineers.
 - Commands: `add`, `list`, `get`, `delete`, `search`, and `stats`.
-- Search strategies: query filtering by tag (`--tag`), title substring (`--query`), or programming language (`--language`).
+- Search strategies: query filtering by tag (`--tag`), title substring or `--title`, or programming language (`--language`).
 - Multiple rendering views: human-friendly colored terminal view (`--format terminal`) and Markdown output (`--format markdown`).
 - `--code-only` flag on `get` for byte-exact code extraction suitable for piping into compilers and clipboards.
 - Strict MVC architecture, GoF Command/Strategy/Factory patterns, and Interface Segregation Principle (ISP) repository abstractions.

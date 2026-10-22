@@ -16,10 +16,10 @@ file-locked JSON repository.
 .TP
 .BR add " [\fIOPTIONS\fR]"
 Store a new code snippet. Requires \fB\-\-title\fR, \fB\-\-lang\fR (or \fB\-\-language\fR),
-and \fB\-\-code\fR.
+and either \fB\-\-code\fR or \fB\-\-file\fR.
 .TP
 .BR list " [\fIOPTIONS\fR]"
-List all stored snippets in the repository.
+List all stored snippets in the repository, with optional \fB\-\-tag\fR or \fB\-\-lang\fR filters.
 .TP
 .BR get " [\fIOPTIONS\fR]"
 Retrieve and display a snippet by exact numeric identifier (\fB\-\-id\fR) or exact title (\fB\-\-title\fR).
@@ -28,8 +28,8 @@ Use \fB\-\-code\-only\fR to extract only the raw snippet contents.
 .BR delete " [\fIOPTIONS\fR]"
 Delete a snippet from the repository by ID (\fB\-\-id\fR) or title (\fB\-\-title\fR).
 .TP
-.BR search " [\fIOPTIONS\fR]"
-Search stored snippets by tag (\fB\-\-tag\fR), title substring (\fB\-\-query\fR), or language (\fB\-\-language\fR).
+.BR search " [\fIQUERY\fR] [\fIOPTIONS\fR]"
+Search stored snippets by title substring (positional argument or \fB\-\-title\fR), tag (\fB\-\-tag\fR), or language (\fB\-\-language\fR).
 .TP
 .BR stats " [\fIOPTIONS\fR]"
 Display aggregate repository statistics, including total snippet counts, language distributions, and tag usage.
@@ -46,35 +46,29 @@ Print the command-line help summary and exit.
 Print the program version and architecture banner.
 .SS Command Options
 .TP
-.BI \-\-title= TITLE
-Specify the snippet title.
+.BI \-t ", " \-\-title= TITLE
+Specify the snippet title. In \fBsearch\fR, filters snippets by case-insensitive title substring.
 .TP
-.BI \-\-lang= LANG ", " \-\-language= LANG
+.BI \-l ", " \-\-lang= LANG ", " \-\-language= LANG
 Specify the programming language of the snippet (e.g., \fBcpp\fR, \fBpython\fR, \fBrust\fR).
 .TP
-.BI \-\-code= CODE
+.BI \-c ", " \-\-code= CODE
 Specify the source code contents directly as a string argument.
 .TP
-.BI \-\-tags= TAGS
-Specify a comma-separated list of tags (e.g., \fBgraph,dfs,tree\fR).
+.BI \-f ", " \-\-file= FILE
+Specify a file path from which to read snippet source code.
 .TP
-.BI \-\-desc= DESC ", " \-\-description= DESC
-Provide an optional descriptive text for the snippet.
+.BI \-\-tags= TAGS ", " \-\-tag= TAG
+Specify comma-separated category tags (in \fBadd\fR) or filter by tag (in \fBlist\fR and \fBsearch\fR).
 .TP
 .BI \-\-id= ID
 Specify the unique positive integer ID of the snippet.
 .TP
-.B \-\-code\-only
+.BR \-c ", " \-\-code\-only
 Used with \fBget\fR. Outputs the raw snippet source code byte-for-byte to standard output without headers or syntax wrappers.
 .TP
 .BI \-\-format= FORMAT
 Specify rendering view: \fBterminal\fR (default ANSI color formatting) or \fBmarkdown\fR.
-.TP
-.BI \-\-query= QUERY
-Used with \fBsearch\fR to filter snippets by case-insensitive title substring.
-.TP
-.BI \-\-tag= TAG
-Used with \fBsearch\fR to filter snippets containing the specified tag.
 .SH ENVIRONMENT
 .TP
 .B SNIPCLI_STORAGE_PATH

@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Packaging Tools & Lintian
         run: |
@@ -107,7 +107,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Prepare Temporary Manifests with Valid Dummy SHA
         shell: pwsh
@@ -198,7 +198,7 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Create Local Tap & Staged Formula
         run: |
@@ -274,7 +274,7 @@ jobs:
           echo "%wheel ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
       - name: Checkout Code via Safe Git Directory
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Mark Workspace Safe for Git
         run: |
@@ -344,7 +344,7 @@ jobs:
             archive_type: zip
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build and Package Distribution Archive (Linux / macOS)
         if: runner.os != 'Windows'

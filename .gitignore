@@ -11,6 +11,8 @@ out/
 *.swo
 compile_commands.json
 .cache/
+__pycache__/
+*.pyc
 
 # Local snippet database files
 *.snipcli_snippets.json

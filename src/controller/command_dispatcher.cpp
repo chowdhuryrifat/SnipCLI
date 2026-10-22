@@ -43,21 +43,26 @@ const std::vector<std::string>& CommandDispatcher::getRegisteredCommands() const
 void CommandDispatcher::printHelp(std::ostream& os, const std::string& specificCommand) const {
     if (specificCommand == "add") {
         os << "SnipCLI - add command\n";
-        os << "Usage: snip add --title <title> --lang <lang> [--code <code> | --file <file>] [--tags <tags>]\n\n";
+        os << "Usage: snip add --title <title> --lang <lang> [--code <code> | --file <file>] "
+              "[--tags <tags>]\n\n";
         os << "Create and persist a new code snippet in the repository.\n\n";
         os << "Options:\n";
-        os << "  -t, --title <title>          Unique snippet title (alphanumeric, spaces, hyphens, underscores)\n";
+        os << "  -t, --title <title>          Unique snippet title (alphanumeric, spaces, hyphens, "
+              "underscores)\n";
         os << "  -l, --lang, --language <l>   Programming language (e.g. cpp, python, rust, go)\n";
-        os << "  -c, --code <code>            Source code content as an inline string (use --code=... if leading dashes)\n";
+        os << "  -c, --code <code>            Source code content as an inline string (use "
+              "--code=... if leading dashes)\n";
         os << "  -f, --file <file>            Path to file containing source code to import\n";
-        os << "  --tags, --tag <tags>         Comma-separated category tags (e.g. \"graph,shortest_path\")\n";
+        os << "  --tags, --tag <tags>         Comma-separated category tags (e.g. "
+              "\"graph,shortest_path\")\n";
         os << "  --format <fmt>               Output format ('terminal' or 'markdown')\n\n";
         os << "Requirements:\n";
         os << "  • --title and --lang are required.\n";
         os << "  • Exactly one of --code or --file must be specified.\n";
         os << "  • Snippet titles must be unique across the repository.\n\n";
         os << "Examples:\n";
-        os << "  snip add --title \"Dijkstra\" --lang cpp --file ./dijkstra.cpp --tags \"graph,algo\"\n";
+        os << "  snip add --title \"Dijkstra\" --lang cpp --file ./dijkstra.cpp --tags "
+              "\"graph,algo\"\n";
         os << "  snip add --title \"QuickSort\" --lang python --code \"def qsort(a): return a\"\n";
         return;
     }
@@ -84,11 +89,13 @@ void CommandDispatcher::printHelp(std::ostream& os, const std::string& specificC
         os << "Options:\n";
         os << "  --id <id>                    Exact numeric identifier of the snippet\n";
         os << "  -t, --title <title>          Exact title of the snippet\n";
-        os << "  -c, --code-only              Output raw source code byte-for-byte (pipe-friendly, no headers)\n";
+        os << "  -c, --code-only              Output raw source code byte-for-byte (pipe-friendly, "
+              "no headers)\n";
         os << "  --format <fmt>               Output format ('terminal' or 'markdown')\n\n";
         os << "Notes:\n";
         os << "  • Specify either --id or --title, not both.\n";
-        os << "  • With --code-only, raw source code is emitted without metadata, perfect for clipboard pipes.\n\n";
+        os << "  • With --code-only, raw source code is emitted without metadata, perfect for "
+              "clipboard pipes.\n\n";
         os << "Examples:\n";
         os << "  snip get --id 1\n";
         os << "  snip get --title \"Dijkstra\"\n";
@@ -116,14 +123,16 @@ void CommandDispatcher::printHelp(std::ostream& os, const std::string& specificC
     if (specificCommand == "search") {
         os << "SnipCLI - search command\n";
         os << "Usage: snip search [<query>] [options]\n\n";
-        os << "Search snippets by query substring, category tag, or language using the GoF Strategy Pattern.\n\n";
+        os << "Search snippets by query substring, category tag, or language using the GoF "
+              "Strategy Pattern.\n\n";
         os << "Options:\n";
         os << "  -t, --title <query>          Search by case-insensitive title substring\n";
         os << "  --tag, --tags <tag>          Search by exact category tag match\n";
         os << "  -l, --lang, --language <l>   Search by exact programming language\n";
         os << "  --format <fmt>               Output format ('terminal' or 'markdown')\n\n";
         os << "Notes:\n";
-        os << "  • Positional queries (e.g. 'snip search dijkstra') perform case-insensitive title search.\n\n";
+        os << "  • Positional queries (e.g. 'snip search dijkstra') perform case-insensitive "
+              "title search.\n\n";
         os << "Examples:\n";
         os << "  snip search \"dijkstra\"\n";
         os << "  snip search --tag \"graph\"\n";
@@ -170,15 +179,18 @@ void CommandDispatcher::printHelp(std::ostream& os, const std::string& specificC
     os << "  --format <fmt>   Output format ('terminal' or 'markdown')\n\n";
 
     os << "Common Examples:\n";
-    os << "  snip add --title \"Dijkstra\" --lang cpp --file ./dijkstra.cpp --tags \"graph,algo\"\n";
+    os << "  snip add --title \"Dijkstra\" --lang cpp --file ./dijkstra.cpp --tags "
+          "\"graph,algo\"\n";
     os << "  snip list --lang cpp\n";
     os << "  snip get --title \"Dijkstra\" --code-only | pbcopy\n";
     os << "  snip search --tag graph\n";
     os << "  snip stats\n\n";
 
     os << "Environment Variables:\n";
-    os << "  SNIPCLI_STORAGE_PATH     Custom storage file location (default: ~/.snipcli/snippets.json)\n";
-    os << "  SNIPCLI_LOCK_TIMEOUT_MS  Storage lock acquisition timeout in ms [1-600000] (default: 10000)\n";
+    os << "  SNIPCLI_STORAGE_PATH     Custom storage file location (default: "
+          "~/.snipcli/snippets.json)\n";
+    os << "  SNIPCLI_LOCK_TIMEOUT_MS  Storage lock acquisition timeout in ms [1-600000] (default: "
+          "10000)\n";
     os << "  NO_COLOR                 When non-empty, suppresses ANSI terminal color escapes\n\n";
 
     os << "Run 'snip <command> --help' or 'snip help <command>' for detailed command options.\n";

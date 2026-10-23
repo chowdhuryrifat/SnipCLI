@@ -402,7 +402,7 @@ sudo apt install snipcli</code></pre>
         <li><a href="https://github.com/chowdhuryrifat/SnipCLI">GitHub Repository (chowdhuryrifat/SnipCLI)</a></li>
         <li><a href="https://github.com/chowdhuryrifat/SnipCLI/releases">Releases &amp; Release Notes</a></li>
         <li><strong>macOS &amp; Linux (Homebrew):</strong> <code>brew install chowdhuryrifat/snipcli/snipcli</code></li>
-        <li><strong>Windows (WinGet):</strong> <code>winget install chowdhuryrifat.SnipCLI</code></li>
+        <li><strong>Windows (WinGet):</strong> <code>winget install chowdhuryrifat.SnipCLI</code> <em>(Coming soon &mdash; PR pending)</em></li>
       </ul>
     </div>
 

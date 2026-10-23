@@ -61,12 +61,14 @@
 
 Install SnipCLI in a single command using your system's package manager:
 
-| Platform | Command |
-| :--- | :--- |
-| 🍺 **macOS & Linux** (Homebrew) | `brew install chowdhuryrifat/snipcli/snipcli` |
-| 🐧 **Debian / Ubuntu / Mint** (APT) | `curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/install.sh \| sudo bash` |
-| 🪟 **Windows** (WinGet) | `winget install chowdhuryrifat.SnipCLI` |
-| 🏹 **Arch Linux** (AUR) | `yay -S snipcli` |
+| Platform | Command | Status |
+| :--- | :--- | :--- |
+| 🍺 **macOS & Linux** (Homebrew) | `brew install chowdhuryrifat/snipcli/snipcli` | **Available** |
+| 🐧 **Debian / Ubuntu / Mint** (APT) | `curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/install.sh \| sudo bash` | **Available** |
+| 🪟 **Windows** (WinGet) | `winget install chowdhuryrifat.SnipCLI` | *Coming Soon ([PR #459579](https://github.com/microsoft/winget-pkgs/pull/459579) passed CI)* |
+| 🏹 **Arch Linux** (AUR) | `yay -S snipcli` | *Coming Soon* |
+
+> 💡 **Windows users:** While the WinGet registry PR completes its automated merge queue, you can immediately download and run the standalone Windows binary from [GitHub Releases](https://github.com/chowdhuryrifat/SnipCLI/releases/latest).
 
 <details>
 <summary><b>🔧 Other Installation Methods (Manual APT Setup, Prebuilt Binaries, Source Build)</b></summary>

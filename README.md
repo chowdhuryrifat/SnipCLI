@@ -90,22 +90,58 @@ ctest --test-dir build --output-on-failure
 ./tests/smoke/smoke_test.sh ./build/snip
 ```
 
-### 3. Package Managers (Coming soon — available after the v1.0.0 release is published)
+### 3. Package Managers
 
-Once the release is published and upstream registry PRs are accepted, SnipCLI will be installable via standard package managers:
+SnipCLI is officially distributed across popular package managers:
+
+#### 🐧 Debian / Ubuntu / Linux Mint / Pop!_OS (`sudo apt`)
+
+Install SnipCLI directly from the official APT repository hosted on GitHub Pages:
+
+**Option A — One-Line Setup & Install (Recommended):**
+```bash
+curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/install.sh | sudo bash
+```
+
+**Option B — Manual Repository Configuration:**
+```bash
+# 1. Download official GPG archive signing keyring
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/snipcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/snipcli-archive-keyring.gpg > /dev/null
+sudo chmod 0644 /etc/apt/keyrings/snipcli-archive-keyring.gpg
+
+# 2. Add the SnipCLI repository to your sources list
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/snipcli-archive-keyring.gpg] https://chowdhuryrifat.github.io/SnipCLI stable main" | sudo tee /etc/apt/sources.list.d/snipcli.list > /dev/null
+
+# 3. Update index and install
+sudo apt update
+sudo apt install snipcli
+```
+
+---
+
+#### 🍺 macOS & Linux (Homebrew Tap)
+
+Install via the official Homebrew tap:
 
 ```bash
-# macOS & Linux (Homebrew) — Coming Soon
 brew tap chowdhuryrifat/snipcli
 brew install snipcli
+```
 
-# Windows (WinGet) — Coming Soon
-winget install ChowdhuryRifat.SnipCLI
+---
 
-# Debian / Ubuntu (.deb via Releases or PPA) — Coming Soon
-sudo dpkg -i snipcli_1.0.0_amd64.deb
+#### 🪟 Windows (WinGet)
 
-# Arch Linux (AUR) — Coming Soon
+```bash
+winget install chowdhuryrifat.SnipCLI
+```
+
+---
+
+#### 🏹 Arch Linux (AUR)
+
+```bash
 yay -S snipcli
 ```
 

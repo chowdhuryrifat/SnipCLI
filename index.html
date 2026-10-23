@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SnipCLI APT Repository</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --heading: #f0f6fc;
+      --accent: #58a6ff;
+      --green: #238636;
+      --code-bg: #090d13;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+    h1 {
+      font-size: 2.4rem;
+      color: var(--heading);
+      margin-bottom: 0.5rem;
+    }
+    .tagline {
+      font-size: 1.15rem;
+      color: #8b949e;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.75rem;
+      margin-bottom: 1.75rem;
+    }
+    h2 {
+      font-size: 1.35rem;
+      color: var(--heading);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.92rem;
+      color: #7ee787;
+      margin: 0.75rem 0;
+    }
+    code {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      color: #79c0ff;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .badges {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: #21262d;
+      border: 1px solid var(--border);
+      color: #8b949e;
+    }
+    footer {
+      text-align: center;
+      color: #8b949e;
+      font-size: 0.85rem;
+      margin-top: 3rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>SnipCLI APT Repository</h1>
+      <p class="tagline">Official Debian/Ubuntu package repository for SnipCLI</p>
+      <div class="badges">
+        <span class="badge">Debian / Ubuntu / Mint / Pop!_OS</span>
+        <span class="badge">Architecture: amd64</span>
+        <span class="badge">GPG Clearsigned</span>
+      </div>
+    </header>
+
+    <div class="card">
+      <h2>🚀 One-Line Installation (Recommended)</h2>
+      <p>Configures the GPG keyring, registers the repository, updates your index, and installs SnipCLI:</p>
+      <pre><code>curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/install.sh | sudo bash</code></pre>
+    </div>
+
+    <div class="card">
+      <h2>📦 Manual Repository Configuration</h2>
+      <p>If you prefer to configure your APT sources manually:</p>
+
+      <p style="margin-top: 0.75rem;"><strong>1. Download and install the archive signing keyring:</strong></p>
+      <pre><code>sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/snipcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/snipcli-archive-keyring.gpg &gt; /dev/null
+sudo chmod 0644 /etc/apt/keyrings/snipcli-archive-keyring.gpg</code></pre>
+
+      <p style="margin-top: 0.75rem;"><strong>2. Register the SnipCLI repository:</strong></p>
+      <pre><code>echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/snipcli-archive-keyring.gpg] https://chowdhuryrifat.github.io/SnipCLI stable main" | sudo tee /etc/apt/sources.list.d/snipcli.list &gt; /dev/null</code></pre>
+
+      <p style="margin-top: 0.75rem;"><strong>3. Update and install:</strong></p>
+      <pre><code>sudo apt update
+sudo apt install snipcli</code></pre>
+    </div>
+
+    <div class="card">
+      <h2>🔗 Links &amp; Other Platforms</h2>
+      <ul style="padding-left: 1.5rem; margin-top: 0.5rem;">
+        <li><a href="https://github.com/chowdhuryrifat/SnipCLI">GitHub Repository (chowdhuryrifat/SnipCLI)</a></li>
+        <li><a href="https://github.com/chowdhuryrifat/SnipCLI/releases">Releases &amp; Release Notes</a></li>
+        <li><strong>macOS (Homebrew):</strong> <code>brew tap chowdhuryrifat/snipcli &amp;&amp; brew install snipcli</code></li>
+        <li><strong>Windows (WinGet):</strong> <code>winget install chowdhuryrifat.SnipCLI</code></li>
+      </ul>
+    </div>
+
+    <footer>
+      &copy; 2026 Chowdhury Rifat Ahmed &bull; SnipCLI is open-source under the MIT License.
+    </footer>
+  </div>
+</body>
+</html>

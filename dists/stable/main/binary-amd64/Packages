@@ -1,0 +1,18 @@
+Package: snipcli
+Version: 1.0.0
+Architecture: amd64
+Maintainer: Chowdhury Rifat Ahmed <67093774+chowdhuryrifat@users.noreply.github.com>
+Installed-Size: 429
+Depends: libc6 (>= 2.34), libgcc-s1 (>= 3.0), libstdc++6 (>= 11)
+Filename: pool/main/s/snipcli/snipcli_1.0.0_amd64.deb
+Size: 145272
+MD5sum: c0a4ca26dc8f769a4b1bb2f08b806b62
+SHA1: f03e382d6b2413221fa09afd8fde159a40272863
+SHA256: 07517292601380dd04ff77c640f9cdc3867b6902d856b420667428e87bf4f016
+Section: utils
+Priority: optional
+Description: Fast, modern C++17 CLI snippet manager for competitive programmers
+ SnipCLI persists snippets to an atomic JSON repository with sub-5ms
+  query times, multi-format rendering (ANSI terminal and Markdown),
+ and cross-process file locking.
+

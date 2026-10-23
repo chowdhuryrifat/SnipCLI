@@ -1,0 +1,24 @@
+Architectures: amd64
+Codename: stable
+Components: main
+Date: Fri, 23 Oct 2026 05:54:52 +0000
+Description: Official SnipCLI Debian/Ubuntu Repository
+Label: SnipCLI
+Origin: SnipCLI
+Suite: stable
+MD5Sum:
+ d80702d3fb4dc8c2c52ce8f9d6eafe17              193 Release
+ 0db85a872a86784df05d787b9f7fa0b2              735 main/binary-amd64/Packages
+ 5ce1f2fc0e61796d9ad76ef89efc2fe3              545 main/binary-amd64/Packages.gz
+SHA1:
+ 8577752ee43eb009bb420b5caf1a10ac73673f27              193 Release
+ e88b696f5f189b76828cc38a3da1dbe3a5600cf1              735 main/binary-amd64/Packages
+ cb84b8b016cb298fd319d7b3998ce0757c1298b0              545 main/binary-amd64/Packages.gz
+SHA256:
+ 164d631cf0a6114e2eac68d2784282211bb1b4052bb34d6784b6d824823189db              193 Release
+ 9a8efeda480d6022e0c9384a5830b492345b403aac02cec1787a7b1b4a191f39              735 main/binary-amd64/Packages
+ 06711ac660638a1c8ad167895bf4ff8137cc7adef2a09791df468f1e6bf0a2cd              545 main/binary-amd64/Packages.gz
+SHA512:
+ 2571b6eff6c9612b47b5c16eab7ff5fb7195ea0bf4fb800c8fbfaf9fdcdc94793125011b7f499b8af7261757e93686eecedc50a35b4071fe4a001eeb22cb4f32              193 Release
+ f4b76b816cdcb538de041589a1e38860222b17dc51a9db8e0b8cb8f3ee652529df469c4a3002b6fb68361942c356b6bbf94f00a5077e31107e1dd88446d41f77              735 main/binary-amd64/Packages
+ aae46e31f104ad4b326f0610558b2dffd9b7d01bdbbe4203f6c4442ece0c803287c7c4103e36f5422858074b9a43b2aa6957506e76d636ee77360f710782afbc              545 main/binary-amd64/Packages.gz

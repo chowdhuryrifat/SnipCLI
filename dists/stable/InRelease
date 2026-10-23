@@ -1,0 +1,44 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Architectures: amd64
+Codename: stable
+Components: main
+Date: Fri, 23 Oct 2026 05:54:52 +0000
+Description: Official SnipCLI Debian/Ubuntu Repository
+Label: SnipCLI
+Origin: SnipCLI
+Suite: stable
+MD5Sum:
+ d80702d3fb4dc8c2c52ce8f9d6eafe17              193 Release
+ 0db85a872a86784df05d787b9f7fa0b2              735 main/binary-amd64/Packages
+ 5ce1f2fc0e61796d9ad76ef89efc2fe3              545 main/binary-amd64/Packages.gz
+SHA1:
+ 8577752ee43eb009bb420b5caf1a10ac73673f27              193 Release
+ e88b696f5f189b76828cc38a3da1dbe3a5600cf1              735 main/binary-amd64/Packages
+ cb84b8b016cb298fd319d7b3998ce0757c1298b0              545 main/binary-amd64/Packages.gz
+SHA256:
+ 164d631cf0a6114e2eac68d2784282211bb1b4052bb34d6784b6d824823189db              193 Release
+ 9a8efeda480d6022e0c9384a5830b492345b403aac02cec1787a7b1b4a191f39              735 main/binary-amd64/Packages
+ 06711ac660638a1c8ad167895bf4ff8137cc7adef2a09791df468f1e6bf0a2cd              545 main/binary-amd64/Packages.gz
+SHA512:
+ 2571b6eff6c9612b47b5c16eab7ff5fb7195ea0bf4fb800c8fbfaf9fdcdc94793125011b7f499b8af7261757e93686eecedc50a35b4071fe4a001eeb22cb4f32              193 Release
+ f4b76b816cdcb538de041589a1e38860222b17dc51a9db8e0b8cb8f3ee652529df469c4a3002b6fb68361942c356b6bbf94f00a5077e31107e1dd88446d41f77              735 main/binary-amd64/Packages
+ aae46e31f104ad4b326f0610558b2dffd9b7d01bdbbe4203f6c4442ece0c803287c7c4103e36f5422858074b9a43b2aa6957506e76d636ee77360f710782afbc              545 main/binary-amd64/Packages.gz
+-----BEGIN PGP SIGNATURE-----
+
+iQJcBAEBCgBGFiEEkgc+holuvIhI2f6yte6+huevA8kFAmra9qwoHGNob3dkaHVy
+eXJpZmF0QHVzZXJzLm5vcmVwbHkuZ2l0aHViLmNvbQAKCRC17r6G568DydnRD/9W
+U2kA1oXfVOghpjd3bzsgB+sX6FenIM80yfSBZKbqFIKEkswH6dwXbtN4NQUcjOnw
+9kpU0DYWeoE1PgdVmKfx5sK5GX5Fd1aFRWFJjz13zGeGVKE6ApOoJHg9am7BO+dY
+vj5k3OwJ1711bM4r71JDHw8eBC2ERqYXwwU3gB1IJ3xWTjuiUPK0Kqv3m3QWS8Lh
+7WyrCWrqmgcWLOxNMdOmhQxgAbGrRLAr8o4GaA1FcMBwkFaU16km5JibgkOTNXXO
+8GT82xSaJ6Lieaii9vOlFC7yvcJ+/MGA+6MACE9dKl3kJtKVs/hUafC6NVm/8V0J
+wZlVkcRwp4i+BJDxB/fBwmGT2pqGqJm2mz4xe1PpzBKwW/GyS6xLg/HThNU6Lkmq
+AF8uMPdDibRI2XHs69rb2ml4lV7MO5mPm9KTMoHkopKTu82p3+NUAAj/otcvIF8T
+v3Xat7CEwc7V4h6Ahoi5RRfplXRfPEHqvlZjKdlyZxCy+a1RFSMoGijiojRM0cZg
+mAjGhJCo1FKKtbaL3gAt49JGq+MQwdoL7egReZ1Gyr9Z1nbPOB7g54Au6H5RsWdQ
+MPIhdZuYB+OfPMsjRYNYgCTJ6OWlStEw8koDj/L3Prxn0kJMdLjGhSVFCY3vTNkD
+sGfNng5KP1jx/Mo7tcQODnf8raXGNR92rAypeS7fTQ==
+=Co+E
+-----END PGP SIGNATURE-----

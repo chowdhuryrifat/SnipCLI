@@ -59,91 +59,46 @@
 
 ## 🚀 Quick Start & Installation
 
-### 1. Prebuilt Binaries (Recommended)
+Install SnipCLI in a single command using your system's package manager:
 
-Standalone, statically-linked executables for Linux (x86_64), macOS (Universal: Apple Silicon & Intel), and Windows (x86_64) are attached to every [GitHub Release](https://github.com/chowdhuryrifat/SnipCLI/releases) accompanied by cryptographic checksums (`SHA256SUMS.txt`) and build provenance attestations:
+| Platform | Command |
+| :--- | :--- |
+| 🍺 **macOS & Linux** (Homebrew) | `brew install chowdhuryrifat/snipcli/snipcli` |
+| 🐧 **Debian / Ubuntu / Mint** (APT) | `curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/install.sh \| sudo bash` |
+| 🪟 **Windows** (WinGet) | `winget install chowdhuryrifat.SnipCLI` |
+| 🏹 **Arch Linux** (AUR) | `yay -S snipcli` |
+
+<details>
+<summary><b>🔧 Other Installation Methods (Manual APT Setup, Prebuilt Binaries, Source Build)</b></summary>
+
+### Manual APT Repository Configuration (Debian / Ubuntu / Mint / Pop!_OS)
+```bash
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/snipcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/snipcli-archive-keyring.gpg > /dev/null
+sudo chmod 0644 /etc/apt/keyrings/snipcli-archive-keyring.gpg
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/snipcli-archive-keyring.gpg] https://chowdhuryrifat.github.io/SnipCLI stable main" | sudo tee /etc/apt/sources.list.d/snipcli.list > /dev/null
+sudo apt update && sudo apt install snipcli
+```
+
+### Prebuilt Binaries
+Standalone, statically-linked executables for Linux (x86_64), macOS (Universal: Apple Silicon & Intel), and Windows (x86_64) are attached to every [GitHub Release](https://github.com/chowdhuryrifat/SnipCLI/releases/latest) with cryptographic checksums (`SHA256SUMS.txt`):
 
 ```bash
-# Example: Download and run on Linux x86_64
+# Example: Linux x86_64
 curl -fsSLO https://github.com/chowdhuryrifat/SnipCLI/releases/download/v1.0.0/snipcli-v1.0.0-linux-x86_64.tar.gz
 tar -xzf snipcli-v1.0.0-linux-x86_64.tar.gz
 ./bin/snip --version
 ```
 
-### 2. Build from Source
-
-Build SnipCLI with zero external dependencies in 3 commands:
-
+### Build from Source
 ```bash
 git clone https://github.com/chowdhuryrifat/SnipCLI.git
 cmake -S SnipCLI -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
-```
-
-#### Run Verification Test Suite:
-
-```bash
-# Run CTest Unit Tests (All 7 Suites - 139 Scenarios & Invariants)
 ctest --test-dir build --output-on-failure
-
-# Run Automated End-to-End Smoke & Integration Tests
 ./tests/smoke/smoke_test.sh ./build/snip
 ```
-
-### 3. Package Managers
-
-SnipCLI is officially distributed across popular package managers:
-
-#### 🐧 Debian / Ubuntu / Linux Mint / Pop!_OS (`sudo apt`)
-
-Install SnipCLI directly from the official APT repository hosted on GitHub Pages:
-
-**Option A — One-Line Setup & Install (Recommended):**
-```bash
-curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/install.sh | sudo bash
-```
-
-**Option B — Manual Repository Configuration:**
-```bash
-# 1. Download official GPG archive signing keyring
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/snipcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/snipcli-archive-keyring.gpg > /dev/null
-sudo chmod 0644 /etc/apt/keyrings/snipcli-archive-keyring.gpg
-
-# 2. Add the SnipCLI repository to your sources list
-echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/snipcli-archive-keyring.gpg] https://chowdhuryrifat.github.io/SnipCLI stable main" | sudo tee /etc/apt/sources.list.d/snipcli.list > /dev/null
-
-# 3. Update index and install
-sudo apt update
-sudo apt install snipcli
-```
-
----
-
-#### 🍺 macOS & Linux (Homebrew Tap)
-
-Install via the official Homebrew tap:
-
-```bash
-brew tap chowdhuryrifat/snipcli
-brew install snipcli
-```
-
----
-
-#### 🪟 Windows (WinGet)
-
-```bash
-winget install chowdhuryrifat.SnipCLI
-```
-
----
-
-#### 🏹 Arch Linux (AUR)
-
-```bash
-yay -S snipcli
-```
+</details>
 
 ---
 

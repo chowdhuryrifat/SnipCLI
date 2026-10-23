@@ -97,6 +97,7 @@ cd build && cpack -G DEB
 
 ### 2. Homebrew (`packaging/homebrew/snipcli.rb`)
 - Formula maintained in tap repository: `chowdhuryrifat/homebrew-snipcli`.
+- 1-Line Installation: `brew install chowdhuryrifat/snipcli/snipcli`
 - Uses standard Homebrew CMake install flags (`*std_cmake_args`).
 - Formula includes unit and CLI smoke test in its `test do` block.
 

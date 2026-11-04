@@ -59,55 +59,48 @@
 
 ## 🚀 Quick Start & Installation
 
-### 1. Prebuilt Binaries (Recommended)
+Install SnipCLI in a single command using your system's package manager:
 
-Standalone, statically-linked executables for Linux (x86_64), macOS (Universal: Apple Silicon & Intel), and Windows (x86_64) are attached to every [GitHub Release](https://github.com/chowdhuryrifat/SnipCLI/releases) accompanied by cryptographic checksums (`SHA256SUMS.txt`) and build provenance attestations:
+| Platform | Command | Status |
+| :--- | :--- | :--- |
+| 🍺 **macOS & Linux** (Homebrew) | `brew install chowdhuryrifat/snipcli/snipcli` | **Available** |
+| 🐧 **Debian / Ubuntu / Mint** (APT) | `curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/install.sh \| sudo bash` | **Available** |
+| 🪟 **Windows** (WinGet) | `winget install chowdhuryrifat.SnipCLI` | *Coming Soon ([PR #459579](https://github.com/microsoft/winget-pkgs/pull/459579) passed CI)* |
+| 🏹 **Arch Linux** (AUR) | `yay -S snipcli` | *Coming Soon* |
+
+> 💡 **Windows users:** While the WinGet registry PR completes its automated merge queue, you can immediately download and run the standalone Windows binary from [GitHub Releases](https://github.com/chowdhuryrifat/SnipCLI/releases/latest).
+
+<details>
+<summary><b>🔧 Other Installation Methods (Manual APT Setup, Prebuilt Binaries, Source Build)</b></summary>
+
+### Manual APT Repository Configuration (Debian / Ubuntu / Mint / Pop!_OS)
+```bash
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/snipcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/snipcli-archive-keyring.gpg > /dev/null
+sudo chmod 0644 /etc/apt/keyrings/snipcli-archive-keyring.gpg
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/snipcli-archive-keyring.gpg] https://chowdhuryrifat.github.io/SnipCLI stable main" | sudo tee /etc/apt/sources.list.d/snipcli.list > /dev/null
+sudo apt update && sudo apt install snipcli
+```
+
+### Prebuilt Binaries
+Standalone, statically-linked executables for Linux (x86_64), macOS (Universal: Apple Silicon & Intel), and Windows (x86_64) are attached to every [GitHub Release](https://github.com/chowdhuryrifat/SnipCLI/releases/latest) with cryptographic checksums (`SHA256SUMS.txt`):
 
 ```bash
-# Example: Download and run on Linux x86_64
+# Example: Linux x86_64
 curl -fsSLO https://github.com/chowdhuryrifat/SnipCLI/releases/download/v1.0.0/snipcli-v1.0.0-linux-x86_64.tar.gz
 tar -xzf snipcli-v1.0.0-linux-x86_64.tar.gz
 ./bin/snip --version
 ```
 
-### 2. Build from Source
-
-Build SnipCLI with zero external dependencies in 3 commands:
-
+### Build from Source
 ```bash
 git clone https://github.com/chowdhuryrifat/SnipCLI.git
 cmake -S SnipCLI -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
-```
-
-#### Run Verification Test Suite:
-
-```bash
-# Run CTest Unit Tests (All 7 Suites - 139 Scenarios & Invariants)
 ctest --test-dir build --output-on-failure
-
-# Run Automated End-to-End Smoke & Integration Tests
 ./tests/smoke/smoke_test.sh ./build/snip
 ```
-
-### 3. Package Managers (Coming soon — available after the v1.0.0 release is published)
-
-Once the release is published and upstream registry PRs are accepted, SnipCLI will be installable via standard package managers:
-
-```bash
-# macOS & Linux (Homebrew) — Coming Soon
-brew tap chowdhuryrifat/snipcli
-brew install snipcli
-
-# Windows (WinGet) — Coming Soon
-winget install ChowdhuryRifat.SnipCLI
-
-# Debian / Ubuntu (.deb via Releases or PPA) — Coming Soon
-sudo dpkg -i snipcli_1.0.0_amd64.deb
-
-# Arch Linux (AUR) — Coming Soon
-yay -S snipcli
-```
+</details>
 
 ---
 

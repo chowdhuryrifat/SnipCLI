@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **`snip add` now requires `--lang`** (or `--language` / `-l`). It previously fell back to `cpp` silently, contradicting its own help text; it now exits 1 with `Missing required option '--lang <language>'`.
+- `--format` accepts `md` as an alias for `markdown` and matches format names case-insensitively (`--format MD`, `--format Terminal`). Previously `md` was advertised internally but rejected by the parser.
+- **Snippet IDs are now renumbered after every deletion** so they always form the contiguous sequence `1..N` (previously IDs were permanent and gaps remained). `snip delete` notes the renumbering in its success message. Use titles for references that must survive deletions.
+- Timestamps (`createdAt`, `updatedAt`) are now written in local time with an explicit UTC offset (e.g. `2026-11-04T22:17:18+06:00`) instead of UTC with a `Z` suffix. Existing timestamps are left unchanged.
+
+### Fixed
+- `snip list` / `snip search` no longer truncate long titles to `...`; the title and language columns now size themselves to the longest value.
+- Markdown output: `|` inside tags is escaped so it can no longer break `--format markdown` tables, and code containing ```` ``` ```` is wrapped in a longer fence so it cannot terminate the code block early.
+- Short option names given with a long prefix (`--t`, `--c`, `--l`, `--f`) are now rejected as unknown options instead of being silently ignored.
+
+### Internal
+- Shared string helpers (`snipcli/common/string_utils.hpp`) replace five duplicated `toLower`/`trim`/ID-parsing copies.
+- `get` and `delete` share one ID-or-title selector resolver; all commands share one exception-to-exit-code guard.
+- CLI option aliases are normalised to canonical keys in the parser (`-l`/`--language` → `lang`, `--tags` → `tag`, …), driven by a single option table.
+- Per-command help text moved from `CommandDispatcher` into each command (`ICommand::getHelp()`).
+- Storage: the storage path is resolved once per operation (≈33–41% fewer filesystem syscalls for `add`/`delete`), one shared JSON string scanner replaces five copies, and serialization/escaping build strings directly instead of through `ostringstream`. On-disk output is byte-identical.
+
 ## [1.0.0] - 2026-10-23
 
 ### Added

@@ -1,6 +1,6 @@
 #include "snipcli/controller/commands/search_command.hpp"
 
-#include "snipcli/common/exceptions.hpp"
+#include "command_support.hpp"
 #include "snipcli/model/strategy/language_search_strategy.hpp"
 #include "snipcli/model/strategy/tag_search_strategy.hpp"
 #include "snipcli/model/strategy/title_search_strategy.hpp"
@@ -20,57 +20,69 @@ std::string SearchCommand::getDescription() const {
            "Pattern";
 }
 
+std::string SearchCommand::getHelp() const {
+    return "SnipCLI - search command\n"
+           "Usage: snip search [<query>] [options]\n\n"
+           "Search snippets by query substring, category tag, or language using the GoF "
+           "Strategy Pattern.\n\n"
+           "Options:\n"
+           "  -t, --title <query>          Search by case-insensitive title substring\n"
+           "  --tag, --tags <tag>          Search by exact category tag match\n"
+           "  -l, --lang, --language <l>   Search by exact programming language\n"
+           "  --format <fmt>               Output format: 'terminal' or 'markdown' (alias 'md')\n\n"
+           "Notes:\n"
+           "  • Positional queries (e.g. 'snip search dijkstra') perform case-insensitive "
+           "title search.\n\n"
+           "Examples:\n"
+           "  snip search \"dijkstra\"\n"
+           "  snip search --tag \"graph\"\n"
+           "  snip search --lang \"python\"\n"
+           "  snip search --tag \"dp\" --format markdown\n";
+}
+
 int SearchCommand::execute() {
-    try {
-        if ((m_args.hasOption("tag") || m_args.hasOption("tags") || m_args.hasOption("lang") ||
-             m_args.hasOption("language") || m_args.hasOption("title")) &&
-            !m_args.positionals.empty()) {
+    return detail::runGuarded(*m_view, [this] {
+        const auto& positionals = m_args.getPositionals();
+        const bool hasFilterOption =
+            m_args.hasOption("tag") || m_args.hasOption("lang") || m_args.hasOption("title");
+
+        if (hasFilterOption && !positionals.empty()) {
             m_view->renderError(
                 "Unexpected positional argument(s) when search filter options are provided.");
-            return 1;
+            return detail::kExitError;
         }
-
-        if (m_args.positionals.size() > 1) {
+        if (positionals.size() > 1) {
             m_view->renderError(
                 "Unexpected extra argument(s). For multi-word queries, please enclose in "
                 "quotes (e.g., 'Binary Search').");
-            return 1;
+            return detail::kExitError;
         }
 
+        // Strategy selection precedence: tag > language > title option > positional title query.
         std::unique_ptr<model::strategy::ISearchStrategy> strategy;
         std::string criteria;
-
-        if (m_args.hasOption("tag") || m_args.hasOption("tags")) {
+        if (m_args.hasOption("tag")) {
             strategy = std::make_unique<model::strategy::TagSearchStrategy>();
-            criteria = m_args.getOption("tag", m_args.getOption("tags"));
-        } else if (m_args.hasOption("lang") || m_args.hasOption("language")) {
+            criteria = m_args.getOption("tag");
+        } else if (m_args.hasOption("lang")) {
             strategy = std::make_unique<model::strategy::LanguageSearchStrategy>();
-            criteria = m_args.getOption("lang", m_args.getOption("language"));
+            criteria = m_args.getOption("lang");
         } else if (m_args.hasOption("title")) {
             strategy = std::make_unique<model::strategy::TitleSearchStrategy>();
             criteria = m_args.getOption("title");
-        } else if (!m_args.positionals.empty()) {
+        } else if (!positionals.empty()) {
             strategy = std::make_unique<model::strategy::TitleSearchStrategy>();
-            criteria = m_args.positionals[0];
+            criteria = positionals.front();
         } else {
             m_view->renderError(
                 "Search criteria missing. Provide a search query, --tag <tag>, or --lang "
                 "<language>.");
-            return 1;
+            return detail::kExitError;
         }
 
-        auto allSnippets = m_reader->getAll();
-        auto matches = strategy->filter(allSnippets, criteria);
-
-        m_view->renderSnippetList(matches);
+        m_view->renderSnippetList(strategy->filter(m_reader->getAll(), criteria));
         return 0;
-    } catch (const common::SnipException& ex) {
-        m_view->renderError(ex.what());
-        return 1;
-    } catch (const std::exception& ex) {
-        m_view->renderError(std::string("Unexpected error: ") + ex.what());
-        return 2;
-    }
+    });
 }
 
 }  // namespace snipcli::controller::commands

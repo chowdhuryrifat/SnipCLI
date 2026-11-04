@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -124,10 +125,14 @@ public:
     [[nodiscard]] const std::filesystem::path& getStoragePath() const noexcept;
 
 private:
-    void ensureStorageDirectoryExists() const;
-    [[nodiscard]] std::vector<Snippet> loadFromFile() const;
-    void saveToFile(const std::vector<Snippet>& snippets) const;
+    /// Resolves symlinks once per operation; all I/O in that operation uses the result.
+    [[nodiscard]] std::filesystem::path resolveTarget() const;
+    [[nodiscard]] std::vector<Snippet> loadFromFile(const std::filesystem::path& target) const;
+    void saveToFile(const std::filesystem::path& target,
+                    const std::vector<Snippet>& snippets) const;
     [[nodiscard]] std::optional<Snippet> getByTitleUnlocked(const std::string& title) const;
+    /// Removes all snippets matching @p predicate under the file lock, then renumbers 1..N.
+    [[nodiscard]] bool removeWhere(const std::function<bool(const Snippet&)>& predicate);
 
     std::filesystem::path m_storagePath;
     mutable std::mutex m_mutex;

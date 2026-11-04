@@ -567,6 +567,70 @@ void runParserTests() {
         }
     }
 
-    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (31/31 Invariants Verified)"
+    // Test 32: Short option names are not accepted with a long "--" prefix
+    for (const char* bogus : {"--t", "--c", "--l", "--f"}) {
+        try {
+            static_cast<void>(snipcli::controller::CliParser::parse({"add", bogus, "x"}));
+            std::cerr << "[FAIL] " << bogus << " was accepted as a long option" << std::endl;
+            std::exit(1);
+        } catch (const snipcli::common::CommandException& ex) {
+            if (std::string(ex.what()).find("Unknown option '" + std::string(bogus) + "'") ==
+                std::string::npos) {
+                std::cerr << "[FAIL] Unexpected message: " << ex.what() << std::endl;
+                std::exit(1);
+            }
+        }
+    }
+
+    // Test 33: Option aliases normalise to one canonical key
+    {
+        auto a = snipcli::controller::CliParser::parse(
+            {"add", "--language=java", "--tags", "x,y", "-t", "T", "-f", "p", "-c", "c"});
+        auto b = snipcli::controller::CliParser::parse({"search", "-l", "go"});
+        if (a.getOption("lang") != "java" || a.getOption("tag") != "x,y" ||
+            a.getOption("title") != "T" || a.getOption("file") != "p" ||
+            a.getOption("code") != "c" || a.hasOption("language") || a.hasOption("tags") ||
+            a.hasOption("t") || b.getOption("lang") != "go" || b.hasOption("l")) {
+            std::cerr << "[FAIL] Option aliases were not normalised to canonical keys" << std::endl;
+            std::exit(1);
+        }
+    }
+
+    // Test 34: --format is case-insensitive, accepts the 'md' alias, and is canonicalised
+    {
+        const std::vector<std::vector<std::string>> cases = {{"list", "--format", "md"},
+                                                             {"list", "--format=MD"},
+                                                             {"--format", "Markdown", "list"},
+                                                             {"stats", "--format=markdown"}};
+        for (const auto& tokens : cases) {
+            auto args = snipcli::controller::CliParser::parse(tokens);
+            if (args.getOption("format") != "markdown") {
+                std::cerr << "[FAIL] --format alias not canonicalised to 'markdown' for "
+                          << tokens.back() << std::endl;
+                std::exit(1);
+            }
+        }
+        auto term = snipcli::controller::CliParser::parse({"list", "--format=TERMINAL"});
+        if (term.getOption("format") != "terminal") {
+            std::cerr << "[FAIL] --format=TERMINAL not canonicalised" << std::endl;
+            std::exit(1);
+        }
+        for (const char* bad : {"mdx", "m", "term", "txt", "html"}) {
+            try {
+                static_cast<void>(snipcli::controller::CliParser::parse(
+                    {"list", std::string("--format=") + bad}));
+                std::cerr << "[FAIL] --format=" << bad << " was accepted" << std::endl;
+                std::exit(1);
+            } catch (const snipcli::common::CommandException& ex) {
+                if (std::string(ex.what()).find("terminal, markdown (alias: md)") ==
+                    std::string::npos) {
+                    std::cerr << "[FAIL] Unexpected format error: " << ex.what() << std::endl;
+                    std::exit(1);
+                }
+            }
+        }
+    }
+
+    std::cout << "[PASS] CliParser & CommandDispatcher tests passed. (34/34 Invariants Verified)"
               << std::endl;
 }

@@ -33,6 +33,14 @@ public:
      * @return std::string Brief summary description displayed in CLI help screens.
      */
     [[nodiscard]] virtual std::string getDescription() const = 0;
+
+    /**
+     * @brief Retrieves detailed usage documentation shown by `snip help <command>` and
+     * `snip <command> --help`. Owning the text here keeps the dispatcher closed for
+     * modification when commands are added (OCP).
+     * @return std::string Multi-line help text, or empty if the command provides none.
+     */
+    [[nodiscard]] virtual std::string getHelp() const { return {}; }
 };
 
 }  // namespace snipcli::controller

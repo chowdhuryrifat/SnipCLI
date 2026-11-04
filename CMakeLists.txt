@@ -52,6 +52,7 @@ include_directories(${INCLUDE_DIR})
 
 # Library Target (Core Domain, View, Controller)
 add_library(snipcli_core
+    ${SRC_DIR}/common/string_utils.cpp
     ${SRC_DIR}/model/snippet.cpp
     ${SRC_DIR}/model/snippet_validator.cpp
     ${SRC_DIR}/model/json_snippet_repository.cpp
@@ -91,6 +92,7 @@ if(SNIPCLI_BUILD_TESTS)
     enable_testing()
     add_executable(snip_tests 
         tests/unit/test_main.cpp
+        tests/unit/test_string_utils.cpp
         tests/unit/test_snippet.cpp
         tests/unit/test_validator.cpp
         tests/unit/test_repository.cpp

@@ -1,180 +1,237 @@
 #include "snipcli/controller/cli_parser.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <string_view>
 
 #include "snipcli/common/exceptions.hpp"
+#include "snipcli/common/string_utils.hpp"
 
 namespace snipcli::controller {
 
 namespace {
 
-struct OptionSchema {
+/**
+ * One accepted spelling of a CLI option. Aliases share a `canonical` key, which is the key
+ * stored in ParsedArgs::options (e.g. -t, --title -> "title"; -l, --lang, --language -> "lang").
+ * An empty `verbs` list means the option is global (accepted by every command).
+ */
+struct OptionSpec {
     std::string_view name;
     bool isShort;
     bool takesValue;
-    std::string_view allowedVerbs[6];
-};
+    std::string_view canonical;
+    std::array<std::string_view, 4> verbs;
 
-constexpr OptionSchema kOptionSchemas[] = {
-    // Global options
-    {"help", false, false, {}},
-    {"h", true, false, {}},
-    {"version", false, false, {}},
-    {"v", true, false, {}},
-    {"format", false, true, {}},
+    [[nodiscard]] bool isGlobal() const noexcept { return verbs[0].empty(); }
 
-    // Add command options
-    {"title", false, true, {"add", "get", "delete", "search"}},
-    {"t", true, true, {"add", "get", "delete", "search"}},
-    {"code", false, true, {"add"}},
-    {"file", false, true, {"add"}},
-    {"f", true, true, {"add"}},
-    {"lang", false, true, {"add", "list", "search"}},
-    {"language", false, true, {"add", "list", "search"}},
-    {"l", true, true, {"add", "list", "search"}},
-    {"tag", false, true, {"add", "list", "search"}},
-    {"tags", false, true, {"add", "list", "search"}},
-
-    // Get & Delete options
-    {"id", false, true, {"get", "delete"}},
-    {"code-only", false, false, {"get"}},
-
-    // Dual-personality switch -c
-    {"c", true, true, {"add"}},  // -c in add is --code (takes value)
-    {"c", true, false, {"get"}}  // -c in get is --code-only (boolean flag)
-};
-
-bool isKnownLongOptionOrFlag(std::string_view name) {
-    for (const auto& opt : kOptionSchemas) {
-        if (!opt.isShort && opt.name == name) {
+    [[nodiscard]] bool supports(std::string_view verb) const noexcept {
+        if (isGlobal()) {
             return true;
         }
+        // Unused trailing slots are empty, so an empty verb must never match them.
+        return !verb.empty() && std::find(verbs.begin(), verbs.end(), verb) != verbs.end();
     }
-    return false;
-}
+};
 
-bool isKnownShortSwitch(std::string_view s) {
-    for (const auto& opt : kOptionSchemas) {
-        if (opt.isShort && opt.name == s) {
-            return true;
+// clang-format off
+constexpr OptionSpec kOptionSpecs[] = {
+    // Global switches and options
+    {"help",      false, false, "help",      {}},
+    {"h",         true,  false, "help",      {}},
+    {"version",   false, false, "version",   {}},
+    {"v",         true,  false, "version",   {}},
+    {"format",    false, true,  "format",    {}},
+
+    // Snippet selection and metadata
+    {"title",     false, true,  "title",     {"add", "get", "delete", "search"}},
+    {"t",         true,  true,  "title",     {"add", "get", "delete", "search"}},
+    {"lang",      false, true,  "lang",      {"add", "list", "search"}},
+    {"language",  false, true,  "lang",      {"add", "list", "search"}},
+    {"l",         true,  true,  "lang",      {"add", "list", "search"}},
+    {"tag",       false, true,  "tag",       {"add", "list", "search"}},
+    {"tags",      false, true,  "tag",       {"add", "list", "search"}},
+    {"id",        false, true,  "id",        {"get", "delete"}},
+
+    // Source code input (add)
+    {"code",      false, true,  "code",      {"add"}},
+    {"file",      false, true,  "file",      {"add"}},
+    {"f",         true,  true,  "file",      {"add"}},
+
+    // Output control (get)
+    {"code-only", false, false, "code-only", {"get"}},
+
+    // Dual-personality -c: --code (takes a value) for add, --code-only (boolean) for get
+    {"c",         true,  true,  "code",      {"add"}},
+    {"c",         true,  false, "code-only", {"get"}},
+};
+// clang-format on
+
+/**
+ * Finds the spec for an option spelling. When several specs share a spelling (-c), the one
+ * supporting @p verb wins; otherwise the first match is returned so that callers can report
+ * "not supported by command".
+ */
+const OptionSpec* findSpec(std::string_view name, bool isShort, std::string_view verb) noexcept {
+    const OptionSpec* firstMatch = nullptr;
+    for (const auto& spec : kOptionSpecs) {
+        if (spec.name != name || spec.isShort != isShort) {
+            continue;
+        }
+        if (spec.supports(verb)) {
+            return &spec;
+        }
+        if (firstMatch == nullptr) {
+            firstMatch = &spec;
         }
     }
-    return false;
+    return firstMatch;
 }
 
-bool isOptionSupportedByCommand(std::string_view optName, std::string_view verb) {
-    for (const auto& opt : kOptionSchemas) {
-        if (opt.name == optName) {
-            bool hasAllowed = false;
-            for (auto allowed : opt.allowedVerbs) {
-                if (!allowed.empty()) {
-                    hasAllowed = true;
-                    if (allowed == verb) {
-                        return true;
-                    }
-                }
-            }
-            if (!hasAllowed) {
-                return true;
-            }
-        }
-    }
-    return false;
+bool startsWith(std::string_view s, std::string_view prefix) noexcept {
+    return s.substr(0, prefix.size()) == prefix;
 }
 
-bool isBooleanFlag(std::string_view name, std::string_view verb) {
-    if (name == "c") {
-        return verb == "get";
-    }
-    for (const auto& opt : kOptionSchemas) {
-        if (opt.name == name) {
-            return !opt.takesValue;
-        }
-    }
-    return false;
+bool isDigit(char c) noexcept {
+    return std::isdigit(static_cast<unsigned char>(c)) != 0;
 }
 
-bool isValueOption(std::string_view opt, std::string_view verb) {
-    if (opt == "c") {
-        return verb != "get";
-    }
-    for (const auto& o : kOptionSchemas) {
-        if (o.name == opt) {
-            return o.takesValue;
-        }
-    }
-    return false;
-}
-
-bool isNextTokenAnOptionOrFlag(std::string_view token, std::string_view verb) {
-    if (token == "--") {
-        return true;
-    }
-    if (token.rfind("--", 0) == 0) {
-        return true;
-    }
-    if (token == "-h" || token == "-v" || token == "-t" || token == "-l" || token == "-f") {
-        return true;
-    }
-    if (token == "-c" && (verb == "get" || verb.empty())) {
-        return true;
-    }
-    return false;
-}
-
-bool isKnownVerb(std::string_view v) {
+bool isKnownVerb(std::string_view v) noexcept {
     return v == "add" || v == "list" || v == "get" || v == "delete" || v == "search" ||
            v == "stats" || v == "help";
 }
 
+/// True if @p token would be parsed as an option/flag rather than as a value.
+bool looksLikeOption(std::string_view token, std::string_view verb) noexcept {
+    if (startsWith(token, "--")) {
+        return true;  // includes the "--" end-of-options marker
+    }
+    if (token.size() < 2 || token[0] != '-') {
+        return false;
+    }
+    const std::string_view name = token.substr(1);
+    if (name == "c") {
+        // -c is a boolean switch for `get` (and before the verb is known), so it can't be a value.
+        return verb == "get" || verb.empty();
+    }
+    return findSpec(name, true, verb) != nullptr;
+}
+
+[[noreturn]] void throwUnsupported(std::string_view display, std::string_view verb) {
+    if (verb.empty()) {
+        throw common::CommandException("Option '" + std::string(display) +
+                                       "' is not supported without a command.");
+    }
+    throw common::CommandException("Option '" + std::string(display) +
+                                   "' is not supported by command '" + std::string(verb) + "'.");
+}
+
+/**
+ * Validates a --format value and returns its canonical name. Matching is case-insensitive and
+ * `md` is accepted as an alias for `markdown`, so commands only ever see "terminal"/"markdown".
+ */
+std::string canonicalFormat(const std::string& val) {
+    const std::string lower = common::toLower(val);
+    if (lower == "terminal") {
+        return "terminal";
+    }
+    if (lower == "markdown" || lower == "md") {
+        return "markdown";
+    }
+    throw common::CommandException("Invalid format '" + val +
+                                   "'. Allowed formats are: terminal, markdown (alias: md).");
+}
+
+/// Validates and stores an option value under its canonical key.
+void storeValue(ParsedArgs& result, const OptionSpec& spec, std::string value) {
+    if (spec.canonical == "format") {
+        value = canonicalFormat(value);
+    }
+    result.options[std::string(spec.canonical)] = std::move(value);
+}
+
+/**
+ * Handles an inline-valued option (`--key=value` or `-k=value`).
+ * @param prefix "--" or "-", used to render the option name in error messages.
+ */
+void parseInlineValue(ParsedArgs& result, std::string_view prefix, std::string_view key,
+                      std::string value, bool isShort, std::string_view verb) {
+    const std::string display = std::string(prefix) + std::string(key);
+    const OptionSpec* spec = findSpec(key, isShort, verb);
+    if (spec == nullptr) {
+        throw common::CommandException("Unknown option '" + display + "'.");
+    }
+    if (!spec->takesValue) {
+        throw common::CommandException("Option '" + display +
+                                       "' is a boolean flag and does not accept a value.");
+    }
+    if (!spec->supports(verb)) {
+        throwUnsupported(display, verb);
+    }
+    if (value.empty()) {
+        throw common::CommandException("Option '" + display + "' requires a value.");
+    }
+    storeValue(result, *spec, std::move(value));
+}
+
+/**
+ * Handles a bare option token (`--key` or `-k`), consuming the following token as its value
+ * when the option takes one. Advances @p i past any consumed value.
+ */
+void parseBareOption(ParsedArgs& result, const std::vector<std::string>& tokens, size_t& i,
+                     std::string_view name, bool isShort, std::string_view verb) {
+    const std::string& arg = tokens[i];
+    const OptionSpec* spec = findSpec(name, isShort, verb);
+    if (spec == nullptr) {
+        throw common::CommandException("Unknown option '" + arg + "'.");
+    }
+    if (!spec->supports(verb)) {
+        throwUnsupported(arg, verb);
+    }
+    if (!spec->takesValue) {
+        result.flags.push_back(arg);
+        return;
+    }
+    if (i + 1 >= tokens.size() || looksLikeOption(tokens[i + 1], verb)) {
+        throw common::CommandException("Option '" + arg + "' requires a value.");
+    }
+    storeValue(result, *spec, tokens[++i]);
+}
+
+/**
+ * Locates the command verb: the first token that is neither an option nor an option's value.
+ * Runs before the main pass so that per-command option rules can be applied.
+ */
 std::string findVerb(const std::vector<std::string>& tokens) {
-    bool endOfOptions = false;
     for (size_t i = 0; i < tokens.size(); ++i) {
         const std::string& tok = tokens[i];
-        if (!endOfOptions && tok == "--") {
-            endOfOptions = true;
-            continue;
+        if (tok == "--") {
+            return i + 1 < tokens.size() ? tokens[i + 1] : std::string();
         }
-        if (endOfOptions) {
-            return tok;
-        }
-        if (tok.rfind("--", 0) == 0) {
-            std::string body = tok.substr(2);
-            size_t eqPos = body.find('=');
-            if (eqPos == std::string::npos) {
-                if (isValueOption(body, "")) {
-                    if (i + 1 < tokens.size()) {
-                        ++i;
-                    }
-                }
-            }
-        } else if (tok == "-c") {
-            if (i + 1 < tokens.size() && !isKnownVerb(tokens[i + 1])) {
-                ++i;
-            }
-        } else if (tok.rfind("-", 0) == 0 && tok.size() > 1 &&
-                   !std::isdigit(static_cast<unsigned char>(tok[1]))) {
-            std::string key = tok.substr(1);
-            if (isValueOption(key, "")) {
-                if (i + 1 < tokens.size()) {
+        if (startsWith(tok, "--")) {
+            const std::string_view body = std::string_view(tok).substr(2);
+            if (body.find('=') == std::string_view::npos) {
+                const OptionSpec* spec = findSpec(body, false, "");
+                if (spec != nullptr && spec->takesValue && i + 1 < tokens.size()) {
                     ++i;
                 }
             }
+        } else if (tok == "-c") {
+            // Ambiguous until the verb is known: skip a following value unless it's a verb.
+            if (i + 1 < tokens.size() && !isKnownVerb(tokens[i + 1])) {
+                ++i;
+            }
+        } else if (tok.size() > 1 && tok[0] == '-' && !isDigit(tok[1])) {
+            const OptionSpec* spec = findSpec(std::string_view(tok).substr(1), true, "");
+            if (spec != nullptr && spec->takesValue && i + 1 < tokens.size()) {
+                ++i;
+            }
         } else {
-            // First non-option positional token is the verb
             return tok;
         }
     }
     return "";
-}
-
-void validateFormat(const std::string& val) {
-    if (val != "terminal" && val != "markdown") {
-        throw common::CommandException("Invalid format '" + val +
-                                       "'. Allowed formats are: terminal, markdown.");
-    }
 }
 
 }  // namespace
@@ -189,10 +246,7 @@ bool ParsedArgs::hasOption(const std::string& key) const {
 
 std::string ParsedArgs::getOption(const std::string& key, const std::string& defaultValue) const {
     auto it = options.find(key);
-    if (it != options.end()) {
-        return it->second;
-    }
-    return defaultValue;
+    return it != options.end() ? it->second : defaultValue;
 }
 
 const std::string& ParsedArgs::getVerb() const noexcept {
@@ -204,20 +258,15 @@ const std::vector<std::string>& ParsedArgs::getPositionals() const noexcept {
 }
 
 ParsedArgs CliParser::parse(int argc, char* const argv[]) {
-    if (argc <= 1 || argv == nullptr) {
-        ParsedArgs fallback;
-        fallback.flags.emplace_back("--help");
-        return fallback;
-    }
-
     std::vector<std::string> tokens;
-    tokens.reserve(static_cast<size_t>(argc - 1));
-    for (int i = 1; i < argc; ++i) {
-        if (argv[i] != nullptr) {
-            tokens.emplace_back(argv[i]);
+    if (argc > 1 && argv != nullptr) {
+        tokens.reserve(static_cast<size_t>(argc - 1));
+        for (int i = 1; i < argc; ++i) {
+            if (argv[i] != nullptr) {
+                tokens.emplace_back(argv[i]);
+            }
         }
     }
-
     return parse(tokens);
 }
 
@@ -228,173 +277,48 @@ ParsedArgs CliParser::parse(const std::vector<std::string>& tokens) {
         return result;
     }
 
-    std::string verb = findVerb(tokens);
+    const std::string verb = findVerb(tokens);
     result.verb = verb;
     bool verbConsumed = false;
     bool endOfOptions = false;
 
+    auto addPositional = [&](const std::string& arg) {
+        if (!verbConsumed && !verb.empty() && arg == verb) {
+            verbConsumed = true;
+        } else {
+            result.positionals.push_back(arg);
+        }
+    };
+
     for (size_t i = 0; i < tokens.size(); ++i) {
         const std::string& arg = tokens[i];
 
-        if (!endOfOptions && arg == "--") {
-            endOfOptions = true;
-            continue;
-        }
-
         if (endOfOptions) {
-            if (!verbConsumed && !verb.empty() && arg == verb) {
-                verbConsumed = true;
+            addPositional(arg);
+        } else if (arg == "--") {
+            endOfOptions = true;
+        } else if (startsWith(arg, "--")) {
+            const std::string_view body = std::string_view(arg).substr(2);
+            const size_t eq = body.find('=');
+            if (eq != std::string_view::npos) {
+                parseInlineValue(result, "--", body.substr(0, eq), std::string(body.substr(eq + 1)),
+                                 false, verb);
             } else {
-                result.positionals.push_back(arg);
+                parseBareOption(result, tokens, i, body, false, verb);
             }
-            continue;
-        }
-
-        if (arg.rfind("--", 0) == 0) {
-            std::string body = arg.substr(2);
-            size_t eqPos = body.find('=');
-            if (eqPos != std::string::npos) {
-                std::string key = body.substr(0, eqPos);
-                std::string val = body.substr(eqPos + 1);
-                if (!isKnownLongOptionOrFlag(key)) {
-                    throw common::CommandException("Unknown option '--" + key + "'.");
-                }
-                if (isBooleanFlag(key, verb)) {
-                    throw common::CommandException(
-                        "Option '--" + key + "' is a boolean flag and does not accept a value.");
-                }
-                if (!isOptionSupportedByCommand(key, verb)) {
-                    if (verb.empty()) {
-                        throw common::CommandException("Option '--" + key +
-                                                       "' is not supported without a command.");
-                    }
-                    throw common::CommandException("Option '--" + key +
-                                                   "' is not supported by command '" + verb + "'.");
-                }
-                if (isValueOption(key, verb) && val.empty()) {
-                    throw common::CommandException("Option '--" + key + "' requires a value.");
-                }
-                if (key == "format") {
-                    validateFormat(val);
-                }
-                result.options[key] = val;
-            } else if (body == "code-only" || body == "help" || body == "version") {
-                if (!isOptionSupportedByCommand(body, verb)) {
-                    if (verb.empty()) {
-                        throw common::CommandException("Option '" + arg +
-                                                       "' is not supported without a command.");
-                    }
-                    throw common::CommandException("Option '" + arg +
-                                                   "' is not supported by command '" + verb + "'.");
-                }
-                result.flags.push_back(arg);
-            } else if (isValueOption(body, verb)) {
-                if (!isOptionSupportedByCommand(body, verb)) {
-                    if (verb.empty()) {
-                        throw common::CommandException("Option '" + arg +
-                                                       "' is not supported without a command.");
-                    }
-                    throw common::CommandException("Option '" + arg +
-                                                   "' is not supported by command '" + verb + "'.");
-                }
-                if (i + 1 >= tokens.size() || isNextTokenAnOptionOrFlag(tokens[i + 1], verb)) {
-                    throw common::CommandException("Option '" + arg + "' requires a value.");
-                }
-                std::string val = tokens[++i];
-                if (body == "format") {
-                    validateFormat(val);
-                }
-                result.options[body] = val;
+        } else if (arg.size() > 1 && arg[0] == '-') {
+            const std::string_view body = std::string_view(arg).substr(1);
+            const size_t eq = body.find('=');
+            if (eq != std::string_view::npos) {
+                parseInlineValue(result, "-", body.substr(0, eq), std::string(body.substr(eq + 1)),
+                                 true, verb);
+            } else if (isDigit(body[0])) {
+                addPositional(arg);  // negative number, e.g. `snip get -- -5` or `snip get -5`
             } else {
-                throw common::CommandException("Unknown option '" + arg + "'.");
-            }
-        } else if (arg.rfind("-", 0) == 0 && arg.size() > 1) {
-            size_t eqPos = arg.find('=');
-            if (eqPos != std::string::npos) {
-                std::string key = arg.substr(1, eqPos - 1);
-                std::string val = arg.substr(eqPos + 1);
-                if (!isKnownShortSwitch(key)) {
-                    throw common::CommandException("Unknown option '-" + key + "'.");
-                }
-                if (isBooleanFlag(key, verb)) {
-                    throw common::CommandException(
-                        "Option '-" + key + "' is a boolean flag and does not accept a value.");
-                }
-                if (!isOptionSupportedByCommand(key, verb)) {
-                    if (verb.empty()) {
-                        throw common::CommandException("Option '-" + key +
-                                                       "' is not supported without a command.");
-                    }
-                    throw common::CommandException("Option '-" + key +
-                                                   "' is not supported by command '" + verb + "'.");
-                }
-                if (isValueOption(key, verb) && val.empty()) {
-                    throw common::CommandException("Option '-" + key + "' requires a value.");
-                }
-                result.options[key] = val;
-                if (key == "t") {
-                    result.options["title"] = val;
-                }
-                if (key == "l") {
-                    result.options["lang"] = val;
-                }
-                if (key == "f") {
-                    result.options["file"] = val;
-                }
-                if (key == "c") {
-                    result.options["code"] = val;
-                }
-            } else if (arg == "-h" || arg == "-v") {
-                result.flags.push_back(arg);
-            } else if (arg == "-c" && verb == "get") {
-                if (!isOptionSupportedByCommand("c", verb)) {
-                    throw common::CommandException("Option '" + arg +
-                                                   "' is not supported by command '" + verb + "'.");
-                }
-                result.flags.push_back(arg);
-            } else if (arg == "-t" || arg == "-l" || arg == "-f" ||
-                       (arg == "-c" && verb != "get")) {
-                std::string key = arg.substr(1);
-                if (!isOptionSupportedByCommand(key, verb)) {
-                    if (verb.empty()) {
-                        throw common::CommandException("Option '" + arg +
-                                                       "' is not supported without a command.");
-                    }
-                    throw common::CommandException("Option '" + arg +
-                                                   "' is not supported by command '" + verb + "'.");
-                }
-                if (i + 1 >= tokens.size() || isNextTokenAnOptionOrFlag(tokens[i + 1], verb)) {
-                    throw common::CommandException("Option '" + arg + "' requires a value.");
-                }
-                std::string val = tokens[++i];
-                result.options[key] = val;
-                if (key == "t") {
-                    result.options["title"] = val;
-                }
-                if (key == "l") {
-                    result.options["lang"] = val;
-                }
-                if (key == "f") {
-                    result.options["file"] = val;
-                }
-                if (key == "c") {
-                    result.options["code"] = val;
-                }
-            } else if (std::isdigit(static_cast<unsigned char>(arg[1]))) {
-                if (!verbConsumed && !verb.empty() && arg == verb) {
-                    verbConsumed = true;
-                } else {
-                    result.positionals.push_back(arg);
-                }
-            } else {
-                throw common::CommandException("Unknown option '" + arg + "'.");
+                parseBareOption(result, tokens, i, body, true, verb);
             }
         } else {
-            if (!verbConsumed && !verb.empty() && arg == verb) {
-                verbConsumed = true;
-            } else {
-                result.positionals.push_back(arg);
-            }
+            addPositional(arg);
         }
     }
 

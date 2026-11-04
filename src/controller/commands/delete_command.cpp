@@ -1,46 +1,8 @@
 #include "snipcli/controller/commands/delete_command.hpp"
 
-#include <cctype>
-#include <charconv>
-#include <optional>
-#include <string>
-#include <string_view>
-
-#include "snipcli/common/exceptions.hpp"
+#include "command_support.hpp"
 
 namespace snipcli::controller::commands {
-
-namespace {
-
-bool isNumeric(std::string_view s) {
-    if (s.empty()) {
-        return false;
-    }
-    size_t start = (s[0] == '+' || s[0] == '-') ? 1 : 0;
-    if (start >= s.size()) {
-        return false;
-    }
-    for (size_t i = start; i < s.size(); ++i) {
-        if (!std::isdigit(static_cast<unsigned char>(s[i]))) {
-            return false;
-        }
-    }
-    return true;
-}
-
-std::optional<uint64_t> parseStrictId(std::string_view s) {
-    if (s.empty()) {
-        return std::nullopt;
-    }
-    uint64_t id = 0;
-    auto [p, ec] = std::from_chars(s.data(), s.data() + s.size(), id);
-    if (ec != std::errc{} || p != s.data() + s.size() || id == 0) {
-        return std::nullopt;
-    }
-    return id;
-}
-
-}  // namespace
 
 DeleteCommand::DeleteCommand(ParsedArgs args, std::shared_ptr<model::ISnippetWriter> writer,
                              std::shared_ptr<view::ISnippetView> view)
@@ -54,81 +16,45 @@ std::string DeleteCommand::getDescription() const {
     return "Delete a snippet by ID or title";
 }
 
+std::string DeleteCommand::getHelp() const {
+    return "SnipCLI - delete command\n"
+           "Usage: snip delete [--id <id> | --title <title> | <query>] [options]\n\n"
+           "Delete a snippet from the repository by ID or title.\n\n"
+           "Options:\n"
+           "  --id <id>                    Exact numeric identifier of the snippet to delete\n"
+           "  -t, --title <title>          Exact title of the snippet to delete\n"
+           "  --format <fmt>               Output format: 'terminal' or 'markdown' (alias 'md')\n\n"
+           "Notes:\n"
+           "  • Specify either --id or --title, not both.\n\n"
+           "Examples:\n"
+           "  snip delete --id 1\n"
+           "  snip delete --title \"Dijkstra\"\n";
+}
+
 int DeleteCommand::execute() {
-    try {
-        if (m_args.hasOption("id") && m_args.hasOption("title")) {
-            m_view->renderError(
-                "Conflicting selector options: specify either --id or --title, not both.");
-            return 1;
+    return detail::runGuarded(*m_view, [this] {
+        const auto resolved = detail::resolveSelector(
+            m_args,
+            "Must specify snippet --id <id> or --title <title> to delete, or provide an "
+            "identifier as an argument.");
+        if (!resolved.selector) {
+            m_view->renderError(resolved.error);
+            return detail::kExitError;
         }
 
-        if ((m_args.hasOption("id") || m_args.hasOption("title")) && !m_args.positionals.empty()) {
-            std::string opt = m_args.hasOption("id") ? "--id" : "--title";
-            m_view->renderError("Unexpected positional argument(s) when option '" + opt +
-                                "' is provided.");
-            return 1;
+        const auto& sel = *resolved.selector;
+        const bool deleted =
+            sel.id ? m_writer->removeById(*sel.id) : m_writer->removeByTitle(sel.title);
+        if (!deleted) {
+            m_view->renderError("Snippet " + sel.describe() + " not found.");
+            return detail::kExitError;
         }
 
-        if (m_args.positionals.size() > 1) {
-            m_view->renderError(
-                "Unexpected extra argument(s). For multi-word snippet titles, please enclose in "
-                "quotes (e.g., 'Binary Search').");
-            return 1;
-        }
-
-        bool deleted = false;
-        std::string identifier;
-
-        if (m_args.hasOption("id")) {
-            std::string idStr = m_args.getOption("id");
-            auto parsedId = parseStrictId(idStr);
-            if (!parsedId.has_value()) {
-                m_view->renderError("Invalid snippet ID format: '" + idStr +
-                                    "'. Expected a positive integer.");
-                return 1;
-            }
-            identifier = "ID #" + std::to_string(*parsedId);
-            deleted = m_writer->removeById(*parsedId);
-        } else if (m_args.hasOption("title")) {
-            std::string title = m_args.getOption("title");
-            identifier = "'" + title + "'";
-            deleted = m_writer->removeByTitle(title);
-        } else if (!m_args.positionals.empty()) {
-            std::string query = m_args.positionals[0];
-            if (isNumeric(query)) {
-                auto parsedId = parseStrictId(query);
-                if (!parsedId.has_value()) {
-                    m_view->renderError("Invalid snippet ID format: '" + query +
-                                        "'. Expected a positive integer.");
-                    return 1;
-                }
-                identifier = "ID #" + std::to_string(*parsedId);
-                deleted = m_writer->removeById(*parsedId);
-            } else {
-                identifier = "'" + query + "'";
-                deleted = m_writer->removeByTitle(query);
-            }
-        } else {
-            m_view->renderError(
-                "Must specify snippet --id <id> or --title <title> to delete, or provide an "
-                "identifier as an argument.");
-            return 1;
-        }
-
-        if (deleted) {
-            m_view->renderSuccess("Snippet " + identifier + " deleted successfully.");
-            return 0;
-        } else {
-            m_view->renderError("Snippet " + identifier + " not found.");
-            return 1;
-        }
-    } catch (const common::SnipException& ex) {
-        m_view->renderError(ex.what());
-        return 1;
-    } catch (const std::exception& ex) {
-        m_view->renderError(std::string("Unexpected error: ") + ex.what());
-        return 2;
-    }
+        m_view->renderSuccess("Snippet " + sel.describe() +
+                              " deleted successfully. Remaining snippet IDs have been "
+                              "renumbered sequentially (run 'snip list' to see them).");
+        return 0;
+    });
 }
 
 }  // namespace snipcli::controller::commands

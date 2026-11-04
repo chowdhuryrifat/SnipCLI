@@ -64,7 +64,7 @@ Under standard `/usr` prefix, CMake installs:
 Downstream package build scripts that include a `check()` or `test()` step can run:
 
 ```bash
-# 1. Unit tests (all 7 suites, 139 scenarios)
+# 1. Unit tests (all 8 suites, 151 scenarios)
 ctest --test-dir build -C Release --output-on-failure
 
 # 2. Integration smoke test against built binary

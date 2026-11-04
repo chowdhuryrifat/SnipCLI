@@ -84,6 +84,10 @@ public:
 
     /**
      * @brief Deletes a snippet by its unique numeric identifier.
+     *
+     * After a successful deletion, the remaining snippets are renumbered to the contiguous
+     * sequence 1..N (preserving their relative order), so IDs never contain gaps.
+     *
      * @param id The unique identifier of the snippet to remove.
      * @return bool True if the snippet was found and removed; false otherwise.
      * @throws common::StorageException If modifying storage fails.
@@ -92,6 +96,9 @@ public:
 
     /**
      * @brief Deletes a snippet by its exact title.
+     *
+     * Remaining snippets are renumbered to 1..N after a successful deletion (see removeById).
+     *
      * @param title The exact title of the snippet to remove.
      * @return bool True if the snippet was found and removed; false otherwise.
      * @throws common::StorageException If modifying storage fails.

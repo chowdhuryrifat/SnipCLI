@@ -1,22 +1,10 @@
 #include "snipcli/view/view_factory.hpp"
 
-#include <algorithm>
-#include <cctype>
-
+#include "snipcli/common/string_utils.hpp"
 #include "snipcli/view/markdown_view.hpp"
 #include "snipcli/view/terminal_view.hpp"
 
 namespace snipcli::view {
-
-namespace {
-
-std::string toLower(std::string str) {
-    std::transform(str.begin(), str.end(), str.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return str;
-}
-
-}  // namespace
 
 std::unique_ptr<ISnippetView> ViewFactory::create(Format format, std::ostream& outStream,
                                                   std::ostream& errStream) {
@@ -32,11 +20,10 @@ std::unique_ptr<ISnippetView> ViewFactory::create(Format format, std::ostream& o
 std::unique_ptr<ISnippetView> ViewFactory::fromString(const std::string& formatName,
                                                       std::ostream& outStream,
                                                       std::ostream& errStream) {
-    std::string lower = toLower(formatName);
-    if (lower == "markdown" || lower == "md") {
-        return create(Format::Markdown, outStream, errStream);
-    }
-    return create(Format::Terminal, outStream, errStream);
+    const std::string lower = common::toLower(formatName);
+    const Format format =
+        (lower == "markdown" || lower == "md") ? Format::Markdown : Format::Terminal;
+    return create(format, outStream, errStream);
 }
 
 }  // namespace snipcli::view

@@ -233,10 +233,16 @@ jobs:
       - name: Build From Source & Test via Local file:// Tarball
         run: |
           echo "=== Creating local source archive for file:// install test ==="
-          git archive --format=tar.gz --prefix=SnipCLI-1.0.0/ -o /tmp/snipcli-1.0.0.tar.gz HEAD
-          TAR_SHA=$(shasum -a 256 /tmp/snipcli-1.0.0.tar.gz | awk '{print $1}')
-          
-          sed -i '' "s|url \".*\"|url \"file:///tmp/snipcli-1.0.0.tar.gz\"|" "${TAP_DIR}/Formula/snipcli.rb"
+          # Homebrew infers the formula version from the archive name, and the formula test
+          # asserts `snip --version` matches it, so name the archive after the version being
+          # built (from CMakeLists.txt) rather than hardcoding a release number.
+          VER=$(sed -nE 's/^[[:space:]]+VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -n 1)
+          [ -n "${VER}" ] || { echo "::error ::Could not read project VERSION from CMakeLists.txt"; exit 1; }
+          echo "Building formula for version ${VER}"
+          git archive --format=tar.gz --prefix="SnipCLI-${VER}/" -o "/tmp/snipcli-${VER}.tar.gz" HEAD
+          TAR_SHA=$(shasum -a 256 "/tmp/snipcli-${VER}.tar.gz" | awk '{print $1}')
+
+          sed -i '' "s|url \".*\"|url \"file:///tmp/snipcli-${VER}.tar.gz\"|" "${TAP_DIR}/Formula/snipcli.rb"
           sed -i '' "s|sha256 \".*\"|sha256 \"${TAR_SHA}\"|" "${TAP_DIR}/Formula/snipcli.rb"
           
           echo "=== Formula with local archive ==="

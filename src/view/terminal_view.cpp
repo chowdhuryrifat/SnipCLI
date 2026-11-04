@@ -1,5 +1,6 @@
 #include "snipcli/view/terminal_view.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <iomanip>
 #include <sstream>
@@ -184,11 +185,24 @@ void TerminalView::renderSnippetList(const std::vector<model::Snippet>& snippets
         return;
     }
 
-    m_out << colorBold() << std::left << std::setw(6) << "ID" << std::setw(25) << "TITLE"
-          << std::setw(12) << "LANGUAGE" << std::setw(10) << "LINES" << "TAGS" << colorReset()
-          << "\n";
+    // Size the title and language columns to their longest value so nothing is truncated.
+    constexpr int kColumnGap = 2;
+    size_t maxTitleLen = std::string("TITLE").size();
+    size_t maxLangLen = std::string("LANGUAGE").size();
+    for (const auto& s : snippets) {
+        maxTitleLen = std::max(maxTitleLen, s.getTitle().size());
+        maxLangLen = std::max(maxLangLen, s.getLanguage().size());
+    }
+    const int titleWidth = static_cast<int>(maxTitleLen) + kColumnGap;
+    const int langWidth = static_cast<int>(maxLangLen) + kColumnGap;
 
-    m_out << colorDim() << std::string(75, '-') << colorReset() << "\n";
+    m_out << colorBold() << std::left << std::setw(6) << "ID" << std::setw(titleWidth) << "TITLE"
+          << std::setw(langWidth) << "LANGUAGE" << std::setw(10) << "LINES" << "TAGS"
+          << colorReset() << "\n";
+
+    const size_t ruleWidth = 6 + static_cast<size_t>(titleWidth) + static_cast<size_t>(langWidth) +
+                             10 + std::string("TAGS").size();
+    m_out << colorDim() << std::string(ruleWidth, '-') << colorReset() << "\n";
 
     for (const auto& s : snippets) {
         std::string tagStr;
@@ -199,14 +213,9 @@ void TerminalView::renderSnippetList(const std::vector<model::Snippet>& snippets
             }
         }
 
-        std::string displayTitle = s.getTitle();
-        if (displayTitle.length() > 23) {
-            displayTitle.replace(20, std::string::npos, "...");
-        }
-
-        m_out << std::left << std::setw(6) << s.getId() << colorCyan() << std::setw(25)
-              << displayTitle << colorReset() << std::setw(12) << s.getLanguage() << std::setw(10)
-              << s.getLineCount() << colorDim() << tagStr << colorReset() << "\n";
+        m_out << std::left << std::setw(6) << s.getId() << colorCyan() << std::setw(titleWidth)
+              << s.getTitle() << colorReset() << std::setw(langWidth) << s.getLanguage()
+              << std::setw(10) << s.getLineCount() << colorDim() << tagStr << colorReset() << "\n";
     }
 }
 

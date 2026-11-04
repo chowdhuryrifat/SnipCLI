@@ -27,6 +27,8 @@ Use \fB\-\-code\-only\fR to extract only the raw snippet contents.
 .TP
 .BR delete " [\fIOPTIONS\fR]"
 Delete a snippet from the repository by ID (\fB\-\-id\fR) or title (\fB\-\-title\fR).
+After deletion the remaining snippets are renumbered to the contiguous sequence 1..N,
+so higher IDs shift down by one.
 .TP
 .BR search " [\fIQUERY\fR] [\fIOPTIONS\fR]"
 Search stored snippets by title substring (positional argument or \fB\-\-title\fR), tag (\fB\-\-tag\fR), or language (\fB\-\-language\fR).

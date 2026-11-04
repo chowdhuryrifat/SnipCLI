@@ -116,7 +116,24 @@ void runViewTests() {
             output.find("ID") != std::string::npos && output.find("TITLE") != std::string::npos,
             "Table header present");
         assertTrue(output.find("ShortTitle") != std::string::npos, "Short title present");
-        assertTrue(output.find("...") != std::string::npos, "Long title truncated with ellipsis");
+        assertTrue(output.find("A Very Long Snippet Title That Exceeds Limit") != std::string::npos,
+                   "Long title rendered in full without truncation");
+        assertTrue(output.find("...") == std::string::npos, "No ellipsis truncation in list");
+
+        // Columns stay aligned: 'cpp' and 'python' start at the same offset on each row
+        std::istringstream rows(output);
+        std::string line;
+        std::vector<size_t> langCols;
+        while (std::getline(rows, line)) {
+            size_t cpp = line.find(" cpp ");
+            size_t py = line.find(" python ");
+            if (cpp != std::string::npos)
+                langCols.push_back(cpp);
+            if (py != std::string::npos)
+                langCols.push_back(py);
+        }
+        assertTrue(langCols.size() == 2 && langCols[0] == langCols[1],
+                   "Language column aligned across rows of differing title lengths");
     }
 
     // ---------------------------------------------------------

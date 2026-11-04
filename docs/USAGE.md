@@ -356,6 +356,8 @@ snip delete [--id <id> | --title <title> | <query>] [options]
 
 > **Note:** `--id` and `--title` are mutually exclusive. Specify either `--id` or `--title`.
 
+> **IDs are renumbered after every delete.** Remaining snippets are compacted to `1..N` in their existing order, so deleting #2 from `1, 2, 3` turns the old #3 into #2. Check `snip list` before deleting by ID again, and prefer titles in scripts or aliases.
+
 #### Examples
 ```bash
 # Delete by unique title

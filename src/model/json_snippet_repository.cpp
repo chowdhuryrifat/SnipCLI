@@ -265,17 +265,43 @@ bool equalsIgnoreCase(std::string_view a, std::string_view b) noexcept {
     return true;
 }
 
+/**
+ * Returns the current time as an ISO 8601 timestamp in the user's local timezone with an
+ * explicit UTC offset (e.g. "2026-11-04T22:17:18+06:00"). The offset keeps the instant
+ * unambiguous while showing the wall-clock time the user actually experienced.
+ */
 std::string getIsoTimestamp() {
     auto now = std::chrono::system_clock::now();
     std::time_t now_c = std::chrono::system_clock::to_time_t(now);
-    std::tm tm{};
+    std::tm local{};
+    std::tm utc{};
 #if defined(_WIN32)
-    gmtime_s(&tm, &now_c);
+    localtime_s(&local, &now_c);
+    gmtime_s(&utc, &now_c);
 #else
-    gmtime_r(&now_c, &tm);
+    localtime_r(&now_c, &local);
+    gmtime_r(&now_c, &utc);
 #endif
+
+    // Portable UTC offset: difference between the local and UTC broken-down times.
+    // The two can differ by at most one calendar day (including across a year boundary).
+    long dayDiff = 0;
+    if (local.tm_year != utc.tm_year) {
+        dayDiff = local.tm_year > utc.tm_year ? 1 : -1;
+    } else {
+        dayDiff = static_cast<long>(local.tm_yday) - static_cast<long>(utc.tm_yday);
+    }
+    long offsetMinutes =
+        (dayDiff * 24 + (local.tm_hour - utc.tm_hour)) * 60 + (local.tm_min - utc.tm_min);
+
+    const char sign = offsetMinutes < 0 ? '-' : '+';
+    if (offsetMinutes < 0) {
+        offsetMinutes = -offsetMinutes;
+    }
+
     std::ostringstream ss;
-    ss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
+    ss << std::put_time(&local, "%Y-%m-%dT%H:%M:%S") << sign << std::setw(2) << std::setfill('0')
+       << (offsetMinutes / 60) << ':' << std::setw(2) << std::setfill('0') << (offsetMinutes % 60);
     return ss.str();
 }
 
@@ -1474,6 +1500,24 @@ uint64_t JsonSnippetRepository::save(Snippet& snippet) {
     return snippet.getId();
 }
 
+namespace {
+
+/**
+ * Compacts snippet IDs to the contiguous sequence 1..N, preserving the existing relative
+ * order (ascending by current ID). Called after every deletion so IDs never contain gaps.
+ * Timestamps are deliberately left untouched: renumbering is not a content modification.
+ */
+void renumberSequentially(std::vector<Snippet>& snippets) {
+    std::stable_sort(snippets.begin(), snippets.end(),
+                     [](const Snippet& a, const Snippet& b) { return a.getId() < b.getId(); });
+    uint64_t nextId = 1;
+    for (auto& s : snippets) {
+        s.setId(nextId++);
+    }
+}
+
+}  // namespace
+
 bool JsonSnippetRepository::removeById(uint64_t id) {
     std::lock_guard<std::mutex> lock(m_mutex);
     FileLock fl(m_storagePath);
@@ -1486,6 +1530,7 @@ bool JsonSnippetRepository::removeById(uint64_t id) {
     }
 
     snippets.erase(it, snippets.end());
+    renumberSequentially(snippets);
     saveToFile(snippets);
     return true;
 }
@@ -1503,6 +1548,7 @@ bool JsonSnippetRepository::removeByTitle(const std::string& title) {
     }
 
     snippets.erase(it, snippets.end());
+    renumberSequentially(snippets);
     saveToFile(snippets);
     return true;
 }

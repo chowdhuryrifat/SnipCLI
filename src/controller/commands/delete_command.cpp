@@ -116,7 +116,9 @@ int DeleteCommand::execute() {
         }
 
         if (deleted) {
-            m_view->renderSuccess("Snippet " + identifier + " deleted successfully.");
+            m_view->renderSuccess("Snippet " + identifier +
+                                  " deleted successfully. Remaining snippet IDs have been "
+                                  "renumbered sequentially (run 'snip list' to see them).");
             return 0;
         } else {
             m_view->renderError("Snippet " + identifier + " not found.");

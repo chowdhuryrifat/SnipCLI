@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Snippet IDs are now renumbered after every deletion** so they always form the contiguous sequence `1..N` (previously IDs were permanent and gaps remained). `snip delete` notes the renumbering in its success message. Use titles for references that must survive deletions.
+- Timestamps (`createdAt`, `updatedAt`) are now written in local time with an explicit UTC offset (e.g. `2026-11-04T22:17:18+06:00`) instead of UTC with a `Z` suffix. Existing timestamps are left unchanged.
+
+### Fixed
+- `snip list` / `snip search` no longer truncate long titles to `...`; the title and language columns now size themselves to the longest value.
+
 ## [1.0.0] - 2026-10-23
 
 ### Added

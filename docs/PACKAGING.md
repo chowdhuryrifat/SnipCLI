@@ -77,7 +77,7 @@ bash tests/smoke/smoke_test.sh build/snip
 
 Pre-authored, verified manifests are maintained in the repository under `packaging/`:
 
-### 1. Debian & Ubuntu (`.deb`)
+### 1. Debian & Ubuntu (`.deb` & Official APT Repository)
 Debian packages are generated via CPack in root `CMakeLists.txt`:
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSNIPCLI_BUILD_TESTS=OFF
@@ -87,8 +87,17 @@ cd build && cpack -G DEB
 - Shared library dependencies (`Depends:`) are determined dynamically via `dpkg-shlibdeps` (`CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON`), ensuring exact libc compatibility.
 - Package Maintainer: `Chowdhury Rifat Ahmed <67093774+chowdhuryrifat@users.noreply.github.com>`.
 
+**Official APT Repository (GitHub Pages):**
+- URL: `https://chowdhuryrifat.github.io/SnipCLI`
+- Distribution: `stable`
+- Component: `main`
+- Cryptographic Signature: GPG clearsigned (`InRelease` / `Release.gpg`), key exported to `snipcli-archive-keyring.gpg`.
+- Setup Script: `curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/install.sh | sudo bash`
+- Maintenance Automation: `scripts/update_apt_repo.sh` generates package indexes and signs metadata. The `.github/workflows/apt-repo.yml` workflow automatically publishes new `.deb` assets on release.
+
 ### 2. Homebrew (`packaging/homebrew/snipcli.rb`)
 - Formula maintained in tap repository: `chowdhuryrifat/homebrew-snipcli`.
+- 1-Line Installation: `brew install chowdhuryrifat/snipcli/snipcli`
 - Uses standard Homebrew CMake install flags (`*std_cmake_args`).
 - Formula includes unit and CLI smoke test in its `test do` block.
 

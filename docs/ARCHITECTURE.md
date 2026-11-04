@@ -22,7 +22,7 @@ flowchart TD
     subgraph Model_Layer ["Model Layer (Business & Data)"]
         Cmd -->|invokes| Repo["ISnippetRepository<br/>(JsonSnippetRepository)"]
         Cmd -->|validates| Val["SnippetValidator"]
-        Cmd -->|queries| Strat["ISearchStrategy<br/>(TagSearch, TitleSearch)"]
+        Cmd -->|queries| Strat["ISearchStrategy<br/>(TagSearch, TitleSearch, LanguageSearch)"]
         Repo -->|"persists to"| Storage[("snippets.json")]
     end
     
@@ -57,12 +57,13 @@ flowchart TD
    - **Interface:** `ICommand`
    - **Concrete Commands:** `AddCommand`, `ListCommand`, `GetCommand`, `DeleteCommand`, `SearchCommand`, `StatsCommand`
    - **Invoker:** `CommandDispatcher`
+   - **Help text:** each command owns its usage text via `ICommand::getHelp()`, so registering a new command never requires editing the dispatcher.
    - **Benefit:** Decouples CLI parsing from business orchestration; enables adding new flags and verbs in < 5 minutes.
 
 2. **Strategy Pattern (Behavioral):**
    - **Interface:** `ISearchStrategy`
-   - **Concrete Strategies:** `TagSearchStrategy`, `TitleSearchStrategy`
-   - **Context:** `SearchCommand`
+   - **Concrete Strategies:** `TagSearchStrategy`, `TitleSearchStrategy`, `LanguageSearchStrategy`
+   - **Context:** `SearchCommand` (and `ListCommand` for `--tag` / `--lang` filtering)
    - **Benefit:** Allows dynamic runtime switching of search algorithms without touching core snippet models.
 
 3. **Factory Pattern (Creational):**

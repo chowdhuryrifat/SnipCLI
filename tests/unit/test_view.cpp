@@ -116,7 +116,24 @@ void runViewTests() {
             output.find("ID") != std::string::npos && output.find("TITLE") != std::string::npos,
             "Table header present");
         assertTrue(output.find("ShortTitle") != std::string::npos, "Short title present");
-        assertTrue(output.find("...") != std::string::npos, "Long title truncated with ellipsis");
+        assertTrue(output.find("A Very Long Snippet Title That Exceeds Limit") != std::string::npos,
+                   "Long title rendered in full without truncation");
+        assertTrue(output.find("...") == std::string::npos, "No ellipsis truncation in list");
+
+        // Columns stay aligned: 'cpp' and 'python' start at the same offset on each row
+        std::istringstream rows(output);
+        std::string line;
+        std::vector<size_t> langCols;
+        while (std::getline(rows, line)) {
+            size_t cpp = line.find(" cpp ");
+            size_t py = line.find(" python ");
+            if (cpp != std::string::npos)
+                langCols.push_back(cpp);
+            if (py != std::string::npos)
+                langCols.push_back(py);
+        }
+        assertTrue(langCols.size() == 2 && langCols[0] == langCols[1],
+                   "Language column aligned across rows of differing title lengths");
     }
 
     // ---------------------------------------------------------
@@ -441,7 +458,54 @@ void runViewTests() {
                    "renderRaw must preserve exact LF bytes without alteration");
     }
 
-    std::cout << "[PASS] Multi-Format Presentation & Factory tests passed. (20/20 Scenarios "
+    // ---------------------------------------------------------
+    // Test 21: Markdown table cells escape '|' so tags cannot break the table
+    // ---------------------------------------------------------
+    {
+        std::ostringstream out;
+        std::ostringstream err;
+        snipcli::view::MarkdownView view(out, err);
+        view.renderSnippetList({{1, "Pipes", "cpp", "x", {"a|b", "c"}, "", ""}});
+        const std::string output = out.str();
+        assertTrue(output.find("`a\\|b`") != std::string::npos, "Pipe in tag is escaped as \\|");
+        // Data row must still have exactly 6 unescaped '|' delimiters (5 columns)
+        std::istringstream rows(output);
+        std::string header;
+        std::string sep;
+        std::string row;
+        std::getline(rows, header);
+        std::getline(rows, sep);
+        std::getline(rows, row);
+        size_t delimiters = 0;
+        for (size_t i = 0; i < row.size(); ++i) {
+            if (row[i] == '|' && (i == 0 || row[i - 1] != '\\')) {
+                ++delimiters;
+            }
+        }
+        assertTrue(delimiters == 6, "Markdown row keeps 5 columns despite '|' in a tag");
+    }
+
+    // ---------------------------------------------------------
+    // Test 22: Markdown code fence is longer than any backtick run inside the code
+    // ---------------------------------------------------------
+    {
+        std::ostringstream out;
+        std::ostringstream err;
+        snipcli::view::MarkdownView view(out, err);
+        const std::string code = "// doc example:\n```\nint x;\n```\n";
+        view.renderSnippet({1, "Fenced", "cpp", code, {}, "", ""});
+        const std::string output = out.str();
+        assertTrue(output.find("````cpp\n" + code + "````\n") != std::string::npos,
+                   "Code containing ``` is wrapped in a 4-backtick fence");
+
+        std::ostringstream plainOut;
+        snipcli::view::MarkdownView plainView(plainOut, err);
+        plainView.renderSnippet({2, "Plain", "cpp", "int y;", {}, "", ""});
+        assertTrue(plainOut.str().find("```cpp\nint y;\n```\n") != std::string::npos,
+                   "Ordinary code keeps the standard 3-backtick fence");
+    }
+
+    std::cout << "[PASS] Multi-Format Presentation & Factory tests passed. (22/22 Scenarios "
                  "Verified)"
               << std::endl;
 }

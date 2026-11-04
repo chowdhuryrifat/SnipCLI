@@ -179,7 +179,7 @@ snip [global-options] <command> [options]
 | :--- | :---: | :--- |
 | `--help` | `-h` | Display help screen (global or per-command) |
 | `--version` | `-v` | Display application version and architecture banner |
-| `--format <fmt>` | — | Override output format: `terminal` (default) or `markdown` |
+| `--format <fmt>` | — | Override output format: `terminal` (default) or `markdown` (alias `md`). Case-insensitive. |
 
 ### Interactive Help Commands
 - `snip --help` or `snip -h` — Display global commands overview, common examples, and environment variables.
@@ -202,11 +202,11 @@ snip add --title <title> --lang <language> [--code <inline_code> | --file <file_
 | Flag | Short | Required | Description |
 | :--- | :---: | :---: | :--- |
 | `--title <string>` | `-t` | **Yes** | Unique snippet title. Allowed: letters, numbers, spaces, hyphens (`-`), underscores (`_`). |
-| `--lang <string>`<br>`--language <string>` | `-l` | **Yes** | Programming language identifier (e.g. `cpp`, `python`, `rust`, `java`, `go`). |
+| `--lang <string>`<br>`--language <string>` | `-l` | **Yes** | Programming language identifier (e.g. `cpp`, `python`, `rust`, `java`, `go`). There is no default; `add` fails without it. |
 | `--code <string>` | `-c` | *Conditional* | Inline code content string. *(Must provide `--code` OR `--file`).* |
 | `--file <filepath>` | `-f` | *Conditional* | Path to an existing file containing snippet source code. |
 | `--tags <list>`<br>`--tag <list>` | — | No | Comma-separated category tags (e.g. `graph,shortest_path,algo`). |
-| `--format <fmt>` | — | No | Presentation format: `terminal` or `markdown`. |
+| `--format <fmt>` | — | No | Presentation format: `terminal` or `markdown` (alias `md`). |
 
 #### Validation Invariants
 - Duplicate titles are rejected defensively to prevent overwriting existing templates.
@@ -242,7 +242,7 @@ snip list [options]
 | :--- | :---: | :--- |
 | `--lang <string>`<br>`--language <string>` | `-l` | Filter snippets by exact programming language (e.g. `cpp`, `python`). |
 | `--tag <string>`<br>`--tags <string>` | — | Filter snippets by category tag (e.g. `graph`, `dp`). |
-| `--format <fmt>` | — | Presentation format: `terminal` (ANSI table) or `markdown` (GFM table). |
+| `--format <fmt>` | — | Presentation format: `terminal` (ANSI table) or `markdown` / `md` (GFM table). |
 
 #### Examples
 ```bash
@@ -276,7 +276,7 @@ snip get [--id <id> | --title <title> | <query>] [options]
 | `--id <integer>` | — | Exact numeric ID of the snippet (e.g. `--id 1`). |
 | `--title <string>` | `-t` | Exact title of the snippet (e.g. `--title "Dijkstra"`). |
 | `--code-only` | `-c` | **Pipe mode:** Emits raw source code byte-for-byte to stdout with zero headers, line numbers, or ANSI escapes. |
-| `--format <fmt>` | — | Output format: `terminal` (default) or `markdown`. |
+| `--format <fmt>` | — | Output format: `terminal` (default) or `markdown` (alias `md`). |
 
 > **Note:** `--id` and `--title` are mutually exclusive. Specify either `--id` or `--title`, not both.
 
@@ -319,7 +319,7 @@ snip search [<query>] [options]
 | `--title <query>` | `-t` | `TitleSearchStrategy` | Search by case-insensitive title substring. |
 | `--tag <tag>`<br>`--tags <tag>` | — | `TagSearchStrategy` | Search by exact category tag match. |
 | `--lang <lang>`<br>`--language <lang>` | `-l` | `LanguageSearchStrategy` | Search by exact programming language. |
-| `--format <fmt>` | — | — | Output format: `terminal` or `markdown`. |
+| `--format <fmt>` | — | — | Output format: `terminal` or `markdown` (alias `md`). |
 
 #### Examples
 ```bash
@@ -356,6 +356,8 @@ snip delete [--id <id> | --title <title> | <query>] [options]
 
 > **Note:** `--id` and `--title` are mutually exclusive. Specify either `--id` or `--title`.
 
+> **IDs are renumbered after every delete.** Remaining snippets are compacted to `1..N` in their existing order, so deleting #2 from `1, 2, 3` turns the old #3 into #2. Check `snip list` before deleting by ID again, and prefer titles in scripts or aliases.
+
 #### Examples
 ```bash
 # Delete by unique title
@@ -382,7 +384,7 @@ snip stats [options]
 
 | Flag | Description |
 | :--- | :--- |
-| `--format <fmt>` | Output format: `terminal` (ANSI box) or `markdown` (formatted stats table). |
+| `--format <fmt>` | Output format: `terminal` (ANSI box) or `markdown` / `md` (formatted stats table). |
 
 #### Metrics Computed
 - **Total Snippets Volume:** Count of all active snippets stored.
@@ -443,6 +445,8 @@ SnipCLI incorporates a polymorphic GoF Factory presentation engine (`ViewFactory
 | **`1`** | **Error** | Command failed (validation error, non-existent snippet, duplicate title, unrecognized option, or lock timeout). |
 
 ### Common Error Messages & Diagnoses
+- `Error: Missing required option '--lang <language>'. Specify the snippet's language, e.g. --lang cpp or -l python.`
+  $\rightarrow$ `snip add` never guesses the language; pass `--lang`, `--language`, or `-l`.
 - `Error: Duplicate snippet title '<title>' already exists.`
   $\rightarrow$ Provide a distinct title or delete the existing snippet first.
 - `Error: No code provided. Use --code="<code_string>" or --file=<file_path>.`

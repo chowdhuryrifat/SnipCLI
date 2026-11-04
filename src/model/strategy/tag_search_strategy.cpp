@@ -1,48 +1,27 @@
 #include "snipcli/model/strategy/tag_search_strategy.hpp"
 
 #include <algorithm>
-#include <cctype>
+
+#include "snipcli/common/string_utils.hpp"
 
 namespace snipcli::model::strategy {
 
-namespace {
-
-std::string toLower(std::string str) {
-    std::transform(str.begin(), str.end(), str.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return str;
-}
-
-std::string trim(const std::string& str) {
-    size_t first = str.find_first_not_of(" \t\r\n");
-    if (first == std::string::npos) {
-        return "";
-    }
-    size_t last = str.find_last_not_of(" \t\r\n");
-    return str.substr(first, last - first + 1);
-}
-
-}  // namespace
-
 std::vector<Snippet> TagSearchStrategy::filter(const std::vector<Snippet>& snippets,
                                                const std::string& criteria) const {
-    std::string trimmedCriteria = trim(criteria);
-    if (trimmedCriteria.empty()) {
+    const std::string_view needle = common::trim(criteria);
+    if (needle.empty()) {
         return {};
     }
 
-    const std::string lowerCriteria = toLower(trimmedCriteria);
     std::vector<Snippet> matches;
-
     for (const auto& snippet : snippets) {
-        for (const auto& tag : snippet.getTags()) {
-            if (toLower(tag) == lowerCriteria) {
-                matches.push_back(snippet);
-                break;
-            }
+        const auto& tags = snippet.getTags();
+        if (std::any_of(tags.begin(), tags.end(), [needle](const std::string& tag) {
+                return common::equalsIgnoreCase(tag, needle);
+            })) {
+            matches.push_back(snippet);
         }
     }
-
     return matches;
 }
 

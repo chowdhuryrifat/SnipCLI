@@ -48,7 +48,7 @@ public:
      * @brief Formats and prints the application version banner to the specified output stream.
      * @param os Target output stream (defaults to std::cout).
      */
-    void printVersion(std::ostream& os = std::cout) const;
+    static void printVersion(std::ostream& os = std::cout);
 
     /**
      * @brief Checks whether a command corresponding to the specified verb is registered.

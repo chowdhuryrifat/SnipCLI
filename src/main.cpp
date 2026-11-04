@@ -1,5 +1,3 @@
-#include <cstdlib>
-#include <filesystem>
 #include <iostream>
 #include <memory>
 
@@ -14,62 +12,53 @@
 #include "snipcli/controller/commands/stats_command.hpp"
 #include "snipcli/model/json_snippet_repository.hpp"
 #include "snipcli/view/view_factory.hpp"
-#include "version.hpp"
 
 int main(int argc, char* argv[]) {
     using namespace snipcli;
 
     try {
-        controller::ParsedArgs args = controller::CliParser::parse(argc, argv);
+        const controller::ParsedArgs args = controller::CliParser::parse(argc, argv);
 
-        // Global flags handling
         if (args.hasFlag("--version") || args.hasFlag("-v")) {
-            std::cout << "SnipCLI version " << SNIPCLI_VERSION_STRING
-                      << " (Modern C++17 MVC Architecture)\n";
+            controller::CommandDispatcher::printVersion(std::cout);
             return 0;
         }
 
-        const bool wantsHelp = args.hasFlag("--help") || args.hasFlag("-h") ||
-                               args.verb == "help" || args.verb.empty();
+        const bool helpRequested =
+            args.hasFlag("--help") || args.hasFlag("-h") || args.verb == "help";
 
-        // Storage and View Initialization (Dependency Injection)
+        // Storage (Dependency Injection). Help must work even when no storage location can be
+        // resolved (e.g. `env -i snip --help`), so storage errors are only fatal otherwise.
         std::shared_ptr<model::JsonSnippetRepository> repository;
         try {
             repository = std::make_shared<model::JsonSnippetRepository>();
         } catch (const common::StorageException&) {
-            if (!wantsHelp) {
+            if (!helpRequested && !args.verb.empty()) {
                 throw;
             }
         }
 
-        std::string formatOpt = args.getOption("format", "terminal");
-        std::shared_ptr<view::ISnippetView> view = view::ViewFactory::fromString(formatOpt);
+        const std::shared_ptr<view::ISnippetView> view =
+            view::ViewFactory::fromString(args.getOption("format", "terminal"));
 
-        // Command Dispatcher Setup (Open/Closed Principle)
+        // Command registration (Open/Closed Principle: new verbs plug in here only)
+        using namespace controller::commands;
         controller::CommandDispatcher dispatcher;
         dispatcher.registerCommand(
-            std::make_unique<controller::commands::AddCommand>(args, repository, repository, view));
-        dispatcher.registerCommand(
-            std::make_unique<controller::commands::ListCommand>(args, repository, view));
-        dispatcher.registerCommand(
-            std::make_unique<controller::commands::GetCommand>(args, repository, view));
-        dispatcher.registerCommand(
-            std::make_unique<controller::commands::DeleteCommand>(args, repository, view));
-        dispatcher.registerCommand(
-            std::make_unique<controller::commands::SearchCommand>(args, repository, view));
-        dispatcher.registerCommand(
-            std::make_unique<controller::commands::StatsCommand>(args, repository, view));
+            std::make_unique<AddCommand>(args, repository, repository, view));
+        dispatcher.registerCommand(std::make_unique<ListCommand>(args, repository, view));
+        dispatcher.registerCommand(std::make_unique<GetCommand>(args, repository, view));
+        dispatcher.registerCommand(std::make_unique<DeleteCommand>(args, repository, view));
+        dispatcher.registerCommand(std::make_unique<SearchCommand>(args, repository, view));
+        dispatcher.registerCommand(std::make_unique<StatsCommand>(args, repository, view));
 
-        if (args.hasFlag("--help") || args.hasFlag("-h") || args.verb == "help") {
-            std::string helpTarget;
+        if (helpRequested) {
+            // `snip help <cmd>` targets the positional; `snip <cmd> --help` targets the verb.
+            std::string target = args.verb;
             if (args.verb == "help") {
-                if (!args.positionals.empty()) {
-                    helpTarget = args.positionals.front();
-                }
-            } else if (!args.verb.empty()) {
-                helpTarget = args.verb;
+                target = args.positionals.empty() ? std::string() : args.positionals.front();
             }
-            dispatcher.printHelp(std::cout, helpTarget);
+            dispatcher.printHelp(std::cout, target);
             return 0;
         }
 

@@ -39,8 +39,9 @@ public:
     /**
      * @brief Parses a format identifier string and constructs the corresponding view.
      *
-     * Performs case-insensitive matching. Accepts "markdown", "md", "terminal", "term", "text",
-     * "txt". Falls back to Format::Terminal if an unrecognized format name is supplied.
+     * Performs case-insensitive matching: "markdown" and its alias "md" select Format::Markdown;
+     * anything else (normally "terminal") selects Format::Terminal. The CLI parser has already
+     * rejected unknown names and normalised aliases before this is called.
      *
      * @param formatName Name of the format string (e.g., from --format flag).
      * @param outStream Standard destination output stream (defaults to std::cout).

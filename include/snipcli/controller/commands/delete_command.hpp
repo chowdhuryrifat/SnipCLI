@@ -46,6 +46,12 @@ public:
      */
     [[nodiscard]] std::string getDescription() const override;
 
+    /**
+     * @brief Retrieves detailed usage documentation for this command.
+     * @return std::string Multi-line help text.
+     */
+    [[nodiscard]] std::string getHelp() const override;
+
 private:
     ParsedArgs m_args;
     std::shared_ptr<model::ISnippetWriter> m_writer;

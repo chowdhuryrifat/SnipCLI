@@ -77,13 +77,13 @@ if $BIN delete --id > /dev/null 2>&1; then
 fi
 
 # Option followed by flag
-if $BIN add --title "Test" --code -h > /dev/null 2>&1; then
-    fail "B2: 'snip add --title Test --code -h' should have failed but succeeded!"
+if $BIN add --lang cpp --title "Test" --code -h > /dev/null 2>&1; then
+    fail "B2: 'snip add --lang cpp --title Test --code -h' should have failed but succeeded!"
 fi
 
 # Valueless short switch
-if $BIN add -t > /dev/null 2>&1; then
-    fail "B2: 'snip add -t' should have failed but succeeded!"
+if $BIN add --lang cpp -t > /dev/null 2>&1; then
+    fail "B2: 'snip add --lang cpp -t' should have failed but succeeded!"
 fi
 pass "B2: Valueless options strictly validated and rejected"
 
@@ -201,7 +201,7 @@ fi
 $BIN get --title "Binary" > /dev/null || fail "Peer Review Regression: Snippet 'Binary' was deleted by typo '--titel'!"
 
 # 2. Add extra positionals rejected
-if $BIN add Unquoted Multi Title --code "int x;" > /dev/null 2>&1; then
+if $BIN add --lang cpp Unquoted Multi Title --code "int x;" > /dev/null 2>&1; then
     fail "Peer Review Regression: Unquoted multi-word title in add should have failed!"
 fi
 if $BIN get --title "Unquoted" > /dev/null 2>&1; then

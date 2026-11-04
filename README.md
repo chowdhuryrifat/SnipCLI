@@ -83,7 +83,7 @@ cmake --build build -j"$(nproc)"
 #### Run Verification Test Suite:
 
 ```bash
-# Run CTest Unit Tests (All 7 Suites - 139 Scenarios & Invariants)
+# Run CTest Unit Tests (All 8 Suites - 150 Scenarios & Invariants)
 ctest --test-dir build --output-on-failure
 
 # Run Automated End-to-End Smoke & Integration Tests
@@ -244,16 +244,16 @@ Export your snippet library directly to GitHub-Flavored Markdown for homework re
 | Verb | Syntax | Flags & Options | Description |
 | :--- | :--- | :--- | :--- |
 | `add` | `snip add --title <t> --lang <l> [--code <c> \| --file <f>] [--tags <t1,t2>]` | `--title`<br>`--lang, --language`<br>`--code`<br>`--file`<br>`--tags, --tag` | Persists a new code snippet with strict domain validation. |
-| `list` | `snip list [--tag <tag>] [--lang <lang>] [--format <fmt>]` | `--tag, --tags`<br>`--lang, --language`<br>`--format` (`terminal` \| `markdown`) | Displays tabular snippet library with optional category/language filters. |
+| `list` | `snip list [--tag <tag>] [--lang <lang>] [--format <fmt>]` | `--tag, --tags`<br>`--lang, --language`<br>`--format` (`terminal` \| `markdown` \| `md`) | Displays tabular snippet library with optional category/language filters. |
 | `get` | `snip get [--title <t> \| --id <id> \| <query>] [--code-only] [--format <fmt>]` | `--title`<br>`--id`<br>`--code-only, -c`<br>`--format` | Retrieves and inspects a snippet; `--code-only` outputs pure source for pipes. |
 | `search` | `snip search [<query>] [--tag <tag>] [--lang <lang>] [--format <fmt>]` | `--tag, --tags`<br>`--lang, --language`<br>`--format` | Dynamic GoF Strategy search across substrings, tags, or languages. |
-| `stats` | `snip stats [--format <fmt>]` | `--format` (`terminal` \| `markdown`) | Computes repository telemetry, total line count, and sorted language metrics. |
+| `stats` | `snip stats [--format <fmt>]` | `--format` (`terminal` \| `markdown` \| `md`) | Computes repository telemetry, total line count, and sorted language metrics. |
 | `delete` | `snip delete [--title <t> \| --id <id> \| <query>] [--format <fmt>]` | `--title`<br>`--id`<br>`--format` | Deletes a snippet by title or ID with verification and clean error reporting. |
 
 **Global Options:**
 - `--help, -h`: Display command-line manual and option syntax.
 - `--version, -v`: Display application name and semantic version.
-- `--format <terminal|markdown>`: Globally override presentation engine format.
+- `--format <terminal|markdown|md>`: Globally override presentation engine format (case-insensitive; `md` is an alias for `markdown`).
 
 > **Note on CLI Options & Aliases:** Single-dash value aliases (`-t`, `-l`, `-f`, and `-c` in `add`) are supported and strictly mapped to their corresponding long options (`--title`, `--lang`, `--file`, `--code`). In `get`, `-c` functions as the pipe-native `--code-only` boolean flag. Global options (`--format`, `--help`, `--version`) may precede or follow the command verb. Options are strictly validated per command schema to guarantee unknown or unsupported options are rejected prior to execution. Valueless options and unquoted multi-word arguments are defensively rejected with explicit diagnostic errors. Standard end-of-options delimiter (`--`) is fully supported.
 
@@ -326,14 +326,15 @@ flowchart TD
 SnipCLI enforces rigorous multi-layered quality gates across every commit and Pull Request:
 
 ### 1. Multi-Suite Unit Testing (CTest)
-A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 139 domain invariants and behavioral scenarios:
+A lightweight zero-dependency modern unit testing framework validates 8 comprehensive suites spanning 150 domain invariants and behavioral scenarios:
+- **`String Utilities` (7 Invariants):** Shared ASCII case folding, trimming, numeric detection, and strict ID parsing.
 - **`Snippet` (10 Invariants):** Immutability, line counting, tag normalization, ISO 8601 timestamps.
 - **`SnippetValidator` (12 Invariants):** Defense against empty titles, illegal characters, empty languages, and missing payloads.
 - **`JsonSnippetRepository` (25 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, atomic file replacement, multi-line CRLF preservation, cross-process advisory lock synchronization with bounded timeout, duplicate-title rejection, symlink loop/recursion depth limit defense, unknown field validation with closed schema drop-on-save characterization, sequential `1..N` ID renumbering on deletion, local-time ISO 8601 timestamps with UTC offset, lock file symlink hardening (`O_NOFOLLOW`) with stale lock resilience, and `SNIPCLI_LOCK_TIMEOUT_MS` bounds clamping with held-lock timeout measurement.
 - **`Strategy Pattern` (10 Scenarios):** Case-insensitive title substring, exact tag matching, and language filtering.
-- **`CliParser` & `CommandDispatcher` (31 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, spaced negative values, valueless option schema validation, global options before verb, `--` delimiter, strict unknown option rejection, command-specific option schema enforcement, and boolean flag equals-syntax rejection.
+- **`CliParser` & `CommandDispatcher` (33 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, spaced negative values, valueless option schema validation, global options before verb, `--` delimiter, strict unknown option rejection, command-specific option schema enforcement, and boolean flag equals-syntax rejection.
 - **`Command Wiring` (31 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution, including strict ID parsing, multi-word argument defense, add-command positional quarantine, unknown option state protection, command-specific option rejection state protection, mutually exclusive selector enforcement, and storage exception quarantine.
-- **`View Engine & Factory` (20 Scenarios):** Stream-injected verification of `TerminalView`, `MarkdownView`, `ViewFactory`, byte-exact `renderRaw`, cross-platform CRLF/LF stream identity, and `NO_COLOR` color suppression.
+- **`View Engine & Factory` (22 Scenarios):** Stream-injected verification of `TerminalView`, `MarkdownView`, `ViewFactory`, byte-exact `renderRaw`, cross-platform CRLF/LF stream identity, and `NO_COLOR` color suppression.
 
 ### 2. Automated End-to-End Smoke & Integration Suite
 The bash test suite (`tests/smoke/smoke_test.sh`) verifies the final binary end-to-end:

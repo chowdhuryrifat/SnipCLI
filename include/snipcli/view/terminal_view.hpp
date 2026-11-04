@@ -91,19 +91,10 @@ private:
     bool m_useOutColors{true};
     bool m_useErrColors{true};
 
-    // Helper functions returning ANSI sequences if colors enabled, or empty string if disabled
-    [[nodiscard]] const char* colorReset() const noexcept;
-    [[nodiscard]] const char* colorBold() const noexcept;
-    [[nodiscard]] const char* colorRed() const noexcept;
-    [[nodiscard]] const char* colorGreen() const noexcept;
-    [[nodiscard]] const char* colorYellow() const noexcept;
-    [[nodiscard]] const char* colorBlue() const noexcept;
-    [[nodiscard]] const char* colorCyan() const noexcept;
-    [[nodiscard]] const char* colorDim() const noexcept;
-
-    [[nodiscard]] const char* errColorReset() const noexcept;
-    [[nodiscard]] const char* errColorBold() const noexcept;
-    [[nodiscard]] const char* errColorRed() const noexcept;
+    /// Returns @p ansiCode if colors are enabled for the output stream, otherwise "".
+    [[nodiscard]] const char* out(const char* ansiCode) const noexcept;
+    /// Returns @p ansiCode if colors are enabled for the error stream, otherwise "".
+    [[nodiscard]] const char* err(const char* ansiCode) const noexcept;
 };
 
 }  // namespace snipcli::view

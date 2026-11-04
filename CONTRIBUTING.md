@@ -40,13 +40,13 @@ SnipCLI maintains zero tolerance for regressions. Every change must be verified 
 
 ### 2.1 Running the Unit Test Suite
 
-The zero-dependency unit testing framework tests 150 scenarios across 8 domain suites:
+The zero-dependency unit testing framework tests 151 scenarios across 8 domain suites:
 - **`String Utilities` (7 scenarios):** Case folding, trimming, numeric detection, strict ID parsing.
 - **`Snippet` (10 scenarios):** Invariants, normalization, timestamps, line counts.
 - **`SnippetValidator` (12 scenarios):** Validation constraints, bad characters, empty payloads.
 - **`JsonSnippetRepository` (25 scenarios):** Persistence, atomic save, lock timeouts, UTF-8, symlink defenses.
 - **`Strategy` (10 scenarios):** Title substring, tag matching, language filtering.
-- **`Parser` (33 scenarios):** Flags, positionals, delimiters, schema rejection.
+- **`Parser` (34 scenarios):** Flags, positionals, delimiters, schema rejection.
 - **`Command Wiring` (31 scenarios):** Execution flows, selector exclusivity, error paths.
 - **`View` (22 scenarios):** Terminal ANSI colors, markdown tables (cell/fence escaping), raw byte outputs, `NO_COLOR`.
 

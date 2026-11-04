@@ -175,7 +175,7 @@ void runCommandTests() {
     }
 
     // ---------------------------------------------------------
-    // Scenario 2: AddCommand - Positional Title & Default Language
+    // Scenario 2: AddCommand - Positional Title & Required --lang
     // ---------------------------------------------------------
     {
         auto repo = std::make_shared<MockRepository>();

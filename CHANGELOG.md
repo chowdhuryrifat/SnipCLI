@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-05
+
+> **Breaking change:** `snip add` now requires `--lang`. Scripts that relied on the old silent `cpp` default must pass `--lang cpp` explicitly. Snippet IDs are also renumbered after every deletion, so scripts should reference snippets by title rather than by ID.
+
+### Added
+- APT repository hosted on GitHub Pages, with automation that publishes each release's `.deb` (`.github/workflows/apt-repo.yml`, `scripts/update_apt_repo.sh`) (#39).
+
 ### Changed
 - **`snip add` now requires `--lang`** (or `--language` / `-l`). It previously fell back to `cpp` silently, contradicting its own help text; it now exits 1 with `Missing required option '--lang <language>'`.
 - `--format` accepts `md` as an alias for `markdown` and matches format names case-insensitively (`--format MD`, `--format Terminal`). Previously `md` was advertised internally but rejected by the parser.

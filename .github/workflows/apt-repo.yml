@@ -1,0 +1,139 @@
+name: SnipCLI APT Repository (GitHub Pages)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to ingest (e.g. v1.0.0; blank for latest)'
+        required: false
+        default: ''
+
+concurrency:
+  group: apt-repo-gh-pages
+  cancel-in-progress: false
+
+jobs:
+  update-apt-repo:
+    name: Build & Publish APT Repository
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Install APT Repository Tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dpkg-dev apt-utils gnupg
+
+      - name: Determine Target Release Tag
+        id: release_info
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName)
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Debian Package from Release
+        id: download_deb
+        shell: bash
+        run: |
+          TAG="${{ steps.release_info.outputs.tag }}"
+          echo "Fetching Debian asset for ${TAG}..."
+          mkdir -p dl
+          gh release download "${TAG}" \
+            --repo "${{ github.repository }}" \
+            --pattern "snipcli_*_amd64.deb" \
+            --dir dl
+          DEB_PATH=$(find dl -type f -name "snipcli_*_amd64.deb" -print -quit)
+          if [ -z "${DEB_PATH}" ] || [ ! -f "${DEB_PATH}" ]; then
+            echo "ERROR: snipcli_*_amd64.deb not found in release ${TAG}." >&2
+            exit 1
+          fi
+          echo "deb_path=${DEB_PATH}" >> "$GITHUB_OUTPUT"
+          echo "Found: ${DEB_PATH}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout gh-pages Branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+        continue-on-error: true
+
+      - name: Prepare gh-pages Workspace
+        shell: bash
+        run: |
+          if [ ! -d "gh-pages/.git" ]; then
+            echo "Initializing fresh gh-pages directory..."
+            mkdir -p gh-pages
+            cd gh-pages
+            git init
+            git checkout -b gh-pages
+            git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+            cd ..
+          fi
+
+      - name: Update APT Repository Layout & Sign Metadata
+        shell: bash
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: |
+          chmod +x source/scripts/update_apt_repo.sh
+          ./source/scripts/update_apt_repo.sh \
+            --repo-dir ./gh-pages \
+            --deb "${{ steps.download_deb.outputs.deb_path }}"
+
+      - name: Commit and Publish to gh-pages
+        shell: bash
+        run: |
+          cd gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          TAG="${{ steps.release_info.outputs.tag }}"
+          if git diff --staged --quiet; then
+            echo "No changes detected in APT repository."
+          else
+            git commit -m "chore(apt): publish repository update for SnipCLI ${TAG} [skip ci]"
+            git push origin gh-pages
+          fi
+
+      - name: Write GitHub Step Summary
+        if: always()
+        shell: bash
+        run: |
+          TAG="${{ steps.release_info.outputs.tag }}"
+          cat << 'EOF' >> "$GITHUB_STEP_SUMMARY"
+          ## 📦 SnipCLI APT Repository Published
+
+          The APT repository has been successfully updated on GitHub Pages!
+
+          ### 🚀 Quick Install (Debian / Ubuntu / Mint / Pop!_OS)
+          ```bash
+          curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/install.sh | sudo bash
+          ```
+
+          ### 🔧 Manual Setup
+          ```bash
+          sudo install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/snipcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/snipcli-archive-keyring.gpg > /dev/null
+          sudo chmod 0644 /etc/apt/keyrings/snipcli-archive-keyring.gpg
+          echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/snipcli-archive-keyring.gpg] https://chowdhuryrifat.github.io/SnipCLI stable main" | sudo tee /etc/apt/sources.list.d/snipcli.list > /dev/null
+          sudo apt update
+          sudo apt install snipcli
+          ```
+          EOF

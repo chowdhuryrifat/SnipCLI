@@ -3,28 +3,38 @@
 #include <fstream>
 #include <sstream>
 
-#include "snipcli/common/exceptions.hpp"
+#include "command_support.hpp"
 #include "snipcli/model/snippet_validator.hpp"
 
 namespace snipcli::controller::commands {
 
 namespace {
 
-std::vector<std::string> splitTags(const std::string& raw) {
+/// Splits a comma-separated tag list, trimming whitespace and dropping empty entries.
+std::vector<std::string> splitTags(std::string_view raw) {
     std::vector<std::string> tags;
-    if (raw.empty()) {
-        return tags;
-    }
-    std::stringstream ss(raw);
-    std::string item;
-    while (std::getline(ss, item, ',')) {
-        size_t start = item.find_first_not_of(" \t\r\n");
-        size_t end = item.find_last_not_of(" \t\r\n");
-        if (start != std::string::npos && end != std::string::npos) {
-            tags.push_back(item.substr(start, end - start + 1));
+    while (!raw.empty()) {
+        const size_t comma = raw.find(',');
+        const std::string_view item = common::trim(raw.substr(0, comma));
+        if (!item.empty()) {
+            tags.emplace_back(item);
         }
+        if (comma == std::string_view::npos) {
+            break;
+        }
+        raw.remove_prefix(comma + 1);
     }
     return tags;
+}
+
+std::string readSourceFile(const std::string& filePath) {
+    std::ifstream file(filePath, std::ios::binary);
+    if (!file.is_open()) {
+        throw common::StorageException("Unable to read source code file: " + filePath);
+    }
+    std::ostringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
 }
 
 }  // namespace
@@ -45,38 +55,59 @@ std::string AddCommand::getDescription() const {
     return "Create and store a new code snippet";
 }
 
+std::string AddCommand::getHelp() const {
+    return "SnipCLI - add command\n"
+           "Usage: snip add --title <title> --lang <lang> [--code <code> | --file <file>] "
+           "[--tags <tags>]\n\n"
+           "Create and persist a new code snippet in the repository.\n\n"
+           "Options:\n"
+           "  -t, --title <title>          Unique snippet title (alphanumeric, spaces, hyphens, "
+           "underscores)\n"
+           "  -l, --lang, --language <l>   Programming language (e.g. cpp, python, rust, go)\n"
+           "  -c, --code <code>            Source code content as an inline string (use "
+           "--code=... if leading dashes)\n"
+           "  -f, --file <file>            Path to file containing source code to import\n"
+           "  --tags, --tag <tags>         Comma-separated category tags (e.g. "
+           "\"graph,shortest_path\")\n"
+           "  --format <fmt>               Output format: 'terminal' or 'markdown' (alias 'md')\n\n"
+           "Requirements:\n"
+           "  • --title and --lang are required (there is no default language).\n"
+           "  • Exactly one of --code or --file must be specified.\n"
+           "  • Snippet titles must be unique across the repository.\n\n"
+           "Examples:\n"
+           "  snip add --title \"Dijkstra\" --lang cpp --file ./dijkstra.cpp --tags "
+           "\"graph,algo\"\n"
+           "  snip add --title \"QuickSort\" --lang python --code \"def qsort(a): return a\"\n";
+}
+
 int AddCommand::execute() {
-    try {
-        if ((m_args.hasOption("title") && !m_args.positionals.empty()) ||
-            m_args.positionals.size() > 1) {
+    return detail::runGuarded(*m_view, [this] {
+        const auto& positionals = m_args.getPositionals();
+        if ((m_args.hasOption("title") && !positionals.empty()) || positionals.size() > 1) {
+            m_view->renderError(detail::kMultiWordHint);
+            return detail::kExitError;
+        }
+
+        // The language drives search/list filtering and Markdown fences, so it is never guessed.
+        if (!m_args.hasOption("lang")) {
             m_view->renderError(
-                "Unexpected extra argument(s). For multi-word snippet titles, please enclose in "
-                "quotes (e.g., 'Binary Search').");
-            return 1;
+                "Missing required option '--lang <language>'. Specify the snippet's language, "
+                "e.g. --lang cpp or -l python.");
+            return detail::kExitError;
         }
 
         std::string title = m_args.getOption("title");
-        if (title.empty() && !m_args.positionals.empty()) {
-            title = m_args.positionals[0];
+        if (title.empty() && !positionals.empty()) {
+            title = positionals.front();
         }
-
-        std::string lang = m_args.getOption("lang", m_args.getOption("language", "cpp"));
-        std::string tagsStr = m_args.getOption("tags", m_args.getOption("tag"));
-        std::vector<std::string> tags = splitTags(tagsStr);
 
         std::string code = m_args.getOption("code");
         if (code.empty() && m_args.hasOption("file")) {
-            std::string filePath = m_args.getOption("file");
-            std::ifstream file(filePath, std::ios::binary);
-            if (!file.is_open()) {
-                throw common::StorageException("Unable to read source code file: " + filePath);
-            }
-            std::stringstream buffer;
-            buffer << file.rdbuf();
-            code = buffer.str();
+            code = readSourceFile(m_args.getOption("file"));
         }
 
-        model::Snippet snippet(0, title, lang, code, tags, "", "");
+        model::Snippet snippet(0, std::move(title), m_args.getOption("lang"), std::move(code),
+                               splitTags(m_args.getOption("tag")), "", "");
         model::SnippetValidator::validate(snippet);
 
         if (m_reader->exists(snippet.getTitle())) {
@@ -84,17 +115,11 @@ int AddCommand::execute() {
                                               "' already exists.");
         }
 
-        uint64_t newId = m_writer->save(snippet);
+        const uint64_t newId = m_writer->save(snippet);
         m_view->renderSuccess("Snippet '" + snippet.getTitle() +
                               "' created successfully with ID #" + std::to_string(newId));
         return 0;
-    } catch (const common::SnipException& ex) {
-        m_view->renderError(ex.what());
-        return 1;
-    } catch (const std::exception& ex) {
-        m_view->renderError(std::string("Unexpected error: ") + ex.what());
-        return 2;
-    }
+    });
 }
 
 }  // namespace snipcli::controller::commands

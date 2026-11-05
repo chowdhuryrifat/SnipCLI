@@ -59,55 +59,48 @@
 
 ## 🚀 Quick Start & Installation
 
-### 1. Prebuilt Binaries (Recommended)
+Install SnipCLI in a single command using your system's package manager:
 
-Standalone, statically-linked executables for Linux (x86_64), macOS (Universal: Apple Silicon & Intel), and Windows (x86_64) are attached to every [GitHub Release](https://github.com/chowdhuryrifat/SnipCLI/releases) accompanied by cryptographic checksums (`SHA256SUMS.txt`) and build provenance attestations:
+| Platform | Command | Status |
+| :--- | :--- | :--- |
+| 🍺 **macOS & Linux** (Homebrew) | `brew install chowdhuryrifat/snipcli/snipcli` | **Available** |
+| 🐧 **Debian / Ubuntu / Mint** (APT) | `curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/install.sh \| sudo bash` | **Available** |
+| 🪟 **Windows** (WinGet) | `winget install chowdhuryrifat.SnipCLI` | *Coming Soon ([PR #459579](https://github.com/microsoft/winget-pkgs/pull/459579) passed CI)* |
+| 🏹 **Arch Linux** (AUR) | `yay -S snipcli` | *Coming Soon* |
+
+> 💡 **Windows users:** While the WinGet registry PR completes its automated merge queue, you can immediately download and run the standalone Windows binary from [GitHub Releases](https://github.com/chowdhuryrifat/SnipCLI/releases/latest).
+
+<details>
+<summary><b>🔧 Other Installation Methods (Manual APT Setup, Prebuilt Binaries, Source Build)</b></summary>
+
+### Manual APT Repository Configuration (Debian / Ubuntu / Mint / Pop!_OS)
+```bash
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://chowdhuryrifat.github.io/SnipCLI/snipcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/snipcli-archive-keyring.gpg > /dev/null
+sudo chmod 0644 /etc/apt/keyrings/snipcli-archive-keyring.gpg
+echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/snipcli-archive-keyring.gpg] https://chowdhuryrifat.github.io/SnipCLI stable main" | sudo tee /etc/apt/sources.list.d/snipcli.list > /dev/null
+sudo apt update && sudo apt install snipcli
+```
+
+### Prebuilt Binaries
+Standalone, statically-linked executables for Linux (x86_64), macOS (Universal: Apple Silicon & Intel), and Windows (x86_64) are attached to every [GitHub Release](https://github.com/chowdhuryrifat/SnipCLI/releases/latest) with cryptographic checksums (`SHA256SUMS.txt`):
 
 ```bash
-# Example: Download and run on Linux x86_64
+# Example: Linux x86_64
 curl -fsSLO https://github.com/chowdhuryrifat/SnipCLI/releases/download/v1.0.0/snipcli-v1.0.0-linux-x86_64.tar.gz
 tar -xzf snipcli-v1.0.0-linux-x86_64.tar.gz
 ./bin/snip --version
 ```
 
-### 2. Build from Source
-
-Build SnipCLI with zero external dependencies in 3 commands:
-
+### Build from Source
 ```bash
 git clone https://github.com/chowdhuryrifat/SnipCLI.git
 cmake -S SnipCLI -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
-```
-
-#### Run Verification Test Suite:
-
-```bash
-# Run CTest Unit Tests (All 7 Suites - 139 Scenarios & Invariants)
 ctest --test-dir build --output-on-failure
-
-# Run Automated End-to-End Smoke & Integration Tests
 ./tests/smoke/smoke_test.sh ./build/snip
 ```
-
-### 3. Package Managers (Coming soon — available after the v1.0.0 release is published)
-
-Once the release is published and upstream registry PRs are accepted, SnipCLI will be installable via standard package managers:
-
-```bash
-# macOS & Linux (Homebrew) — Coming Soon
-brew tap chowdhuryrifat/snipcli
-brew install snipcli
-
-# Windows (WinGet) — Coming Soon
-winget install ChowdhuryRifat.SnipCLI
-
-# Debian / Ubuntu (.deb via Releases or PPA) — Coming Soon
-sudo dpkg -i snipcli_1.0.0_amd64.deb
-
-# Arch Linux (AUR) — Coming Soon
-yay -S snipcli
-```
+</details>
 
 ---
 
@@ -244,16 +237,16 @@ Export your snippet library directly to GitHub-Flavored Markdown for homework re
 | Verb | Syntax | Flags & Options | Description |
 | :--- | :--- | :--- | :--- |
 | `add` | `snip add --title <t> --lang <l> [--code <c> \| --file <f>] [--tags <t1,t2>]` | `--title`<br>`--lang, --language`<br>`--code`<br>`--file`<br>`--tags, --tag` | Persists a new code snippet with strict domain validation. |
-| `list` | `snip list [--tag <tag>] [--lang <lang>] [--format <fmt>]` | `--tag, --tags`<br>`--lang, --language`<br>`--format` (`terminal` \| `markdown`) | Displays tabular snippet library with optional category/language filters. |
+| `list` | `snip list [--tag <tag>] [--lang <lang>] [--format <fmt>]` | `--tag, --tags`<br>`--lang, --language`<br>`--format` (`terminal` \| `markdown` \| `md`) | Displays tabular snippet library with optional category/language filters. |
 | `get` | `snip get [--title <t> \| --id <id> \| <query>] [--code-only] [--format <fmt>]` | `--title`<br>`--id`<br>`--code-only, -c`<br>`--format` | Retrieves and inspects a snippet; `--code-only` outputs pure source for pipes. |
 | `search` | `snip search [<query>] [--tag <tag>] [--lang <lang>] [--format <fmt>]` | `--tag, --tags`<br>`--lang, --language`<br>`--format` | Dynamic GoF Strategy search across substrings, tags, or languages. |
-| `stats` | `snip stats [--format <fmt>]` | `--format` (`terminal` \| `markdown`) | Computes repository telemetry, total line count, and sorted language metrics. |
+| `stats` | `snip stats [--format <fmt>]` | `--format` (`terminal` \| `markdown` \| `md`) | Computes repository telemetry, total line count, and sorted language metrics. |
 | `delete` | `snip delete [--title <t> \| --id <id> \| <query>] [--format <fmt>]` | `--title`<br>`--id`<br>`--format` | Deletes a snippet by title or ID with verification and clean error reporting. |
 
 **Global Options:**
 - `--help, -h`: Display command-line manual and option syntax.
 - `--version, -v`: Display application name and semantic version.
-- `--format <terminal|markdown>`: Globally override presentation engine format.
+- `--format <terminal|markdown|md>`: Globally override presentation engine format (case-insensitive; `md` is an alias for `markdown`).
 
 > **Note on CLI Options & Aliases:** Single-dash value aliases (`-t`, `-l`, `-f`, and `-c` in `add`) are supported and strictly mapped to their corresponding long options (`--title`, `--lang`, `--file`, `--code`). In `get`, `-c` functions as the pipe-native `--code-only` boolean flag. Global options (`--format`, `--help`, `--version`) may precede or follow the command verb. Options are strictly validated per command schema to guarantee unknown or unsupported options are rejected prior to execution. Valueless options and unquoted multi-word arguments are defensively rejected with explicit diagnostic errors. Standard end-of-options delimiter (`--`) is fully supported.
 
@@ -301,7 +294,7 @@ flowchart TD
 1. **Model (`snipcli::model`):** Pure domain logic and persistence. Completely isolated from terminal widths, ANSI escapes, or CLI flags.
 2. **View (`snipcli::view`):** Pure presentation. Implements `ISnippetView` to format data to any `std::ostream`. Completely isolated from business logic and database queries.
 3. **Controller (`snipcli::controller`):** Mediator. Executes CLI verbs through the Command Pattern, catches exceptions, and routes results to the View.
-4. **Storage Concurrency & Integrity:** In-process thread-safety guarded by `std::mutex`, cross-process writer exclusion guarded by advisory `<storagePath>.lock` (`flock` on POSIX with `O_NOFOLLOW`, `LockFileEx` on Windows) with bounded timeout (default 10s, configurable via `SNIPCLI_LOCK_TIMEOUT_MS` in range `[1, 600000]` ms with safe bounds clamping and default fallback), POSIX parent directory `fsync` and macOS `F_FULLFSYNC` durability, lock-free reader operations over atomic file replacement, strict UTF-8 validation, closed schema enforcement (unknown fields are validated on read and dropped upon write; preservation is scheduled for v1.1), and sequential ID allocation (IDs are assigned as highest existing ID + 1 and can be reused after deleting the newest snippet; use titles for stable references).
+4. **Storage Concurrency & Integrity:** In-process thread-safety guarded by `std::mutex`, cross-process writer exclusion guarded by advisory `<storagePath>.lock` (`flock` on POSIX with `O_NOFOLLOW`, `LockFileEx` on Windows) with bounded timeout (default 10s, configurable via `SNIPCLI_LOCK_TIMEOUT_MS` in range `[1, 600000]` ms with safe bounds clamping and default fallback), POSIX parent directory `fsync` and macOS `F_FULLFSYNC` durability, lock-free reader operations over atomic file replacement, strict UTF-8 validation, closed schema enforcement (unknown fields are validated on read and dropped upon write; preservation is scheduled for v1.1), and sequential ID allocation (IDs are always `1..N` and are renumbered after every deletion; use titles for stable references).
 
 ---
 
@@ -326,14 +319,15 @@ flowchart TD
 SnipCLI enforces rigorous multi-layered quality gates across every commit and Pull Request:
 
 ### 1. Multi-Suite Unit Testing (CTest)
-A lightweight zero-dependency modern unit testing framework validates 7 comprehensive suites spanning 139 domain invariants and behavioral scenarios:
+A lightweight zero-dependency modern unit testing framework validates 8 comprehensive suites spanning 151 domain invariants and behavioral scenarios:
+- **`String Utilities` (7 Invariants):** Shared ASCII case folding, trimming, numeric detection, and strict ID parsing.
 - **`Snippet` (10 Invariants):** Immutability, line counting, tag normalization, ISO 8601 timestamps.
 - **`SnippetValidator` (12 Invariants):** Defense against empty titles, illegal characters, empty languages, and missing payloads.
-- **`JsonSnippetRepository` (25 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, atomic file replacement, multi-line CRLF preservation, cross-process advisory lock synchronization with bounded timeout, duplicate-title rejection, symlink loop/recursion depth limit defense, unknown field validation with closed schema drop-on-save characterization, max(id)+1 ID allocation and reuse on deletion characterization, lock file symlink hardening (`O_NOFOLLOW`) with stale lock resilience, and `SNIPCLI_LOCK_TIMEOUT_MS` bounds clamping with held-lock timeout measurement.
+- **`JsonSnippetRepository` (25 Scenarios & Invariants):** CRUD operations, ID auto-incrementation, persistence roundtrips, corrupted JSON quarantine, Unicode decoding, atomic file replacement, multi-line CRLF preservation, cross-process advisory lock synchronization with bounded timeout, duplicate-title rejection, symlink loop/recursion depth limit defense, unknown field validation with closed schema drop-on-save characterization, sequential `1..N` ID renumbering on deletion, local-time ISO 8601 timestamps with UTC offset, lock file symlink hardening (`O_NOFOLLOW`) with stale lock resilience, and `SNIPCLI_LOCK_TIMEOUT_MS` bounds clamping with held-lock timeout measurement.
 - **`Strategy Pattern` (10 Scenarios):** Case-insensitive title substring, exact tag matching, and language filtering.
-- **`CliParser` & `CommandDispatcher` (31 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, spaced negative values, valueless option schema validation, global options before verb, `--` delimiter, strict unknown option rejection, command-specific option schema enforcement, and boolean flag equals-syntax rejection.
+- **`CliParser` & `CommandDispatcher` (34 Invariants):** Tokenization, short/long flags, positional arguments, standalone flag isolation, spaced negative values, valueless option schema validation, global options before verb, `--` delimiter, strict unknown option rejection, command-specific option schema enforcement, and boolean flag equals-syntax rejection.
 - **`Command Wiring` (31 Scenarios):** Mocked verification of `add`, `list`, `get`, `delete`, `search`, and `stats` execution, including strict ID parsing, multi-word argument defense, add-command positional quarantine, unknown option state protection, command-specific option rejection state protection, mutually exclusive selector enforcement, and storage exception quarantine.
-- **`View Engine & Factory` (20 Scenarios):** Stream-injected verification of `TerminalView`, `MarkdownView`, `ViewFactory`, byte-exact `renderRaw`, cross-platform CRLF/LF stream identity, and `NO_COLOR` color suppression.
+- **`View Engine & Factory` (22 Scenarios):** Stream-injected verification of `TerminalView`, `MarkdownView`, `ViewFactory`, byte-exact `renderRaw`, cross-platform CRLF/LF stream identity, and `NO_COLOR` color suppression.
 
 ### 2. Automated End-to-End Smoke & Integration Suite
 The bash test suite (`tests/smoke/smoke_test.sh`) verifies the final binary end-to-end:

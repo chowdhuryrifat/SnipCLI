@@ -175,14 +175,14 @@ void runCommandTests() {
     }
 
     // ---------------------------------------------------------
-    // Scenario 2: AddCommand - Positional Title & Default Language
+    // Scenario 2: AddCommand - Positional Title & Required --lang
     // ---------------------------------------------------------
     {
         auto repo = std::make_shared<MockRepository>();
         auto view = std::make_shared<MockView>();
 
         auto args = snipcli::controller::CliParser::parse(
-            {"add", "BinarySearch", "--code", "int l = 0, r = n - 1;"});
+            {"add", "BinarySearch", "--lang", "cpp", "--code", "int l = 0, r = n - 1;"});
 
         snipcli::controller::commands::AddCommand cmd(args, repo, repo, view);
         int code = cmd.execute();
@@ -190,7 +190,32 @@ void runCommandTests() {
         assertTrue(code == 0, "AddCommand with positional title must return 0");
         auto s = repo->getByTitle("BinarySearch");
         assertTrue(s.has_value(), "Snippet with positional title must be saved");
-        assertTrue(s->getLanguage() == "cpp", "Default language must be 'cpp'");
+        assertTrue(s->getLanguage() == "cpp", "Explicit language must be stored");
+
+        // --lang is mandatory: there is no default language
+        const size_t countBefore = repo->count();
+        const size_t errorsBefore = view->errors.size();
+        auto noLang =
+            snipcli::controller::CliParser::parse({"add", "--title", "NoLang", "--code", "x"});
+        snipcli::controller::commands::AddCommand noLangCmd(noLang, repo, repo, view);
+        assertTrue(noLangCmd.execute() == 1, "AddCommand without --lang must exit 1");
+        assertTrue(repo->count() == countBefore && !repo->exists("NoLang"),
+                   "Nothing is saved when --lang is missing");
+        assertTrue(
+            view->errors.size() == errorsBefore + 1 &&
+                view->errors.back().find("Missing required option '--lang") != std::string::npos,
+            "Error names the missing --lang option");
+
+        // Every alias satisfies the requirement
+        for (const auto& alias : {std::string("-l"), std::string("--language")}) {
+            const std::string title = "Alias" + std::string(alias == "-l" ? "Short" : "Long");
+            auto aliased = snipcli::controller::CliParser::parse(
+                {"add", "--title", title, alias, "python", "--code", "pass"});
+            snipcli::controller::commands::AddCommand aliasCmd(aliased, repo, repo, view);
+            assertTrue(aliasCmd.execute() == 0, "AddCommand accepts language via " + alias);
+            assertTrue(repo->getByTitle(title)->getLanguage() == "python",
+                       "Language from " + alias + " is stored");
+        }
     }
 
     // ---------------------------------------------------------
@@ -228,8 +253,9 @@ void runCommandTests() {
         auto repo = std::make_shared<MockRepository>();
         auto view = std::make_shared<MockView>();
 
-        auto args = snipcli::controller::CliParser::parse(
-            {"add", "--title", "MissingFileSnippet", "--file", "non_existent_file_xyz.cpp"});
+        auto args = snipcli::controller::CliParser::parse({"add", "--lang", "cpp", "--title",
+                                                           "MissingFileSnippet", "--file",
+                                                           "non_existent_file_xyz.cpp"});
 
         snipcli::controller::commands::AddCommand cmd(args, repo, repo, view);
         int code = cmd.execute();
@@ -250,7 +276,7 @@ void runCommandTests() {
         repo->addDirect({1, "FloydWarshall", "cpp", "int d[N][N];", {"graph"}, "", ""});
 
         auto args = snipcli::controller::CliParser::parse(
-            {"add", "--title", "FloydWarshall", "--code", "int dist[N][N];"});
+            {"add", "--lang", "cpp", "--title", "FloydWarshall", "--code", "int dist[N][N];"});
 
         snipcli::controller::commands::AddCommand cmd(args, repo, repo, view);
         int code = cmd.execute();
@@ -269,13 +295,14 @@ void runCommandTests() {
         auto view = std::make_shared<MockView>();
 
         // Missing code
-        auto args1 = snipcli::controller::CliParser::parse({"add", "--title", "NoCode"});
+        auto args1 =
+            snipcli::controller::CliParser::parse({"add", "--lang", "cpp", "--title", "NoCode"});
         snipcli::controller::commands::AddCommand cmd1(args1, repo, repo, view);
         assertTrue(cmd1.execute() != 0, "Snippet without code must fail validation");
 
         // Empty title
         auto args2 = snipcli::controller::CliParser::parse(
-            {"add", "--title", "", "--code", "int dummy = 1;"});
+            {"add", "--lang", "cpp", "--title", "", "--code", "int dummy = 1;"});
         snipcli::controller::commands::AddCommand cmd2(args2, repo, repo, view);
         assertTrue(cmd2.execute() != 0, "Snippet with empty title must fail validation");
     }
@@ -867,8 +894,8 @@ void runCommandTests() {
         auto view = std::make_shared<MockView>();
 
         // 1. Unquoted multi-word title positional: snip add Binary Search --code "int x;"
-        auto argsMulti =
-            snipcli::controller::CliParser::parse({"add", "Binary", "Search", "--code", "int x;"});
+        auto argsMulti = snipcli::controller::CliParser::parse(
+            {"add", "--lang", "cpp", "Binary", "Search", "--code", "int x;"});
         snipcli::controller::commands::AddCommand cmdMulti(argsMulti, repo, repo, view);
         int codeMulti = cmdMulti.execute();
         assertTrue(codeMulti != 0, "AddCommand with multi-word positional title must fail");
@@ -882,7 +909,7 @@ void runCommandTests() {
         // 2. Extra positional when --title is already provided: snip add --title "MySnippet" Extra
         // --code "int x;"
         auto argsExtra = snipcli::controller::CliParser::parse(
-            {"add", "--title", "MySnippet", "Extra", "--code", "int x;"});
+            {"add", "--lang", "cpp", "--title", "MySnippet", "Extra", "--code", "int x;"});
         snipcli::controller::commands::AddCommand cmdExtra(argsExtra, repo, repo, view);
         int codeExtra = cmdExtra.execute();
         assertTrue(codeExtra != 0,

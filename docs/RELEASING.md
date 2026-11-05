@@ -31,7 +31,7 @@ Every release must pass three automated quality gates prior to publishing:
      - Ubuntu 24.04 (GCC ThreadSanitizer with `setarch x86_64 -R`)
      - macOS 14 (AppleClang 15)
      - Windows Latest (MSVC 2022)
-   - 139 unit test scenarios across 7 CTest suites (`ctest --output-on-failure`)
+   - 151 unit test scenarios across 8 suites (`ctest --output-on-failure`)
    - End-to-end CLI integration smoke test suite (`tests/smoke/smoke_test.sh`)
    - Adversarial audit reproduction suite (`scripts/snipcli_audit_repro.sh`)
 

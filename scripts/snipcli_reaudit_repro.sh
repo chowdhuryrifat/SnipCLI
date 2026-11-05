@@ -15,17 +15,17 @@ env -i "$SNIP" --help >out.txt 2>err.txt; rc=$?
 echo "    OBSERVED: rc=$rc first line: $( (head -1 out.txt; head -1 err.txt) | head -1 | strip_ansi )"
 
 hdr "R2 regression guard for the cross-process lock (no automated test exists today)" "40/40 stored; 10 deletes + 10 adds leave exactly 10 new"
-fresh; for i in $(seq 1 40); do ( "$SNIP" add --title "P$i" --code "int x$i;" >/dev/null 2>&1 ) & done; wait
+fresh; for i in $(seq 1 40); do ( "$SNIP" add --lang cpp --title "P$i" --code "int x$i;" >/dev/null 2>&1 ) & done; wait
 echo "    OBSERVED: parallel adds stored $(grep -c '"title"' "$W/db.json")/40, distinct ids $(grep '"id"' "$W/db.json" | sort -u | wc -l)"
-fresh; for i in $(seq 1 10); do "$SNIP" add --title "K$i" --code "a;" >/dev/null; done
-for i in $(seq 1 10); do ( "$SNIP" delete "K$i" >/dev/null 2>&1 ) & ( "$SNIP" add --title "N$i" --code "b;" >/dev/null 2>&1 ) & done; wait
+fresh; for i in $(seq 1 10); do "$SNIP" add --lang cpp --title "K$i" --code "a;" >/dev/null; done
+for i in $(seq 1 10); do ( "$SNIP" delete "K$i" >/dev/null 2>&1 ) & ( "$SNIP" add --lang cpp --title "N$i" --code "b;" >/dev/null 2>&1 ) & done; wait
 echo "    OBSERVED: leftover K=$(grep -c '"title": "K' "$W/db.json") (want 0), new N=$(grep -c '"title": "N' "$W/db.json") (want 10)"
 
 hdr "R3 a held lock makes snip wait forever with no message" "error within ~10 s: 'storage is locked by another snip process'"
 if command -v flock >/dev/null 2>&1; then
-  fresh; "$SNIP" add --title Seed --code "a;" >/dev/null
+  fresh; "$SNIP" add --lang cpp --title Seed --code "a;" >/dev/null
   ( flock -x "$W/db.json.lock" sleep 6 ) & sleep 0.5
-  SNIPCLI_LOCK_TIMEOUT_MS=2000 timeout 3 "$SNIP" add --title Blocked --code "b;" >lock_out.txt 2>&1; rc=$?; wait
+  SNIPCLI_LOCK_TIMEOUT_MS=2000 timeout 3 "$SNIP" add --lang cpp --title Blocked --code "b;" >lock_out.txt 2>&1; rc=$?; wait
   echo "    OBSERVED: rc=$rc output: [$(strip_ansi < lock_out.txt | head -1)]"
 else echo "    SKIPPED: flock(1) not installed"; fi
 
@@ -48,7 +48,7 @@ else echo "    SKIPPED: python3 not installed"; fi
 
 hdr "R7 values that start with '--' are rejected; extra positionals on list/stats are ignored" "documented behavior (use --code=VALUE), consistent extra-argument errors"
 fresh
-"$SNIP" add --title Q1 --code "-- sql comment" 2>&1 | strip_ansi | head -1 | sed 's/^/    OBSERVED (--code "-- sql comment"): /'
-"$SNIP" add --title Q2 --code="-- sql comment" 2>&1 | strip_ansi | head -1 | sed 's/^/    OBSERVED (--code="-- sql comment"): /'
+"$SNIP" add --lang cpp --title Q1 --code "-- sql comment" 2>&1 | strip_ansi | head -1 | sed 's/^/    OBSERVED (--code "-- sql comment"): /'
+"$SNIP" add --lang cpp --title Q2 --code="-- sql comment" 2>&1 | strip_ansi | head -1 | sed 's/^/    OBSERVED (--code="-- sql comment"): /'
 "$SNIP" stats extra 2>&1 | strip_ansi | head -1 | sed 's/^/    OBSERVED (stats extra): /'
 echo; echo "done."

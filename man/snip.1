@@ -27,6 +27,8 @@ Use \fB\-\-code\-only\fR to extract only the raw snippet contents.
 .TP
 .BR delete " [\fIOPTIONS\fR]"
 Delete a snippet from the repository by ID (\fB\-\-id\fR) or title (\fB\-\-title\fR).
+After deletion the remaining snippets are renumbered to the contiguous sequence 1..N,
+so higher IDs shift down by one.
 .TP
 .BR search " [\fIQUERY\fR] [\fIOPTIONS\fR]"
 Search stored snippets by title substring (positional argument or \fB\-\-title\fR), tag (\fB\-\-tag\fR), or language (\fB\-\-language\fR).
@@ -51,6 +53,7 @@ Specify the snippet title. In \fBsearch\fR, filters snippets by case-insensitive
 .TP
 .BI \-l ", " \-\-lang= LANG ", " \-\-language= LANG
 Specify the programming language of the snippet (e.g., \fBcpp\fR, \fBpython\fR, \fBrust\fR).
+Required by \fBadd\fR; there is no default language.
 .TP
 .BI \-c ", " \-\-code= CODE
 Specify the source code contents directly as a string argument.
@@ -68,7 +71,8 @@ Specify the unique positive integer ID of the snippet.
 Used with \fBget\fR. Outputs the raw snippet source code byte-for-byte to standard output without headers or syntax wrappers.
 .TP
 .BI \-\-format= FORMAT
-Specify rendering view: \fBterminal\fR (default ANSI color formatting) or \fBmarkdown\fR.
+Specify rendering view: \fBterminal\fR (default ANSI color formatting) or \fBmarkdown\fR
+(alias \fBmd\fR). Format names are case-insensitive.
 .SH ENVIRONMENT
 .TP
 .B SNIPCLI_STORAGE_PATH

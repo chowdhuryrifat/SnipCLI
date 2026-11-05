@@ -30,8 +30,8 @@ public:
      * @param language Programming language identifier (e.g., "cpp", "python", "java").
      * @param code Full source code body of the snippet.
      * @param tags Collection of category/topic tags (e.g., "graph", "dp", "shortest_path").
-     * @param createdAt ISO 8601 UTC timestamp of creation.
-     * @param updatedAt ISO 8601 UTC timestamp of last modification.
+     * @param createdAt ISO 8601 timestamp of creation (local time with UTC offset).
+     * @param updatedAt ISO 8601 timestamp of last modification (local time with UTC offset).
      */
     Snippet(uint64_t id, std::string title, std::string language, std::string code,
             std::vector<std::string> tags, std::string createdAt, std::string updatedAt);

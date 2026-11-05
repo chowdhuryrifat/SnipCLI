@@ -74,6 +74,22 @@ EOF
 $BIN add --title "Factorial" --lang "java" --tags "math,recursion" --file "$SAMPLE_FILE" > /dev/null || fail "Failed to add Factorial snippet from file"
 pass "Snippet 'Factorial' added via --file input"
 
+# 2e: --lang is mandatory (no silent default language)
+if $BIN add --title "NoLangSnippet" --code "int x;" > /dev/null 2>&1; then
+    fail "add without --lang should have failed"
+fi
+NOLANG_OUT=$($BIN add --title "NoLangSnippet" --code "int x;" 2>&1 || true)
+echo "$NOLANG_OUT" | grep -q "Missing required option '--lang" || fail "Missing --lang error message not shown"
+if $BIN get --title "NoLangSnippet" > /dev/null 2>&1; then
+    fail "Snippet without --lang must not be stored"
+fi
+pass "add without --lang rejected and nothing stored"
+
+# 2f: --format md alias and case-insensitive format names render Markdown
+$BIN list --format md | grep -q "^| ID | Title |" || fail "--format md did not render a Markdown table"
+$BIN list --format=MarkDown | grep -q "^| ID | Title |" || fail "--format=MarkDown did not render a Markdown table"
+pass "--format md alias and case-insensitive format names verified"
+
 # ------------------------------------------------------------------------------
 # Test 3: Defensive Domain Invariants & Validation Quarantine
 # ------------------------------------------------------------------------------
@@ -299,13 +315,13 @@ $BIN delete --title "GuardSnippet" > /dev/null
 pass "Unknown option rejection: typo --titel cleanly rejected, snippet protected"
 
 # 10h: Extra positionals for add rejected
-if $BIN add Unquoted Multi Title --code "int x;" > /dev/null 2>&1; then
+if $BIN add --lang cpp Unquoted Multi Title --code "int x;" > /dev/null 2>&1; then
     fail "Add with unquoted multi-word title was accepted unexpectedly"
 fi
 if $BIN get --title "Unquoted" > /dev/null 2>&1; then
     fail "Snippet 'Unquoted' was wrongly created by unquoted add!"
 fi
-if $BIN add --title "SingleTitle" ExtraArg --code "int x;" > /dev/null 2>&1; then
+if $BIN add --lang cpp --title "SingleTitle" ExtraArg --code "int x;" > /dev/null 2>&1; then
     fail "Add with explicit --title and extra positional was accepted unexpectedly"
 fi
 if $BIN get --title "SingleTitle" > /dev/null 2>&1; then
@@ -428,7 +444,7 @@ if [ -z "${WINDIR:-}" ] && [ -z "${COMSPEC:-}" ]; then
     PARALLEL_STORAGE="$TEMP_DIR/parallel_snippets.json"
     export SNIPCLI_STORAGE_PATH="$PARALLEL_STORAGE"
     for i in $(seq 1 20); do
-        ( "$BIN" add --title "P$i" --code "int x$i;" > /dev/null 2>&1 ) &
+        ( "$BIN" add --lang cpp --title "P$i" --code "int x$i;" > /dev/null 2>&1 ) &
     done
     wait
 
@@ -440,7 +456,7 @@ if [ -z "${WINDIR:-}" ] && [ -z "${COMSPEC:-}" ]; then
     SAME_RACE_STORAGE="$TEMP_DIR/same_race.json"
     export SNIPCLI_STORAGE_PATH="$SAME_RACE_STORAGE"
     for i in $(seq 1 8); do
-        ( "$BIN" add --title "RaceTitle" --code "int val = $i;" > /dev/null 2>&1 ) &
+        ( "$BIN" add --lang cpp --title "RaceTitle" --code "int val = $i;" > /dev/null 2>&1 ) &
     done
     wait
 
@@ -455,9 +471,9 @@ if [ -z "${WINDIR:-}" ] && [ -z "${COMSPEC:-}" ]; then
     ln -s "$ALIAS_REAL_DIR" "$ALIAS_LINK_DIR"
     for i in $(seq 1 20); do
         if [ $((i % 2)) -eq 0 ]; then
-            ( SNIPCLI_STORAGE_PATH="$ALIAS_REAL_DIR/db.json" "$BIN" add --title "Alias$i" --code "int a$i;" > /dev/null 2>&1 ) &
+            ( SNIPCLI_STORAGE_PATH="$ALIAS_REAL_DIR/db.json" "$BIN" add --lang cpp --title "Alias$i" --code "int a$i;" > /dev/null 2>&1 ) &
         else
-            ( SNIPCLI_STORAGE_PATH="$ALIAS_LINK_DIR/db.json" "$BIN" add --title "Alias$i" --code "int a$i;" > /dev/null 2>&1 ) &
+            ( SNIPCLI_STORAGE_PATH="$ALIAS_LINK_DIR/db.json" "$BIN" add --lang cpp --title "Alias$i" --code "int a$i;" > /dev/null 2>&1 ) &
         fi
     done
     wait

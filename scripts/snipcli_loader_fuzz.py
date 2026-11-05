@@ -46,7 +46,7 @@ seeds = [
     ("Gamma", '// caf\u00e9 \u4e2d\u6587 \U0001F600\n}]{["'),
 ]
 for title, code in seeds:
-    subprocess.run([SNIP, "add", "--title", title, "--code", code, "--tags", "x,y"],
+    subprocess.run([SNIP, "add", "--title", title, "--lang", "cpp", "--code", code, "--tags", "x,y"],
                    env=env, capture_output=True)
 valid = open(db, "rb").read()
 rc, out, err = run(valid)

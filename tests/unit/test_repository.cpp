@@ -1,6 +1,8 @@
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -153,10 +155,12 @@ void runRepositoryTests() {
         // Delete non-existent ID
         assertTrue(!repo.removeById(9999), "removeById on invalid ID must return false");
 
-        // Delete by ID
+        // Delete by ID (remaining IDs are renumbered to 1..N afterwards)
+        auto deletedTitle = repo.getById(2)->getTitle();
         assertTrue(repo.removeById(2), "removeById(2) must return true");
         assertTrue(repo.count() == 2, "Count should decrease to 2");
-        assertTrue(!repo.getById(2).has_value(), "Snippet 2 should no longer exist");
+        assertTrue(!repo.getByTitle(deletedTitle).has_value(), "Deleted snippet no longer exists");
+        assertTrue(!repo.getById(3).has_value(), "IDs compacted: no ID 3 remains after delete");
 
         // Delete non-existent title
         assertTrue(!repo.removeByTitle("NonExistentTitle"),
@@ -168,10 +172,11 @@ void runRepositoryTests() {
         assertTrue(!repo.getByTitle("BFS").has_value(), "BFS should no longer exist");
         assertTrue(!repo.exists("BFS"), "exists('BFS') must be false");
 
-        // Remaining snippet should be BinarySearch (ID 3)
+        // Remaining snippet should be BinarySearch, renumbered from ID 3 to ID 1
         auto remaining = repo.getAll();
-        assertTrue(remaining.size() == 1 && remaining[0].getTitle() == "BinarySearch",
-                   "Only BinarySearch snippet should remain");
+        assertTrue(remaining.size() == 1 && remaining[0].getTitle() == "BinarySearch" &&
+                       remaining[0].getId() == 1,
+                   "Only BinarySearch snippet should remain, renumbered to ID 1");
     }
 
     // ---------------------------------------------------------
@@ -1062,44 +1067,104 @@ void runRepositoryTests() {
     }
 
     // ---------------------------------------------------------
-    // 23: Characterization of max(id)+1 ID allocation and reuse on deletion (F4)
+    // 23: Sequential ID contract: IDs are renumbered to 1..N after every deletion
     // ---------------------------------------------------------
     {
-        std::filesystem::path f4Dir = testDir / "f4_id_reuse";
+        std::filesystem::path f4Dir = testDir / "f4_id_renumber";
         std::filesystem::create_directories(f4Dir, ec);
-        std::filesystem::path f4File = f4Dir / "id_reuse.json";
+        std::filesystem::path f4File = f4Dir / "id_renumber.json";
 
         snipcli::model::JsonSnippetRepository repo(f4File);
 
-        // Add #1 and #2
-        snipcli::model::Snippet s1(0, "First", "cpp", "int a = 1;", {}, "", "");
-        snipcli::model::Snippet s2(0, "Second", "cpp", "int b = 2;", {}, "", "");
-        auto saved1 = repo.save(s1);
-        auto saved2 = repo.save(s2);
+        auto titlesInIdOrder = [&repo]() {
+            std::vector<std::string> titles;
+            for (const auto& s : repo.getAll()) {
+                titles.push_back(std::to_string(s.getId()) + ":" + s.getTitle());
+            }
+            return titles;
+        };
 
-        assertTrue(saved1 == 1, "First snippet receives ID 1");
-        assertTrue(saved2 == 2, "Second snippet receives ID 2");
+        for (const char* t : {"First", "Second", "Third", "Fourth"}) {
+            snipcli::model::Snippet s(0, t, "cpp", "int x = 0;", {}, "", "");
+            (void)repo.save(s);
+        }
+        auto beforeSecond = repo.getByTitle("Second");
+        assertTrue(beforeSecond.has_value(), "Second snippet exists before deletions");
 
-        // Intentional v1.0 characterization: deleting the highest ID allows ID reuse on next add
-        assertTrue(repo.removeById(2), "Successfully delete highest ID (2)");
-
-        snipcli::model::Snippet s3(0, "Third", "cpp", "int c = 3;", {}, "", "");
-        auto saved3 = repo.save(s3);
-        assertTrue(saved3 == 2,
-                   "Intentional contract: new snippet reuses highest ID 2 after deletion");
-
-        // Verify deleting an interior ID does not reuse:
-        // Add snippet #3
-        snipcli::model::Snippet s4(0, "Fourth", "cpp", "int d = 4;", {}, "", "");
-        auto saved4 = repo.save(s4);
-        assertTrue(saved4 == 3, "Next snippet receives ID 3");
-
-        // Delete interior snippet #2: remaining are #1 and #3 (maxId = 3)
+        // Delete interior ID 2 by ID: gap closes, relative order preserved
         assertTrue(repo.removeById(2), "Successfully delete interior ID (2)");
+        assertTrue(titlesInIdOrder() == std::vector<std::string>{"1:First", "2:Third", "3:Fourth"},
+                   "Interior deletion renumbers remaining snippets to 1..3 in order");
+
+        // Renumbering must not touch timestamps (not a content modification)
+        auto third = repo.getByTitle("Third");
+        assertTrue(third.has_value() && !third->getUpdatedAt().empty(),
+                   "Renumbered snippet keeps its timestamps");
+
+        // Delete first ID by title: everything shifts down
+        assertTrue(repo.removeByTitle("first"), "Delete ID 1 by title (case-insensitive)");
+        assertTrue(titlesInIdOrder() == std::vector<std::string>{"1:Third", "2:Fourth"},
+                   "Deletion by title also renumbers to 1..2");
+
+        // Next insert continues the contiguous sequence
         snipcli::model::Snippet s5(0, "Fifth", "cpp", "int e = 5;", {}, "", "");
-        auto saved5 = repo.save(s5);
-        assertTrue(saved5 == 4,
-                   "Deleting interior ID does not reuse: next snippet receives maxId+1 = 4");
+        assertTrue(repo.save(s5) == 3, "Next snippet receives N+1 = 3");
+
+        // Deleting the last ID leaves the others untouched
+        assertTrue(repo.removeById(3), "Delete highest ID (3)");
+        assertTrue(titlesInIdOrder() == std::vector<std::string>{"1:Third", "2:Fourth"},
+                   "Deleting the highest ID leaves lower IDs unchanged");
+
+        // A hand-edited file with gaps / out-of-order IDs is compacted in ascending-ID order
+        std::filesystem::path gapFile = f4Dir / "gaps.json";
+        {
+            std::ofstream out(gapFile, std::ios::trunc);
+            out << "[{\"id\":9,\"title\":\"Nine\",\"language\":\"cpp\",\"code\":\"a\",\"tags\":[]},"
+                   "{\"id\":4,\"title\":\"Four\",\"language\":\"cpp\",\"code\":\"b\",\"tags\":[]},"
+                   "{\"id\":7,\"title\":\"Seven\",\"language\":\"cpp\",\"code\":\"c\",\"tags\":[]}"
+                   "]";
+        }
+        snipcli::model::JsonSnippetRepository gapRepo(gapFile);
+        assertTrue(gapRepo.removeById(7), "Delete ID 7 from gapped file");
+        auto remaining = gapRepo.getAll();
+        assertTrue(remaining.size() == 2 && remaining[0].getId() == 1 &&
+                       remaining[0].getTitle() == "Four" && remaining[1].getId() == 2 &&
+                       remaining[1].getTitle() == "Nine",
+                   "Gapped/out-of-order IDs compacted to 1..N by ascending original ID");
+    }
+
+    // ---------------------------------------------------------
+    // 23b: Timestamps are ISO 8601 local time with explicit UTC offset
+    // ---------------------------------------------------------
+    {
+        std::filesystem::path tsFile = testDir / "timestamps.json";
+        snipcli::model::JsonSnippetRepository repo(tsFile);
+        snipcli::model::Snippet s(0, "Stamped", "cpp", "int t;", {}, "", "");
+        (void)repo.save(s);
+        const std::string& ts = s.getCreatedAt();
+        // Shape: YYYY-MM-DDTHH:MM:SS+HH:MM (25 chars)
+        bool shapeOk = ts.size() == 25 && ts[4] == '-' && ts[7] == '-' && ts[10] == 'T' &&
+                       ts[13] == ':' && ts[16] == ':' && (ts[19] == '+' || ts[19] == '-') &&
+                       ts[22] == ':';
+        for (size_t i :
+             {0u, 1u, 2u, 3u, 5u, 6u, 8u, 9u, 11u, 12u, 14u, 15u, 17u, 18u, 20u, 21u, 23u, 24u}) {
+            shapeOk = shapeOk && i < ts.size() && std::isdigit(static_cast<unsigned char>(ts[i]));
+        }
+        assertTrue(shapeOk, "createdAt is local ISO 8601 with UTC offset, got: " + ts);
+        assertTrue(ts.find('Z') == std::string::npos, "Timestamp no longer uses UTC 'Z' suffix");
+
+        // With TZ forced to UTC the offset must be +00:00 (POSIX only; tzset honours TZ)
+#if !defined(_WIN32)
+        {
+            snipcli::test::ScopedEnv tz("TZ", std::string("UTC"));
+            tzset();
+            snipcli::model::Snippet u(0, "StampedUtc", "cpp", "int u;", {}, "", "");
+            (void)repo.save(u);
+            assertTrue(u.getCreatedAt().size() == 25 && u.getCreatedAt().substr(19) == "+00:00",
+                       "UTC timezone yields +00:00 offset, got: " + u.getCreatedAt());
+        }
+        tzset();
+#endif
     }
 
     // ---------------------------------------------------------

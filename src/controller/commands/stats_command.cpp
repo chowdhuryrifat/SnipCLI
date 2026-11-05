@@ -2,11 +2,10 @@
 
 #include <algorithm>
 #include <map>
-#include <string>
 #include <utility>
 #include <vector>
 
-#include "snipcli/common/exceptions.hpp"
+#include "command_support.hpp"
 
 namespace snipcli::controller::commands {
 
@@ -22,44 +21,47 @@ std::string StatsCommand::getDescription() const {
     return "Display code metrics and statistics across all snippets";
 }
 
+std::string StatsCommand::getHelp() const {
+    return "SnipCLI - stats command\n"
+           "Usage: snip stats [options]\n\n"
+           "Display code metrics and repository telemetry across all snippets.\n\n"
+           "Options:\n"
+           "  --format <fmt>               Output format: 'terminal' or 'markdown' (alias 'md')\n\n"
+           "Metrics Reported:\n"
+           "  • Total stored snippet volume\n"
+           "  • Total lines of code across all snippets\n"
+           "  • Language distribution breakdown sorted by snippet count\n\n"
+           "Examples:\n"
+           "  snip stats\n"
+           "  snip stats --format markdown\n";
+}
+
 int StatsCommand::execute() {
-    try {
+    return detail::runGuarded(*m_view, [this] {
         if (!m_args.getPositionals().empty()) {
             m_view->renderError(
                 "Unexpected extra argument(s). Command 'stats' does not accept positional "
                 "arguments.");
-            return 1;
+            return detail::kExitError;
         }
 
-        auto snippets = m_reader->getAll();
-        size_t totalSnippets = snippets.size();
+        const auto snippets = m_reader->getAll();
         size_t totalLines = 0;
         std::map<std::string, size_t> counts;
-
         for (const auto& s : snippets) {
             totalLines += s.getLineCount();
-            counts[s.getLanguage()]++;
+            ++counts[s.getLanguage()];
         }
 
+        // Sort by descending snippet count, then alphabetically by language.
         std::vector<std::pair<std::string, size_t>> breakdown(counts.begin(), counts.end());
-        std::sort(
-            breakdown.begin(), breakdown.end(),
-            [](const std::pair<std::string, size_t>& a, const std::pair<std::string, size_t>& b) {
-                if (a.second != b.second) {
-                    return a.second > b.second;  // Descending count
-                }
-                return a.first < b.first;  // Alphabetical secondary
-            });
+        std::sort(breakdown.begin(), breakdown.end(), [](const auto& a, const auto& b) {
+            return a.second != b.second ? a.second > b.second : a.first < b.first;
+        });
 
-        m_view->renderStats(totalSnippets, totalLines, breakdown);
+        m_view->renderStats(snippets.size(), totalLines, breakdown);
         return 0;
-    } catch (const common::SnipException& ex) {
-        m_view->renderError(ex.what());
-        return 1;
-    } catch (const std::exception& ex) {
-        m_view->renderError(std::string("Unexpected error: ") + ex.what());
-        return 2;
-    }
+    });
 }
 
 }  // namespace snipcli::controller::commands

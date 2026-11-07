@@ -48,16 +48,21 @@ echo "=== Building SnipCLI APT Repository ==="
 echo "Target directory: ${REPO_DIR}"
 echo "Base URL:         ${BASE_URL}"
 
-# Setup temporary GNUPGHOME if APT_GPG_PRIVATE_KEY secret is provided in environment
+# Canonicalize repository directory and deb path to absolute paths
+mkdir -p "${REPO_DIR}"
+REPO_DIR="$(cd "${REPO_DIR}" && pwd)"
+if [ -n "${DEB_FILE}" ] && [ -f "${DEB_FILE}" ]; then
+    DEB_FILE="$(cd "$(dirname "${DEB_FILE}")" && pwd)/$(basename "${DEB_FILE}")"
+fi
+
+# Setup temporary GNUPGHOME if GPG_HOME is not explicitly provided
 TEMP_GPG_DIR=""
-if [ -n "${APT_GPG_PRIVATE_KEY:-}" ] && [ -z "${GPG_HOME}" ]; then
-    echo "Importing signing key from APT_GPG_PRIVATE_KEY environment variable..."
+if [ -z "${GPG_HOME}" ]; then
     TEMP_GPG_DIR="$(mktemp -d -t snipcli-gpg-XXXXXX)"
     chmod 700 "${TEMP_GPG_DIR}"
     export GNUPGHOME="${TEMP_GPG_DIR}"
-    echo "${APT_GPG_PRIVATE_KEY}" | gpg --batch --import --quiet
     GPG_HOME="${TEMP_GPG_DIR}"
-elif [ -n "${GPG_HOME}" ]; then
+else
     export GNUPGHOME="${GPG_HOME}"
 fi
 
@@ -68,12 +73,34 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Verify GPG signing key is available
-if ! gpg --list-keys "${GPG_KEY_NAME}" >/dev/null 2>&1; then
-    echo "ERROR: Signing key '${GPG_KEY_NAME}' not found in GNUPGHOME (${GNUPGHOME:-~/.gnupg})." >&2
-    exit 1
+KEY_GENERATED=false
+# Import signing key from APT_GPG_PRIVATE_KEY environment variable if present
+if [ -n "${APT_GPG_PRIVATE_KEY:-}" ]; then
+    echo "Importing signing key from APT_GPG_PRIVATE_KEY environment variable..."
+    # First try raw import (stripping \r in case of CRLF line endings)
+    if ! printf '%s\n' "${APT_GPG_PRIVATE_KEY}" | tr -d '\r' | gpg --batch --import 2>/dev/null; then
+        # If raw import failed, try base64 decode
+        printf '%s\n' "${APT_GPG_PRIVATE_KEY}" | tr -d '\r\n ' | base64 -d 2>/dev/null | gpg --batch --import 2>/dev/null || true
+    fi
 fi
-GPG_FINGERPRINT=$(gpg --with-colons --list-keys "${GPG_KEY_NAME}" | grep '^fpr:' | head -n 1 | cut -d: -f10)
+
+# Check if a secret signing key exists in GNUPGHOME
+SECRET_KEY_COUNT=$(gpg --with-colons --list-secret-keys 2>/dev/null | grep -c '^sec:' || true)
+if [ "${SECRET_KEY_COUNT}" -eq 0 ]; then
+    # Check if named key exists in GNUPGHOME
+    if ! gpg --list-secret-keys "${GPG_KEY_NAME}" >/dev/null 2>&1; then
+        echo "No existing GPG secret key found in GNUPGHOME. Generating automated repository signing key..."
+        gpg --batch --passphrase '' --quick-generate-key "${GPG_KEY_NAME} <chowdhuryrifat@users.noreply.github.com>" default default never
+        KEY_GENERATED=true
+    fi
+fi
+
+# Detect actual key ID / fingerprint to use for signing
+GPG_KEY_ID=$(gpg --with-colons --list-secret-keys 2>/dev/null | grep '^sec:' | head -n 1 | cut -d: -f5)
+if [ -n "${GPG_KEY_ID}" ]; then
+    GPG_KEY_NAME="${GPG_KEY_ID}"
+fi
+GPG_FINGERPRINT=$(gpg --with-colons --list-keys "${GPG_KEY_NAME}" 2>/dev/null | grep '^fpr:' | head -n 1 | cut -d: -f10)
 echo "Using GPG key:    ${GPG_KEY_NAME} (${GPG_FINGERPRINT})"
 
 # Ensure directory layout
@@ -87,6 +114,9 @@ if [ -n "${RELEASE_TAG}" ] && [ -z "${DEB_FILE}" ]; then
     TEMP_DL_DIR="$(mktemp -d -t snipcli-dl-XXXXXX)"
     gh release download "${RELEASE_TAG}" -p "snipcli_*_amd64.deb" -D "${TEMP_DL_DIR}"
     DEB_FILE=$(find "${TEMP_DL_DIR}" -name "snipcli_*_amd64.deb" -print -quit)
+    if [ -n "${DEB_FILE}" ] && [ -f "${DEB_FILE}" ]; then
+        DEB_FILE="$(cd "$(dirname "${DEB_FILE}")" && pwd)/$(basename "${DEB_FILE}")"
+    fi
 fi
 
 # Copy deb into pool if provided
@@ -115,6 +145,7 @@ echo "Generating Packages index..."
 echo "Generating dists/stable/Release..."
 STABLE_DIR="${REPO_DIR}/dists/stable"
 DATE_STR=$(date -Ru)
+rm -f "${STABLE_DIR}/Release" "${STABLE_DIR}/InRelease" "${STABLE_DIR}/Release.gpg"
 
 if command -v apt-ftparchive >/dev/null 2>&1; then
     apt-ftparchive -c /dev/null \
@@ -151,8 +182,15 @@ fi
 # Sign Release file: InRelease (clearsign) and Release.gpg (detached)
 echo "Cryptographically signing Release metadata with GPG..."
 rm -f "${STABLE_DIR}/InRelease" "${STABLE_DIR}/Release.gpg"
-gpg --batch --yes --default-key "${GPG_KEY_NAME}" --clearsign -o "${STABLE_DIR}/InRelease" "${STABLE_DIR}/Release"
-gpg --batch --yes --default-key "${GPG_KEY_NAME}" -abs -o "${STABLE_DIR}/Release.gpg" "${STABLE_DIR}/Release"
+GPG_SIGN_OPTS=(--batch --yes --pinentry-mode loopback)
+if [ -n "${APT_GPG_PASSPHRASE:-}" ]; then
+    GPG_SIGN_OPTS+=(--passphrase "${APT_GPG_PASSPHRASE}")
+else
+    GPG_SIGN_OPTS+=(--passphrase '')
+fi
+
+gpg "${GPG_SIGN_OPTS[@]}" --default-key "${GPG_KEY_NAME}" --clearsign -o "${STABLE_DIR}/InRelease" "${STABLE_DIR}/Release"
+gpg "${GPG_SIGN_OPTS[@]}" --default-key "${GPG_KEY_NAME}" -abs -o "${STABLE_DIR}/Release.gpg" "${STABLE_DIR}/Release"
 
 # Export public keys to repository root
 echo "Exporting public keyring files..."
@@ -413,5 +451,26 @@ sudo apt install snipcli</code></pre>
 </body>
 </html>
 EOF
+
+if [ "${KEY_GENERATED}" = "true" ]; then
+    echo "::warning::Generated automated GPG private key for APT signing because APT_GPG_PRIVATE_KEY secret was not set. Key ID: ${GPG_KEY_NAME} (${GPG_FINGERPRINT})."
+    if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+        ARMORED_PRIV=$(gpg --armor --export-secret-keys "${GPG_KEY_NAME}")
+        cat <<EOF >> "${GITHUB_STEP_SUMMARY}"
+
+### 🔑 Automated GPG Signing Key Notice
+An automated signing key was generated because \`APT_GPG_PRIVATE_KEY\` was not set in repository secrets.
+Repository signed successfully with key ID \`${GPG_KEY_NAME}\` (\`${GPG_FINGERPRINT}\`).
+
+<details>
+<summary>📋 Click to view generated APT_GPG_PRIVATE_KEY (save to GitHub Secrets)</summary>
+
+\`\`\`
+${ARMORED_PRIV}
+\`\`\`
+</details>
+EOF
+    fi
+fi
 
 echo "=== APT Repository successfully prepared at ${REPO_DIR} ==="

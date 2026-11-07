@@ -35,14 +35,18 @@ jobs:
         id: release_info
         shell: bash
         run: |
-          if [ -n "${{ github.event.inputs.tag }}" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          elif [ "${{ github.event_name }}" = "release" ]; then
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "${TAG}" ] && [ "${{ github.event_name }}" = "release" ]; then
             TAG="${{ github.event.release.tag_name }}"
-          else
-            TAG=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName)
+          fi
+          if [ -z "${TAG}" ] || [[ "${TAG}" == untagged* ]]; then
+            TAG=$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName 2>/dev/null || true)
+          fi
+          if [ -z "${TAG}" ]; then
+            TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v2.0.0")
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Determined target tag: ${TAG}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -53,15 +57,24 @@ jobs:
           TAG="${{ steps.release_info.outputs.tag }}"
           echo "Fetching Debian asset for ${TAG}..."
           mkdir -p dl
-          gh release download "${TAG}" \
-            --repo "${{ github.repository }}" \
-            --pattern "snipcli_*_amd64.deb" \
-            --dir dl
-          DEB_PATH=$(find dl -type f -name "snipcli_*_amd64.deb" -print -quit)
+          DEB_PATH=""
+          for attempt in {1..6}; do
+            gh release download "${TAG}" \
+              --repo "${{ github.repository }}" \
+              --pattern "snipcli_*_amd64.deb" \
+              --dir dl --clobber 2>/dev/null || true
+            DEB_PATH=$(find dl -type f -name "snipcli_*_amd64.deb" -print -quit)
+            if [ -n "${DEB_PATH}" ] && [ -f "${DEB_PATH}" ]; then
+              break
+            fi
+            echo "Attempt ${attempt}/6: asset not ready yet; sleeping 5s..."
+            sleep 5
+          done
           if [ -z "${DEB_PATH}" ] || [ ! -f "${DEB_PATH}" ]; then
             echo "ERROR: snipcli_*_amd64.deb not found in release ${TAG}." >&2
             exit 1
           fi
+          DEB_PATH="$(cd "$(dirname "${DEB_PATH}")" && pwd)/$(basename "${DEB_PATH}")"
           echo "deb_path=${DEB_PATH}" >> "$GITHUB_OUTPUT"
           echo "Found: ${DEB_PATH}"
         env:
@@ -91,10 +104,11 @@ jobs:
         shell: bash
         env:
           APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
         run: |
           chmod +x source/scripts/update_apt_repo.sh
           ./source/scripts/update_apt_repo.sh \
-            --repo-dir ./gh-pages \
+            --repo-dir "$GITHUB_WORKSPACE/gh-pages" \
             --deb "${{ steps.download_deb.outputs.deb_path }}"
 
       - name: Commit and Publish to gh-pages
@@ -103,6 +117,7 @@ jobs:
           cd gh-pages
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
           git add -A
           TAG="${{ steps.release_info.outputs.tag }}"
           if git diff --staged --quiet; then

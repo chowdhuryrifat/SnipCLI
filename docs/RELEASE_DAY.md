@@ -34,7 +34,7 @@ Before beginning, ensure you have:
      - `Build & Test Matrix (ubuntu-24.04 - GCC)`
      - `Build & Test Matrix (ubuntu-24.04 - GCC-Sanitizers)`
      - `Build & Test Matrix (ubuntu-24.04 - GCC-TSan)`
-     - `Build & Test Matrix (macos-14 - AppleClang)`
+     - `Build & Test Matrix (macos-15 - AppleClang)`
      - `Build & Test Matrix (windows-latest - MSVC)`
    - Check **Require branches to be up to date before merging**
    - Click **Save changes**

@@ -64,7 +64,7 @@ jobs:
             artifact_name: snipcli-linux-tsan
             binary_path: build/snip
             cmake_flags: -DCMAKE_CXX_FLAGS="-fsanitize=thread -g"
-          - os: macos-14
+          - os: macos-15
             compiler: AppleClang
             artifact_name: snipcli-macos-arm64
             binary_path: build/snip

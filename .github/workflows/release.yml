@@ -154,7 +154,7 @@ jobs:
   build-macos:
     name: Build macOS Universal Binary (ARM64 + x86_64)
     needs: [verify]
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7

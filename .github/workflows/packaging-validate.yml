@@ -194,8 +194,8 @@ jobs:
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "  - DefaultLocale: https://aka.ms/winget-manifest.defaultLocale.1.9.0.schema.json"
 
   validate-homebrew:
-    name: Homebrew Formula Validation (macos-14)
-    runs-on: macos-14
+    name: Homebrew Formula Validation (macos-15)
+    runs-on: macos-15
     steps:
       - name: Checkout Code
         uses: actions/checkout@v7
@@ -261,7 +261,7 @@ jobs:
         if: always()
         run: |
           echo "## Homebrew Formula Validation Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Runner:** macos-14 (Apple Silicon)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Runner:** macos-15 (Apple Silicon)" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Homebrew:** $(brew --version | head -n 1)" >> "$GITHUB_STEP_SUMMARY"
           echo "- **brew style:** PASS" >> "$GITHUB_STEP_SUMMARY"
           echo "- **brew audit:** ${audit_result}" >> "$GITHUB_STEP_SUMMARY"
@@ -344,7 +344,7 @@ jobs:
         include:
           - os: ubuntu-24.04
             archive_type: tarball
-          - os: macos-14
+          - os: macos-15
             archive_type: tarball
           - os: windows-latest
             archive_type: zip

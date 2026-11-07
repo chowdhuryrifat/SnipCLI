@@ -29,7 +29,7 @@ Every release must pass three automated quality gates prior to publishing:
      - Ubuntu 24.04 (GCC 13)
      - Ubuntu 24.04 (GCC AddressSanitizer + UndefinedBehaviorSanitizer)
      - Ubuntu 24.04 (GCC ThreadSanitizer with `setarch x86_64 -R`)
-     - macOS 14 (AppleClang 15)
+     - macOS 15 (AppleClang 16)
      - Windows Latest (MSVC 2022)
    - 151 unit test scenarios across 8 suites (`ctest --output-on-failure`)
    - End-to-end CLI integration smoke test suite (`tests/smoke/smoke_test.sh`)

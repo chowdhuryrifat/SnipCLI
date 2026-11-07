@@ -342,7 +342,7 @@ The bash test suite (`tests/smoke/smoke_test.sh`) verifies the final binary end-
 ### 3. GitHub Actions CI/CD Matrix
 Every pull request targeting `main` or `dev` triggers the automated CI/CD pipeline:
 - **Code Quality & Static Analysis:** Clang-Format 18 check (`git diff --exit-code`) and Cppcheck static analysis (`--enable=warning,performance,portability --error-exitcode=1`).
-- **Build & Test Matrix:** Parallel compilation, CTest execution, and automated smoke & adversarial test suites across `ubuntu-24.04` (GCC), `ubuntu-24.04` (GCC-Sanitizers with ASan + UBSan), `ubuntu-24.04` (GCC-TSan with `setarch x86_64 -R`), `macos-14` (AppleClang), and `windows-latest` (MSVC).
+- **Build & Test Matrix:** Parallel compilation, CTest execution, and automated smoke & adversarial test suites across `ubuntu-24.04` (GCC), `ubuntu-24.04` (GCC-Sanitizers with ASan + UBSan), `ubuntu-24.04` (GCC-TSan with `setarch x86_64 -R`), `macos-15` (AppleClang), and `windows-latest` (MSVC).
 - **Adversarial Audit Reproduction:** Reproduction script (`scripts/snipcli_audit_repro.sh`) validating adversarial edge cases and cross-platform CRLF/LF byte-exact roundtrips across all operating systems.
 - **Automated Artifact Packaging:** Production binaries are automatically archived and published as CI build artifacts.
 
